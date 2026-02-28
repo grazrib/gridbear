@@ -1,0 +1,22 @@
+{
+  "name": "playwright",
+  "version": "0.0.1",
+  "type": "mcp",
+  "description": "Playwright browser automation MCP provider",
+  "mcp_category": "automation",
+  "entry_point": "provider.py",
+  "class_name": "PlaywrightProvider",
+  "context_skills": [{
+    "name": "playwright-instructions",
+    "title": "Playwright Browser Automation Instructions",
+    "file": "skills/instructions.md"
+  }],
+  "config_schema": {
+    "headless": {
+      "type": "boolean",
+      "default": true,
+      "description": "Run browser in headless mode"
+    }
+  },
+  "dependencies": []
+}

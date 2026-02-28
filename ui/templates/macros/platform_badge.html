@@ -1,0 +1,24 @@
+{# Platform badge macros for dynamic channel rendering.
+   channel = {name, icon, color, display_name, badge_abbr}
+#}
+
+{% macro platform_badge(channel) %}
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium"
+      style="background: {{ channel.color }}15; color: {{ channel.color }}">
+    <i class="{{ channel.icon }}"></i> {{ channel.display_name }}
+</span>
+{% endmacro %}
+
+{% macro platform_badge_abbr(channel) %}
+<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+      style="background: {{ channel.color }}15; color: {{ channel.color }}">
+    {{ channel.badge_abbr }}
+</span>
+{% endmacro %}
+
+{% macro platform_badge_sm(channel) %}
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium"
+      style="background: {{ channel.color }}15; color: {{ channel.color }}">
+    <i class="{{ channel.icon }}"></i> @
+</span>
+{% endmacro %}

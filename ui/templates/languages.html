@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Languages - GridBear{% endblock %}
+{% block page_title %}Languages{% endblock %}
+{% block breadcrumb_active %}Languages{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage available languages for the user portal</p>{% endblock %}
+
+{% block content_alerts %}
+{% if saved %}
+<div class="rounded-xl bg-nordic-500/10 border border-nordic-500/20 p-4 mb-4 flex items-center gap-3">
+    <i class="fas fa-check-circle text-nordic-500"></i>
+    <span class="text-sm text-nordic-700 dark:text-nordic-300">
+        {% if saved == 'add' %}Language added.
+        {% elif saved == 'toggle' %}Language status updated.
+        {% elif saved == 'default' %}Default language updated.
+        {% elif saved == 'delete' %}Language deleted.
+        {% else %}Saved.{% endif %}
+    </span>
+</div>
+{% endif %}
+{% if error %}
+<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 mb-4 flex items-center gap-3">
+    <i class="fas fa-exclamation-circle text-red-500"></i>
+    <span class="text-sm text-red-700 dark:text-red-300">
+        {% if error == 'cannot_deactivate_default' %}Cannot deactivate the default language.
+        {% elif error == 'cannot_delete_default' %}Cannot delete the default language.
+        {% elif error == 'notfound' %}Language not found.
+        {% elif error == 'notactive' %}Language must be active to set as default.
+        {% elif error == 'invalid' %}Invalid language code or name.
+        {% else %}An error occurred.{% endif %}
+    </span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Languages Table -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+    <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-language text-nordic-500"></i>
+            Active Languages
+        </h3>
+        <span class="text-xs text-void-500 dark:text-void-400">{{ languages|length }} language{{ 's' if languages|length != 1 }}</span>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                    <th class="px-5 py-3">Code</th>
+                    <th class="px-5 py-3">Name</th>
+                    <th class="px-5 py-3">Direction</th>
+                    <th class="px-5 py-3">Status</th>
+                    <th class="px-5 py-3">Default</th>
+                    <th class="px-5 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                {% for lang in languages %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                    <td class="px-5 py-4">
+                        <span class="font-mono text-sm font-medium text-void-900 dark:text-white">{{ lang.code }}</span>
+                    </td>
+                    <td class="px-5 py-4 text-sm text-void-700 dark:text-void-300">{{ lang.name }}</td>
+                    <td class="px-5 py-4">
+                        <span class="text-xs px-2 py-0.5 rounded-lg bg-void-100 dark:bg-void-800 text-void-600 dark:text-void-400">{{ lang.direction or 'ltr' }}</span>
+                    </td>
+                    <td class="px-5 py-4">
+                        {% if lang.active %}
+                        <span class="inline-flex items-center gap-1 text-xs font-medium text-nordic-600 dark:text-nordic-400">
+                            <i class="fas fa-circle text-[6px]"></i> Active
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center gap-1 text-xs font-medium text-void-400">
+                            <i class="fas fa-circle text-[6px]"></i> Inactive
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-4">
+                        {% if lang.is_default %}
+                        <span class="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                            <i class="fas fa-star text-[10px]"></i> Default
+                        </span>
+                        {% else %}
+                        <form method="POST" action="/admin/languages/{{ lang.code }}/default" class="inline">
+                            {% include "partials/csrf_field.html" %}
+                            <button type="submit" class="text-xs text-void-400 hover:text-nordic-500 transition-colors"
+                                    title="Set as default">
+                                <i class="far fa-star"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-4 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <form method="POST" action="/admin/languages/{{ lang.code }}/toggle" class="inline">
+                                {% include "partials/csrf_field.html" %}
+                                <button type="submit"
+                                        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+                                               {% if lang.active %}bg-void-100 dark:bg-void-800 text-void-600 dark:text-void-400 hover:bg-red-500/10 hover:text-red-500{% else %}bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 hover:bg-nordic-500/20{% endif %}"
+                                        {% if lang.is_default and lang.active %}disabled title="Cannot deactivate default"{% endif %}>
+                                    {% if lang.active %}Deactivate{% else %}Activate{% endif %}
+                                </button>
+                            </form>
+                            {% if not lang.is_default %}
+                            <form method="POST" action="/admin/languages/{{ lang.code }}/delete" class="inline"
+                                  onsubmit="return confirm('Delete language {{ lang.code }}?')">
+                                {% include "partials/csrf_field.html" %}
+                                <button type="submit" class="p-1.5 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-colors">
+                                    <i class="fas fa-trash-can text-xs"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Language Form -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-plus text-nordic-500"></i>
+            Add Language
+        </h3>
+    </div>
+    <form method="POST" action="/admin/languages/add" class="p-5">
+        {% include "partials/csrf_field.html" %}
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-xs font-medium text-void-600 dark:text-void-400 mb-1.5">Code</label>
+                <input type="text" name="code" required maxlength="10"
+                       placeholder="e.g. fr"
+                       class="w-full px-3 py-2 rounded-lg border border-void-200 dark:border-void-700 bg-white dark:bg-void-800/50 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-void-600 dark:text-void-400 mb-1.5">Name</label>
+                <input type="text" name="name" required
+                       placeholder="e.g. Français"
+                       class="w-full px-3 py-2 rounded-lg border border-void-200 dark:border-void-700 bg-white dark:bg-void-800/50 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-void-600 dark:text-void-400 mb-1.5">Direction</label>
+                <select name="direction"
+                        class="w-full px-3 py-2 rounded-lg border border-void-200 dark:border-void-700 bg-white dark:bg-void-800/50 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all">
+                    <option value="ltr">LTR (Left to Right)</option>
+                    <option value="rtl">RTL (Right to Left)</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button type="submit"
+                        class="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-nordic-500 to-nordic-600 text-white text-sm font-medium hover:from-nordic-600 hover:to-nordic-700 transition-all shadow-lg shadow-nordic-500/20">
+                    Add Language
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

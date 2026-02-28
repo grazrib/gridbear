@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Telegram",
+      "url": "/plugins/telegram",
+      "icon": "fab fa-telegram",
+      "section": "channels",
+      "priority": 10
+    }
+  ]
+}

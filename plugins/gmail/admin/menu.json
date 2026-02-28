@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Gmail",
+      "url": "/oauth/gmail",
+      "icon": "fab fa-google",
+      "section": "integrations",
+      "priority": 10
+    }
+  ]
+}

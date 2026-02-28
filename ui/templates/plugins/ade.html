@@ -1,0 +1,116 @@
+{% extends "plugins/plugin_base.html" %}
+
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage local and remote development environments</p>{% endblock %}
+
+{% block plugin_content_after %}
+    <!-- Global Settings -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-sliders text-nordic-500"></i>
+                Global Settings
+            </h3>
+        </div>
+        <div class="p-5">
+            <form method="POST" action="/plugins/agentic-development/settings" class="space-y-4">
+                {% include "partials/csrf_field.html" %}
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Tool Mode</label>
+                    <select name="tool_mode"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="generic" {% if tool_mode == 'generic' %}selected{% endif %}>Generic (shared tools for all environments)</option>
+                        <option value="per_command" {% if tool_mode == 'per_command' %}selected{% endif %}>Per-Command (one MCP tool per whitelisted command)</option>
+                    </select>
+                    <p class="text-xs text-void-500">Generic mode exposes tools like <code class="bg-void-100 dark:bg-void-800 px-1 rounded">execute</code>, <code class="bg-void-100 dark:bg-void-800 px-1 rounded">shell</code>. Per-command mode creates a dedicated tool for each whitelisted command.</p>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all">
+                        <i class="fas fa-save"></i>
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Environments -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent flex items-center justify-between">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-layer-group text-frost-500"></i>
+                Environments
+            </h3>
+            <a href="/plugins/agentic-development/env/add"
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-all text-sm">
+                <i class="fas fa-plus"></i>
+                Add Environment
+            </a>
+        </div>
+        <div class="p-5">
+            {% if environments %}
+            <div class="space-y-3">
+                {% for env in environments %}
+                <a href="/plugins/agentic-development/env/{{ env.id }}"
+                   class="block p-4 rounded-xl bg-void-50 dark:bg-void-800/30 border border-void-200 dark:border-void-700 hover:border-nordic-500/50 transition-all group">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br {% if env.type == 'remote' %}from-frost-500/20 to-nordic-500/20{% else %}from-nordic-500/20 to-ember-500/20{% endif %} flex items-center justify-center">
+                                <i class="fas {% if env.type == 'remote' %}fa-server{% else %}fa-docker{% endif %} {% if env.type == 'remote' %}text-frost-400{% else %}text-nordic-400{% endif %} text-lg"></i>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-void-900 dark:text-white group-hover:text-nordic-500 transition-colors">
+                                    {{ env.name or env.id }}
+                                </div>
+                                <div class="text-sm text-void-500 dark:text-void-400">
+                                    {% if env.type == 'remote' %}
+                                        {{ env.user }}@{{ env.host }}:{{ env.port }}
+                                    {% else %}
+                                        {{ env.executor_url | default('Local executor', true) }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full {% if env.type == 'remote' %}bg-frost-500/10 text-frost-500{% else %}bg-nordic-500/10 text-nordic-500{% endif %} text-xs font-medium">
+                                <i class="fas {% if env.type == 'remote' %}fa-cloud{% else %}fa-laptop-code{% endif %}"></i>
+                                {{ env.type | capitalize }}
+                            </span>
+                            {% if env.has_credential %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-nordic-500/10 text-nordic-500 text-xs font-medium">
+                                <i class="fas fa-key"></i>
+                                {{ env.credential_label }} Set
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-ember-500/10 text-ember-500 text-xs font-medium">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                No {{ env.credential_label }}
+                            </span>
+                            {% endif %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-void-200 dark:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium">
+                                <i class="fas fa-folder"></i>
+                                {{ env.projects|length }} projects
+                            </span>
+                            <i class="fas fa-chevron-right text-void-400 group-hover:text-nordic-500 transition-colors"></i>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-12">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-void-100 dark:bg-void-800 flex items-center justify-center">
+                    <i class="fas fa-layer-group text-void-400 text-2xl"></i>
+                </div>
+                <p class="text-void-500 dark:text-void-400 mb-4">No environments configured yet</p>
+                <a href="/plugins/agentic-development/env/add"
+                   class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-all">
+                    <i class="fas fa-plus"></i>
+                    Add Your First Environment
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

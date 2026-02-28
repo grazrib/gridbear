@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en" x-data="{ sidebarOpen: window.innerWidth >= 1024, darkMode: localStorage.getItem('theme') !== 'light' }"
+      :class="{ dark: darkMode }"
+      x-init="$watch('darkMode', val => { document.documentElement.classList.toggle('dark', val); document.documentElement.dataset.theme = val ? 'dark' : 'light'; localStorage.setItem('theme', val ? 'dark' : 'light') })">
+<head>
+    <script>(function(){var d=localStorage.getItem('theme')!=='light';document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=d?'dark':'light'})()</script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}GridBear{% endblock %}</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <meta name="theme-color" content="{{ (theme_metadata or {}).get('accent_color', '#14b8a6') }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Geist Font -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-mono/style.css">
+    {% if theme_font_imports %}
+    {% for url in theme_font_imports %}
+    <link rel="stylesheet" href="{{ url }}">
+    {% endfor %}
+    {% endif %}
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: Object.assign({
+                        nordic: {
+                            50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4',
+                            400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e',
+                            800: '#115e59', 900: '#134e4a', 950: '#042f2e',
+                        },
+                        void: {
+                            50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1',
+                            400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155',
+                            800: '#1e293b', 900: '#0f172a', 950: '#020617',
+                        },
+                        ember: { 400: '#fb923c', 500: '#f97316', 600: '#ea580c' },
+                        frost: { 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7' },
+                    }, {{ (theme_tailwind_config.colors or {})|tojson }}),
+                    fontFamily: Object.assign({
+                        sans: ['Geist Sans', 'system-ui', 'sans-serif'],
+                        mono: ['Geist Mono', 'monospace'],
+                    }, {{ (theme_tailwind_config.fontFamily or {})|tojson }}),
+                    borderRadius: Object.assign({
+                        'ios': '12px',
+                        'ios-lg': '16px',
+                        'ios-xl': '20px',
+                    }, {{ (theme_tailwind_config.borderRadius or {})|tojson }}),
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'gradient': 'gradient 8s ease infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        gradient: {
+                            '0%, 100%': { backgroundPosition: '0% 50%' },
+                            '50%': { backgroundPosition: '100% 50%' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        },
+                        glow: {
+                            '0%': { boxShadow: '0 0 20px rgba(45, 212, 191, 0.3)' },
+                            '100%': { boxShadow: '0 0 30px rgba(45, 212, 191, 0.6)' },
+                        }
+                    },
+                    backgroundSize: {
+                        '300%': '300%',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.3); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.5); }
+
+        /* Gradient border effect */
+        .gradient-border {
+            position: relative;
+            background: linear-gradient(135deg, rgba(45, 212, 191, 0.1), rgba(14, 165, 233, 0.1));
+        }
+        .gradient-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(135deg, #2dd4bf, #0ea5e9, #2dd4bf);
+            background-size: 300% 300%;
+            animation: gradient 8s ease infinite;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        /* Glass effect */
+        .glass {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .light .glass {
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Noise texture overlay */
+        .noise::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+        }
+
+        /* Active menu item */
+        .menu-active {
+            background: linear-gradient(135deg, rgba(45, 212, 191, 0.15), rgba(14, 165, 233, 0.1));
+            border-left: 2px solid #2dd4bf;
+        }
+
+        /* Card hover effect */
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Status indicator pulse */
+        .status-online {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* ===== Shared utility classes (used by dashboard + plugin templates) ===== */
+
+        /* Cards */
+        .stat-card {
+            background: var(--card-bg, rgba(255,255,255,0.75));
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--separator, rgba(0,0,0,0.08));
+            border-radius: 16px; padding: 18px;
+            transition: all 300ms cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+        .stat-card:hover { transform: scale(1.01); }
+
+        .card-ios {
+            background: var(--card-bg, rgba(255,255,255,0.75));
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--separator, rgba(0,0,0,0.08));
+            border-radius: 16px; overflow: hidden;
+            transition: background 0.4s ease;
+        }
+        .card-ios-header {
+            padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;
+        }
+        .card-ios-header h2 { font-size: 15px; font-weight: 600; color: var(--label-0); }
+
+        /* Agent table */
+        table.agent-table { width: 100%; border-collapse: collapse; }
+        table.agent-table th {
+            padding: 8px 16px; font-size: 11px; font-weight: 600;
+            color: var(--label-3); text-align: left;
+            text-transform: uppercase; letter-spacing: 0.02em;
+        }
+        table.agent-table td {
+            padding: 12px 16px; font-size: 13px;
+            border-top: 1px solid var(--separator);
+        }
+        table.agent-table tr:hover td { background: var(--table-hover); }
+        table.agent-table tbody tr:first-child td { border-top: none; }
+
+        /* Status dots */
+        .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+        .dot-on { background: var(--dot-on); box-shadow: 0 0 8px var(--dot-on-shadow); }
+        .dot-warn { background: var(--dot-warn); box-shadow: 0 0 8px var(--dot-warn-shadow); }
+        .dot-off { background: var(--dot-off); }
+        .dot-err { background: var(--dot-err); box-shadow: 0 0 8px var(--dot-err-shadow); }
+        .dot-sm { width: 5px; height: 5px; }
+
+        /* Pills / Badges */
+        .pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 500;
+        }
+        .pill-g { background: var(--pill-green-bg); color: var(--tint-green); }
+        .pill-o { background: var(--pill-orange-bg); color: var(--tint-orange); }
+
+        /* Activity */
+        .activity-item {
+            display: flex; gap: 12px; padding: 10px 0;
+            border-bottom: 1px solid var(--separator);
+            font-size: 13px;
+        }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-icon {
+            width: 30px; height: 30px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; flex-shrink: 0;
+        }
+
+        /* Utility color classes */
+        .c-0 { color: var(--label-0); }
+        .c-1 { color: var(--label-1); }
+        .c-2 { color: var(--label-2); }
+        .c-3 { color: var(--label-3); }
+        .c-blue { color: var(--tint-accent); }
+        .c-green { color: var(--tint-green); }
+        .c-orange { color: var(--tint-orange); }
+        .c-red { color: var(--tint-red); }
+        .c-purple { color: var(--tint-purple); }
+        .c-cyan { color: var(--tint-cyan); }
+        .bg-ib { background: var(--icon-accent-bg); }
+        .bg-ig { background: var(--icon-green-bg); }
+        .bg-io { background: var(--icon-orange-bg); }
+        .bg-ip { background: var(--icon-purple-bg); }
+        .bg-ic { background: var(--icon-cyan-bg); }
+        .bg-f2 { background: var(--fill-2); }
+
+        .avatar-gradient {
+            background: linear-gradient(135deg, var(--avatar-from), var(--avatar-to));
+        }
+
+        /* Input fields */
+        .input-field {
+            background: var(--input-bg, var(--fill-1));
+            border: 1px solid var(--input-border, var(--separator));
+            color: var(--label-0);
+            transition: all 0.2s ease;
+        }
+        .input-field::placeholder { color: var(--label-3); }
+        .input-field:focus {
+            outline: none;
+            border-color: var(--input-focus-border, var(--tint-accent));
+            box-shadow: 0 0 0 3px var(--input-focus-ring, rgba(20,184,166,0.20));
+        }
+
+        /* Primary button */
+        .btn-primary {
+            background: var(--tint-accent);
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover { background: var(--btn-hover, #0d9488); }
+        .btn-primary:active { filter: brightness(0.92); }
+
+        /* Fade-in animations */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up { animation: fadeUp 0.5s cubic-bezier(0.25, 0.1, 0.25, 1) forwards; }
+        .fade-d1 { animation-delay: 0.05s; opacity: 0; }
+        .fade-d2 { animation-delay: 0.15s; opacity: 0; }
+        .fade-d3 { animation-delay: 0.25s; opacity: 0; }
+    </style>
+    {% include "partials/theme_head.html" ignore missing %}
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="font-sans antialiased bg-void-100 dark:bg-void-950 text-void-900 dark:text-void-100 min-h-screen transition-colors duration-300">
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Background Pattern -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-nordic-500/5 via-transparent to-transparent"></div>
+        <div class="absolute top-0 right-0 w-[800px] h-[800px] bg-frost-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        <div class="absolute bottom-0 left-0 w-[600px] h-[600px] bg-nordic-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+    </div>
+
+    <div class="relative flex min-h-screen">
+        <!-- Sidebar -->
+        <aside
+            class="fixed lg:sticky top-0 left-0 z-40 h-screen w-72 transform transition-transform duration-300 lg:translate-x-0"
+            :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+        >
+            <div class="flex flex-col h-full bg-white/80 dark:bg-void-900/80 backdrop-blur-xl border-r border-void-200 dark:border-void-800">
+                <!-- Brand -->
+                <div class="p-6 border-b border-void-200 dark:border-void-800">
+                    <a href="/" class="flex items-center gap-4 group">
+                        <div class="relative">
+                            <div class="w-12 h-12 rounded-xl overflow-hidden ring-2 ring-nordic-500/20 group-hover:ring-nordic-500/40 transition-all">
+                                <img src="/static/logo.png" alt="GridBear" class="w-full h-full object-cover">
+                            </div>
+                            <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-nordic-500 rounded-full border-2 border-white dark:border-void-900 status-online"></div>
+                        </div>
+                        <div>
+                            <span class="text-xl font-semibold tracking-tight">GridBear</span>
+                            <p class="text-xs text-void-500 dark:text-void-400 font-mono">v{{ version }}</p>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Navigation -->
+                <nav class="flex-1 overflow-y-auto p-4 space-y-6"
+                     x-data="{
+                         sections: JSON.parse(localStorage.getItem('sidebarSections') || '{}'),
+                         isOpen(name) { return this.sections[name] !== false; },
+                         toggle(name) { this.sections[name] = !this.isOpen(name); localStorage.setItem('sidebarSections', JSON.stringify(this.sections)); }
+                     }"
+                     x-init="$nextTick(() => { const a = $el.querySelector('.menu-active'); if (a) { const s = a.closest('[data-section]'); if (s) { sections[s.dataset.section] = true; localStorage.setItem('sidebarSections', JSON.stringify(sections)); } } })">
+                    <!-- Dashboard -->
+                    <div>
+                        <a href="/"
+                           class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if request.url.path == '/' %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                            <i class="fas fa-gauge w-5 text-center"></i>
+                            <span>{{ _("Dashboard") }}</span>
+                        </a>
+                    </div>
+
+                    <!-- Agents Section -->
+                    <div data-section="agents">
+                        <h3 @click="toggle('agents')"
+                            class="px-4 mb-2 text-[10px] font-semibold uppercase tracking-widest text-void-400 dark:text-void-500 cursor-pointer select-none flex items-center justify-between">
+                            <span>{{ _("Agents") }}</span>
+                            <i class="fas fa-chevron-down text-[8px] transition-transform duration-200"
+                               :class="isOpen('agents') ? '' : '-rotate-90'"></i>
+                        </h3>
+                        <div x-show="isOpen('agents')" x-collapse class="space-y-1">
+                            <a href="/agents/"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/agents' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-robot w-5 text-center"></i>
+                                <span>{{ _("Manage Agents") }}</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Users Section -->
+                    <div data-section="users">
+                        <h3 @click="toggle('users')"
+                            class="px-4 mb-2 text-[10px] font-semibold uppercase tracking-widest text-void-400 dark:text-void-500 cursor-pointer select-none flex items-center justify-between">
+                            <span>{{ _("Users") }}</span>
+                            <i class="fas fa-chevron-down text-[8px] transition-transform duration-200"
+                               :class="isOpen('users') ? '' : '-rotate-90'"></i>
+                        </h3>
+                        <div x-show="isOpen('users')" x-collapse class="space-y-1">
+                            <a href="/users"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/users' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-users w-5 text-center"></i>
+                                <span>{{ _("Users") }}</span>
+                            </a>
+                            <a href="/permissions/"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/permissions' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-shield-halved w-5 text-center"></i>
+                                <span>{{ _("Permissions") }}</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    {% set plugins_with_menus = plugin_menus|map(attribute='plugin')|list %}
+
+                    <!-- Runners -->
+                    {% set runner_menus = plugin_menus|selectattr('section', 'equalto', 'runners')|list %}
+                    {% set runners_without_menu = enabled_runners|reject('in', plugins_with_menus)|list %}
+                    {% if runner_menus or runners_without_menu %}
+                    <div data-section="runners">
+                        <h3 @click="toggle('runners')"
+                            class="px-4 mb-2 text-[10px] font-semibold uppercase tracking-widest text-void-400 dark:text-void-500 cursor-pointer select-none flex items-center justify-between">
+                            <span>{{ _("Runners") }}</span>
+                            <i class="fas fa-chevron-down text-[8px] transition-transform duration-200"
+                               :class="isOpen('runners') ? '' : '-rotate-90'"></i>
+                        </h3>
+                        <div x-show="isOpen('runners')" x-collapse class="space-y-1">
+                            {% for item in runner_menus %}
+                            <a href="{{ item.url }}"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if item.url in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="{{ item.icon }} w-5 text-center"></i>
+                                <span>{{ _(item.label) }}</span>
+                            </a>
+                            {% endfor %}
+                            {% for runner in runners_without_menu %}
+                            <a href="/plugins/{{ runner }}"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/plugins/' ~ runner in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-microchip w-5 text-center"></i>
+                                <span>{{ runner|replace('-', ' ')|title }}</span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Channels -->
+                    {% set channel_menus = plugin_menus|selectattr('section', 'equalto', 'channels')|list %}
+                    {% set channels_without_menu = enabled_channels|reject('in', plugins_with_menus)|list %}
+                    {% if channel_menus or channels_without_menu %}
+                    <div data-section="channels">
+                        <h3 @click="toggle('channels')"
+                            class="px-4 mb-2 text-[10px] font-semibold uppercase tracking-widest text-void-400 dark:text-void-500 cursor-pointer select-none flex items-center justify-between">
+                            <span>{{ _("Channels") }}</span>
+                            <i class="fas fa-chevron-down text-[8px] transition-transform duration-200"
+                               :class="isOpen('channels') ? '' : '-rotate-90'"></i>
+                        </h3>
+                        <div x-show="isOpen('channels')" x-collapse class="space-y-1">
+                            {% for item in channel_menus %}
+                            <a href="{{ item.url }}"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if item.url in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="{{ item.icon }} w-5 text-center"></i>
+                                <span>{{ _(item.label) }}</span>
+                            </a>
+                            {% endfor %}
+                            {% for channel in channels_without_menu %}
+                            <a href="/plugins/{{ channel }}"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/plugins/' ~ channel in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fab fa-{{ channel }} w-5 text-center"></i>
+                                <span>{{ channel|title }}</span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Services -->
+                    {% set service_menus = plugin_menus|selectattr('section', 'equalto', 'services')|list %}
+                    {% set services_without_menu = enabled_services|reject('in', plugins_with_menus)|list %}
+                    {% if service_menus or services_without_menu %}
+                    <div data-section="services">
+                        <h3 @click="toggle('services')"
+                            class="px-4 mb-2 text-[10px] font-semibold uppercase tracking-widest text-void-400 dark:text-void-500 cursor-pointer select-none flex items-center justify-between">
+                            <span>{{ _("Services") }}</span>
+                            <i class="fas fa-chevron-down text-[8px] transition-transform duration-200"
+                               :class="isOpen('services') ? '' : '-rotate-90'"></i>
+                        </h3>
+                        <div x-show="isOpen('services')" x-collapse class="space-y-1">
+                            {% for item in service_menus %}
+                            <a href="{{ item.url }}"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if item.url in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="{{ item.icon }} w-5 text-center"></i>
+                                <span>{{ _(item.label) }}</span>
+                            </a>
+                            {% endfor %}
+                            {% for service in services_without_menu %}
+                            <a href="/plugins/{{ service }}"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/plugins/' ~ service in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-cube w-5 text-center"></i>
+                                <span>{{ service|replace('-', ' ')|title }}</span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Integrations -->
+                    {% set mcp_menus = plugin_menus|selectattr('section', 'equalto', 'integrations')|list %}
+                    {% set mcp_without_menu = enabled_mcp|reject('in', plugins_with_menus)|list %}
+                    {% if mcp_menus or mcp_without_menu %}
+                    <div data-section="integrations">
+                        <h3 @click="toggle('integrations')"
+                            class="px-4 mb-2 text-[10px] font-semibold uppercase tracking-widest text-void-400 dark:text-void-500 cursor-pointer select-none flex items-center justify-between">
+                            <span>{{ _("Integrations") }}</span>
+                            <i class="fas fa-chevron-down text-[8px] transition-transform duration-200"
+                               :class="isOpen('integrations') ? '' : '-rotate-90'"></i>
+                        </h3>
+                        <div x-show="isOpen('integrations')" x-collapse class="space-y-1">
+                            {% for item in mcp_menus %}
+                            <a href="{{ item.url }}"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if item.url in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="{{ item.icon }} w-5 text-center"></i>
+                                <span>{{ _(item.label) }}</span>
+                            </a>
+                            {% endfor %}
+                            {% for mcp in mcp_without_menu %}
+                            <a href="/plugins/{{ mcp }}"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/plugins/' ~ mcp in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-plug w-5 text-center"></i>
+                                <span>{{ mcp|replace('-', ' ')|title }}</span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Data -->
+                    <div data-section="data">
+                        <h3 @click="toggle('data')"
+                            class="px-4 mb-2 text-[10px] font-semibold uppercase tracking-widest text-void-400 dark:text-void-500 cursor-pointer select-none flex items-center justify-between">
+                            <span>{{ _("Data") }}</span>
+                            <i class="fas fa-chevron-down text-[8px] transition-transform duration-200"
+                               :class="isOpen('data') ? '' : '-rotate-90'"></i>
+                        </h3>
+                        <div x-show="isOpen('data')" x-collapse class="space-y-1">
+                            <a href="/memory/browse"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/memory/browse' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-brain w-5 text-center"></i>
+                                <span>{{ _("Memories") }}</span>
+                            </a>
+                            <a href="/memory"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if request.url.path == '/memory' %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-users w-5 text-center"></i>
+                                <span>{{ _("Memory Groups") }}</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- System -->
+                    <div data-section="system">
+                        <h3 @click="toggle('system')"
+                            class="px-4 mb-2 text-[10px] font-semibold uppercase tracking-widest text-void-400 dark:text-void-500 cursor-pointer select-none flex items-center justify-between">
+                            <span>{{ _("System") }}</span>
+                            <i class="fas fa-chevron-down text-[8px] transition-transform duration-200"
+                               :class="isOpen('system') ? '' : '-rotate-90'"></i>
+                        </h3>
+                        <div x-show="isOpen('system')" x-collapse class="space-y-1">
+                            <a href="/tools/"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/tools' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-wrench w-5 text-center"></i>
+                                <span>{{ _("Tools") }}</span>
+                            </a>
+                            <a href="/oauth2/clients"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/oauth2' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-key w-5 text-center"></i>
+                                <span>{{ _("OAuth2 / MCP Gateway") }}</span>
+                            </a>
+                            <a href="/themes/"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/themes' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-palette w-5 text-center"></i>
+                                <span>{{ _("Themes") }}</span>
+                            </a>
+                            <a href="/rest-api/"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/rest-api' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-plug w-5 text-center"></i>
+                                <span>{{ _("REST API") }}</span>
+                            </a>
+                            <a href="/plugins/"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if request.url.path == '/plugins/' %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-puzzle-piece w-5 text-center"></i>
+                                <span>{{ _("Plugins") }}</span>
+                            </a>
+                            <a href="/admin/languages"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/admin/languages' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-language w-5 text-center"></i>
+                                <span>{{ _("Languages") }}</span>
+                            </a>
+                            <a href="/settings"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/settings' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-sliders w-5 text-center"></i>
+                                <span>{{ _("Settings") }}</span>
+                            </a>
+                        </div>
+                    </div>
+                </nav>
+
+                <!-- User Menu -->
+                {% set cu = request.state.current_user %}
+                <div class="p-4 border-t border-void-200 dark:border-void-800">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            {% if cu and cu.avatar_url %}
+                            <img src="{{ cu.avatar_url }}" alt="" class="w-9 h-9 rounded-lg object-cover">
+                            {% else %}
+                            <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-nordic-500 to-frost-500 flex items-center justify-center">
+                                <span class="text-white text-sm font-bold">{{ (cu.display_name or cu.username or '?')[0]|upper }}</span>
+                            </div>
+                            {% endif %}
+                            <div>
+                                <p class="text-sm font-medium">{{ cu.display_name or cu.username if cu else 'GridBear' }}</p>
+                                <p class="text-xs text-void-500 dark:text-void-400">{{ cu.username if cu else '' }}</p>
+                            </div>
+                        </div>
+                        <a href="/auth/logout" class="p-2 rounded-lg hover:bg-void-100 dark:hover:bg-void-800 text-void-500 hover:text-void-700 dark:hover:text-void-300 transition-colors" title="{{ _('Logout') }}">
+                            <i class="fas fa-arrow-right-from-bracket"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Overlay for mobile -->
+        <div
+            class="fixed inset-0 bg-black/50 z-30 lg:hidden transition-opacity"
+            :class="sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+            @click="sidebarOpen = false"
+        ></div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-h-screen lg:ml-0">
+            <!-- Top Bar -->
+            <header class="sticky top-0 z-20 bg-white/80 dark:bg-void-900/80 backdrop-blur-xl border-b border-void-200 dark:border-void-800">
+                <div class="flex items-center justify-between h-16 px-4 lg:px-8">
+                    <div class="flex items-center gap-4">
+                        <!-- Mobile menu toggle -->
+                        <button
+                            @click="sidebarOpen = !sidebarOpen"
+                            class="lg:hidden p-2 rounded-lg hover:bg-void-100 dark:hover:bg-void-800 transition-colors"
+                        >
+                            <i class="fas fa-bars text-void-600 dark:text-void-300"></i>
+                        </button>
+
+                        <!-- Breadcrumb -->
+                        <nav class="hidden sm:flex items-center gap-2 text-sm">
+                            {% block breadcrumb %}
+                            <a href="/" class="text-void-500 dark:text-void-400 hover:text-nordic-600 dark:hover:text-nordic-400 transition-colors">
+                                <i class="fas fa-home"></i>
+                            </a>
+                            <i class="fas fa-chevron-right text-void-300 dark:text-void-600 text-xs"></i>
+                            <span class="text-void-700 dark:text-void-200 font-medium">{% block breadcrumb_active %}Dashboard{% endblock %}</span>
+                            {% endblock %}
+                        </nav>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <!-- User Portal -->
+                        {% if request.state.current_user %}
+                        <a href="/me" class="p-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 transition-all" title="{{ _('User Portal') }}">
+                            <i class="fas fa-user text-void-600 dark:text-void-300"></i>
+                        </a>
+                        {% endif %}
+
+                        <!-- Notifications -->
+                        {% include "partials/notification_bell.html" %}
+
+                        <!-- Theme toggle -->
+                        <button
+                            @click="darkMode = !darkMode"
+                            class="p-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 transition-all"
+                        >
+                            <i class="fas text-void-600 dark:text-void-300" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+                        </button>
+
+                        <!-- Security -->
+                        <a href="/auth/security" class="p-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 transition-all" title="{{ _('Security') }}">
+                            <i class="fas fa-shield-halved text-void-600 dark:text-void-300"></i>
+                        </a>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="flex-1 p-4 lg:p-8">
+                <!-- Page Header -->
+                <div class="mb-8">
+                    <h1 class="text-2xl lg:text-3xl font-semibold tracking-tight">{% block page_title %}Dashboard{% endblock %}</h1>
+                    {% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1"></p>{% endblock %}
+                </div>
+
+                <!-- Content -->
+                {% block content_alerts %}{% endblock %}
+                {% if plugin %}
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                    <div class="xl:col-span-2 space-y-6">
+                {% endif %}
+                        {% block content %}{% endblock %}
+                {% if plugin %}
+                    </div>
+                    <div class="space-y-6">
+                        {% include "plugins/partials/plugin_info.html" %}
+                        {% include "plugins/partials/dependencies.html" %}
+                        {% include "plugins/partials/context_skill.html" %}
+                        {% block content_sidebar %}{% endblock %}
+                        {% include "plugins/partials/reload.html" %}
+                    </div>
+                </div>
+                {% endif %}
+            </main>
+
+            <!-- Footer -->
+            <footer class="border-t border-void-200 dark:border-void-800 px-4 lg:px-8 py-4">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-void-500 dark:text-void-400">
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold text-void-700 dark:text-void-200">GridBear</span>
+                        <span class="text-void-300 dark:text-void-600">|</span>
+                        <span>{{ _("AI Agent Orchestration Platform") }}</span>
+                    </div>
+                    <div class="font-mono text-xs">v{{ version }}</div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const colors = {
+                success: 'from-nordic-500 to-nordic-600',
+                error: 'from-red-500 to-red-600',
+                warning: 'from-ember-500 to-ember-600',
+                info: 'from-frost-500 to-frost-600'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-xl bg-gradient-to-r ${colors[type]} text-white shadow-lg transform translate-x-full transition-transform duration-300 flex items-center gap-2`;
+            toast.innerHTML = `<span>${message}</span>`;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.remove('translate-x-full'));
+
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+
+    {% block extra_js %}{% endblock %}
+    <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/service-worker.js');}</script>
+</body>
+</html>

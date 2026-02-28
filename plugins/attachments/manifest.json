@@ -1,0 +1,16 @@
+{
+  "name": "attachments",
+  "version": "0.0.1",
+  "type": "service",
+  "description": "Attachment handling and storage",
+  "entry_point": "service.py",
+  "class_name": "AttachmentService",
+  "config_schema": {
+    "base_dir": {
+      "type": "string",
+      "default": "data/attachments",
+      "description": "Base directory for attachments"
+    }
+  },
+  "dependencies": []
+}

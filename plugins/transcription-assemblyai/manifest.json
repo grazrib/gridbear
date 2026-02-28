@@ -1,0 +1,24 @@
+{
+  "name": "transcription-assemblyai",
+  "version": "0.0.1",
+  "type": "service",
+  "provides": "transcription",
+  "display_name": "AssemblyAI",
+  "description": "Audio transcription using AssemblyAI with speaker diarization",
+  "entry_point": "service.py",
+  "class_name": "TranscriptionAssemblyAIService",
+  "config_schema": {
+    "api_key": {
+      "type": "secret",
+      "env": "ASSEMBLYAI_API_KEY",
+      "description": "AssemblyAI API key",
+      "required": true
+    },
+    "speakers": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable speaker diarization"
+    }
+  },
+  "dependencies": []
+}

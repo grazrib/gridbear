@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Playwright - GridBear Admin{% endblock %}
+{% block page_title %}Playwright Browser{% endblock %}
+{% block breadcrumb_active %}Playwright{% endblock %}
+
+{% block content_alerts %}
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Settings saved. Restart GridBear to apply changes.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('granted') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-user-check"></i>
+    <span>Playwright access granted.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('revoked') %}
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-600 dark:text-frost-400">
+    <i class="fas fa-user-times"></i>
+    <span>Playwright access revoked.</span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- User Access -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-users text-nordic-500"></i>
+            User Access
+        </h3>
+        <p class="text-sm text-void-500 dark:text-void-400 mt-1">
+            Users with Playwright access can use browser automation tools via chat.
+        </p>
+    </div>
+    <div class="p-5">
+        <!-- Grant Access Form -->
+        {% if users_without_access %}
+        <form method="POST" action="/plugin/playwright/grant" class="flex gap-2 mb-4">
+            {% include "partials/csrf_field.html" %}
+            <select name="username" required
+                    class="flex-1 bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                <option value="" disabled selected>Select user...</option>
+                {% for user in users_without_access %}
+                <option value="{{ user }}">{{ user }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all">
+                <i class="fas fa-user-plus"></i> Grant Access
+            </button>
+        </form>
+        {% endif %}
+
+        <!-- Users with Access -->
+        {% if users_with_access %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-xs font-medium text-void-500 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                        <th class="px-5 py-3">User</th>
+                        <th class="px-5 py-3 w-20">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                    {% for user in users_with_access %}
+                    <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                        <td class="px-5 py-4">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-user text-nordic-500"></i>
+                                <span class="font-medium">{{ user }}</span>
+                            </div>
+                        </td>
+                        <td class="px-5 py-4">
+                            <form method="POST" action="/plugin/playwright/revoke"
+                                  onsubmit="return confirm('Revoke Playwright access from {{ user }}?');">
+                                {% include "partials/csrf_field.html" %}
+                                <input type="hidden" name="username" value="{{ user }}">
+                                <button type="submit" class="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 text-sm transition-colors">
+                                    <i class="fas fa-user-times"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>No users have Playwright access. Grant access to enable browser automation.</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Settings -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-cog text-void-400"></i>
+            Settings
+        </h3>
+    </div>
+    <form method="POST" action="/plugin/playwright/settings">
+        {% include "partials/csrf_field.html" %}
+        <div class="p-5">
+            <label class="flex items-center gap-3 cursor-pointer">
+                <div class="relative">
+                    <input type="checkbox" class="sr-only peer" name="headless"
+                           {% if config.get('headless', true) %}checked{% endif %}>
+                    <div class="w-11 h-6 bg-void-300 dark:bg-void-600 rounded-full peer peer-checked:bg-nordic-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                </div>
+                <div>
+                    <span class="text-sm font-medium text-void-700 dark:text-void-200">Headless Mode</span>
+                    <p class="text-xs text-void-500">Run browser without visible window (recommended for servers)</p>
+                </div>
+            </label>
+        </div>
+        <div class="px-5 py-4 border-t border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-900/30">
+            <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all">
+                <i class="fas fa-save"></i> Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block content_sidebar %}
+<!-- Info Card -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-info-circle text-frost-500"></i>
+            About Playwright
+        </h3>
+    </div>
+    <div class="p-5">
+        <p class="text-sm text-void-600 dark:text-void-400">
+            Playwright enables browser automation via chat. Users can navigate websites, fill forms, take screenshots and more.
+        </p>
+    </div>
+</div>
+
+<!-- Available Tools -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-tools text-void-400"></i>
+            Available Tools
+        </h3>
+    </div>
+    <div class="p-5 text-sm space-y-3">
+        <div>
+            <span class="font-medium text-nordic-600 dark:text-nordic-400">Navigation</span>
+            <ul class="text-xs text-void-500 dark:text-void-400 ml-3 mt-1 space-y-0.5">
+                <li>browser_navigate</li>
+                <li>browser_navigate_back</li>
+                <li>browser_tabs</li>
+            </ul>
+        </div>
+        <div>
+            <span class="font-medium text-nordic-600 dark:text-nordic-400">Interaction</span>
+            <ul class="text-xs text-void-500 dark:text-void-400 ml-3 mt-1 space-y-0.5">
+                <li>browser_click</li>
+                <li>browser_type</li>
+                <li>browser_fill_form</li>
+                <li>browser_select_option</li>
+            </ul>
+        </div>
+        <div>
+            <span class="font-medium text-nordic-600 dark:text-nordic-400">Capture</span>
+            <ul class="text-xs text-void-500 dark:text-void-400 ml-3 mt-1 space-y-0.5">
+                <li>browser_snapshot</li>
+                <li>browser_take_screenshot</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Usage Example -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-comment text-void-400"></i>
+            Example
+        </h3>
+    </div>
+    <div class="p-5 text-sm text-void-600 dark:text-void-400">
+        <p class="mb-2">From Telegram/Discord:</p>
+        <div class="bg-void-100 dark:bg-void-800 rounded-xl p-3">
+            <code class="text-xs text-void-700 dark:text-void-300">"Vai su google.com e fammi uno screenshot"</code>
+        </div>
+    </div>
+</div>
+{% endblock %}

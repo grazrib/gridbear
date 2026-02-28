@@ -1,0 +1,14 @@
+{
+  "name": "github",
+  "version": "0.0.1",
+  "type": "mcp",
+  "description": "GitHub MCP server - uses official GitHub MCP server for repos, PRs, issues, actions",
+  "mcp_category": "development",
+  "entry_point": "provider.py",
+  "class_name": "GitHubMCPProvider",
+  "context_skills": [{
+    "name": "github-instructions",
+    "title": "GitHub MCP Instructions",
+    "file": "skills/instructions.md"
+  }]
+}

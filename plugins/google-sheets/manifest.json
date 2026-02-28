@@ -1,0 +1,38 @@
+{
+  "name": "google-sheets",
+  "version": "0.0.1",
+  "type": "mcp",
+  "description": "Google Sheets MCP - read, write, search spreadsheets via service account",
+  "mcp_category": "automation",
+  "entry_point": "provider.py",
+  "class_name": "GoogleSheetsProvider",
+  "context_skills": [{
+    "name": "google-sheets-instructions",
+    "title": "Google Sheets MCP Instructions",
+    "file": "skills/instructions.md"
+  }],
+  "dependencies": {
+    "required": ["google-sa"]
+  },
+  "service_connections": [{
+    "id": "google-sa",
+    "name": "Google Service Account",
+    "auth_type": "credentials",
+    "description": "Google service account (managed by google-sa plugin)",
+    "icon": "fas fa-key",
+    "color": "green",
+    "agent_only": true
+  }],
+  "config_schema": {
+    "drive_folder_id": {
+      "type": "string",
+      "default": "",
+      "description": "Google Drive folder ID to scope spreadsheet listing"
+    },
+    "enabled_tools": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated tool filter (empty = all tools)"
+    }
+  }
+}

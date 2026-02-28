@@ -1,0 +1,156 @@
+{% extends "me/base.html" %}
+
+{% block title %}{{ _("Triggers") }} - {{ workflow.display_name }} - GridBear{% endblock %}
+{% block page_title %}{{ _("Triggers") }}{% endblock %}
+
+{% block content %}
+<div>
+    <!-- Breadcrumb -->
+    <div class="mb-4 flex items-center gap-2 text-sm text-void-500 dark:text-void-400">
+        <a href="/me/workflows" class="hover:text-nordic-500 transition-colors">{{ _("Workflows") }}</a>
+        <i class="fas fa-chevron-right text-xs text-void-300 dark:text-void-600"></i>
+        <a href="/me/workflows/{{ workflow.id }}" class="hover:text-nordic-500 transition-colors">{{ workflow.display_name }}</a>
+        <i class="fas fa-chevron-right text-xs text-void-300 dark:text-void-600"></i>
+        <span class="text-void-700 dark:text-void-300">{{ _("Triggers") }}</span>
+    </div>
+
+    <div class="mb-4">
+        <a href="/me/workflows/{{ workflow.id }}" class="text-sm text-void-500 hover:text-nordic-500 transition-colors">
+            <i class="fas fa-arrow-left mr-1"></i> {{ _("Back to workflow") }}
+        </a>
+    </div>
+
+    <!-- Success/Delete alerts -->
+    {% if request.query_params.get('saved') == 'trigger' %}
+    <div class="mb-6 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4">
+        <p class="text-sm text-green-700 dark:text-green-300">
+            <i class="fas fa-check-circle mr-1"></i> {{ _("Trigger added successfully.") }}
+        </p>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('deleted') == 'trigger' %}
+    <div class="mb-6 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4">
+        <p class="text-sm text-green-700 dark:text-green-300">
+            <i class="fas fa-check-circle mr-1"></i> {{ _("Trigger deleted.") }}
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Existing Triggers -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/60 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+        <div class="p-5 border-b border-void-200 dark:border-void-800">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-clock text-nordic-500"></i>
+                {{ _("Active Triggers") }}
+            </h3>
+        </div>
+
+        {% if triggers %}
+        <div class="divide-y divide-void-100 dark:divide-void-800">
+            {% for trigger in triggers %}
+            <div class="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="flex items-center gap-4 min-w-0">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+                        <i class="fas fa-clock text-nordic-500"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-sm font-medium text-void-900 dark:text-white uppercase">{{ trigger.trigger_type }}</span>
+                            {% if trigger.enabled %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+                                {{ _("Enabled") }}
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-void-200 dark:bg-void-700 text-void-500 text-xs font-medium">
+                                {{ _("Disabled") }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="flex items-center gap-3 text-xs text-void-500 dark:text-void-400">
+                            <code class="font-mono bg-void-50 dark:bg-void-800 px-2 py-0.5 rounded">{{ trigger.config.cron_expression if trigger.config else '-' }}</code>
+                            <span><i class="fas fa-globe mr-1"></i>{{ trigger.config.timezone if trigger.config else 'UTC' }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <form method="POST" action="/me/workflows/{{ workflow.id }}/triggers/{{ trigger.id }}/toggle" class="inline">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit"
+                                class="px-3 py-2 rounded-xl border border-void-200 dark:border-void-700 text-void-600 dark:text-void-300 hover:bg-void-50 dark:hover:bg-void-800 text-sm font-medium transition-colors"
+                                title="{{ _('Disable') if trigger.enabled else _('Enable') }}">
+                            {% if trigger.enabled %}
+                            <i class="fas fa-toggle-on text-nordic-500 mr-1"></i> {{ _("Disable") }}
+                            {% else %}
+                            <i class="fas fa-toggle-off mr-1"></i> {{ _("Enable") }}
+                            {% endif %}
+                        </button>
+                    </form>
+                    <form method="POST" action="/me/workflows/{{ workflow.id }}/triggers/{{ trigger.id }}/delete" class="inline">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit"
+                                class="px-3 py-2 rounded-xl border border-red-200 dark:border-red-800 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium transition-colors"
+                                onclick="return confirm({{ _('Delete this trigger?')|tojson }})">
+                            <i class="fas fa-trash-alt mr-1"></i> {{ _("Delete") }}
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-5 py-12 text-center">
+            <i class="fas fa-clock text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+            <p class="text-void-500 dark:text-void-400">{{ _("No triggers configured") }}</p>
+            <p class="text-void-400 dark:text-void-500 text-sm mt-1">{{ _("Add a cron trigger below to schedule automatic runs") }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Add Cron Trigger -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/60 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-plus text-nordic-500"></i>
+                {{ _("Add Cron Trigger") }}
+            </h3>
+        </div>
+        <form method="POST" action="/me/workflows/{{ workflow.id }}/triggers/add">
+            {% include "partials/csrf_field.html" %}
+            <div class="p-5 space-y-4">
+                <!-- Cron Expression -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Cron Expression") }}</label>
+                    <input type="text" name="cron_expression" required
+                           placeholder="0 */2 * * *"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm font-mono focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20">
+                    <p class="text-xs text-void-400 mt-1">{{ _("Standard 5-part cron: minute hour day month weekday (e.g. 0 9 * * 1-5 for weekdays at 9am)") }}</p>
+                </div>
+
+                <!-- Timezone -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Timezone") }}</label>
+                    <input type="text" name="timezone" value="Europe/Rome"
+                           placeholder="Europe/Rome"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20">
+                </div>
+
+                <!-- Input Data -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Input Data (JSON, optional)") }}</label>
+                    <textarea name="input_data" rows="3"
+                              placeholder='{"key": "value"}'
+                              class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm font-mono focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20 resize-y"></textarea>
+                    <p class="text-xs text-void-400 mt-1">{{ _("Optional JSON object passed as input_data when the trigger fires") }}</p>
+                </div>
+            </div>
+
+            <div class="px-5 pb-5">
+                <button type="submit"
+                        class="px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                    <i class="fas fa-plus mr-1"></i> {{ _("Add Trigger") }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

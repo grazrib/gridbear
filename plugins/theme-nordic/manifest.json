@@ -1,0 +1,9 @@
+{
+  "name": "theme-nordic",
+  "type": "theme",
+  "version": "0.1.0",
+  "description": "Nordic Glass theme with teal accent, glassmorphism effects, and mesh gradients",
+  "author": "GridBear",
+  "class_name": "NordicGlassTheme",
+  "entry_point": "theme.py"
+}

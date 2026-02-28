@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}{{ plugin.display_name }} - GridBear{% endblock %}
+{% block page_title %}{{ plugin.display_name }}{% endblock %}
+{% block breadcrumb_active %}{{ plugin.name }}{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Plugin configuration and secrets management</p>{% endblock %}
+
+{% block extra_js %}
+<script>
+function unlockSecret(key) {
+    document.getElementById('locked-' + key).style.display = 'none';
+    document.getElementById('unlocked-' + key).style.display = 'flex';
+    document.querySelector('#unlocked-' + key + ' input').focus();
+}
+function lockSecret(key) {
+    document.getElementById('locked-' + key).style.display = 'flex';
+    document.getElementById('unlocked-' + key).style.display = 'none';
+}
+</script>
+{% block plugin_extra_js %}{% endblock %}
+{% endblock %}
+
+{% block content_alerts %}
+{% include "plugins/partials/alerts.html" %}
+{% endblock %}
+
+{% block content %}
+{% block plugin_content_before %}{% endblock %}
+{% block plugin_secrets %}{% include "plugins/partials/secrets.html" %}{% endblock %}
+{% block plugin_config_fields %}{% include "plugins/partials/config_fields.html" %}{% endblock %}
+{% block plugin_content_after %}{% endblock %}
+{% endblock %}
+
+{% block content_sidebar %}
+{% block plugin_sidebar_extra %}{% endblock %}
+{% include "plugins/partials/back_link.html" %}
+{% endblock %}

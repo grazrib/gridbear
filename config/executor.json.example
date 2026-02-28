@@ -1,0 +1,31 @@
+{
+  "projects": {
+    "my-project": {
+      "description": "Example project",
+      "source_path": "/path/to/local/project",
+      "mount_path": "/projects/my-project",
+      "restricted_paths": [],
+      "containers": {
+        "my-container": {
+          "allowed_commands": [
+            {
+              "pattern": "python -m py_compile /app/{file}",
+              "params": {
+                "file": "^[a-zA-Z0-9_/.-]+\\.py$"
+              }
+            },
+            {
+              "pattern": "restart",
+              "params": {}
+            }
+          ]
+        }
+      }
+    }
+  },
+  "permissions": {
+    "username": {
+      "my-project": ["read", "write", "execute"]
+    }
+  }
+}

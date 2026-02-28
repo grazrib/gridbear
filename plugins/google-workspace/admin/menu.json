@@ -1,0 +1,10 @@
+{
+  "items": [
+    {
+      "label": "Google Workspace",
+      "url": "/oauth/gmail",
+      "icon": "file-text",
+      "description": "Manage Google Workspace accounts (uses Gmail OAuth)"
+    }
+  ]
+}

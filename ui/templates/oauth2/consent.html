@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Authorize - GridBear</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        nordic: { 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488' },
+                        void: { 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
+                        frost: { 400: '#38bdf8', 500: '#0ea5e9' },
+                        ember: { 500: '#f97316' }
+                    },
+                    fontFamily: { sans: ['Geist Sans', 'system-ui', 'sans-serif'] },
+                }
+            }
+        }
+    </script>
+    <style>
+        .bg-grid {
+            background-image:
+                linear-gradient(rgba(45, 212, 191, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(45, 212, 191, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+    </style>
+    {% include "partials/theme_head.html" ignore missing %}
+</head>
+<body class="font-sans antialiased bg-void-950 min-h-screen flex items-center justify-center p-4 overflow-hidden">
+    <div class="fixed inset-0 bg-grid"></div>
+    <div class="fixed inset-0">
+        <div class="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-nordic-500/10 rounded-full blur-[100px]"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-frost-500/10 rounded-full blur-[100px]"></div>
+    </div>
+
+    <div class="relative w-full max-w-md">
+        <div class="absolute inset-0 bg-gradient-to-r from-nordic-500/20 via-frost-500/20 to-nordic-500/20 rounded-3xl blur-xl transform scale-105"></div>
+
+        <div class="relative glass-card rounded-3xl border border-white/10 overflow-hidden">
+            <!-- Header -->
+            <div class="relative p-8 pb-4 text-center">
+                <div class="relative inline-block mb-4">
+                    <div class="w-16 h-16 rounded-2xl overflow-hidden ring-2 ring-nordic-500/30 shadow-2xl mx-auto">
+                        <img src="/static/logo.png" alt="GridBear" class="w-full h-full object-cover">
+                    </div>
+                </div>
+                <h1 class="text-2xl font-semibold text-white tracking-tight mb-1">Authorization Request</h1>
+                <p class="text-slate-400 text-sm">
+                    <span class="text-nordic-400 font-medium">{{ client.name }}</span> wants to access your GridBear account
+                </p>
+            </div>
+
+            <!-- App info -->
+            <div class="px-8 pb-4">
+                <div class="p-4 rounded-xl bg-void-800/50 border border-white/5">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-10 h-10 rounded-lg bg-nordic-500/10 flex items-center justify-center">
+                            <i class="fas fa-plug text-nordic-400"></i>
+                        </div>
+                        <div>
+                            <p class="text-white font-medium text-sm">{{ client.name }}</p>
+                            <p class="text-slate-500 text-xs">{{ client.client_type }} client</p>
+                        </div>
+                    </div>
+
+                    {% if scope_list %}
+                    <div class="border-t border-white/5 pt-3 mt-3">
+                        <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">Requested permissions</p>
+                        <div class="flex flex-wrap gap-2">
+                            {% for s in scope_list %}
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-frost-500/10 text-frost-400 text-xs font-medium">
+                                {% if s == 'mcp' %}
+                                <i class="fas fa-tools text-[10px]"></i>
+                                {% elif s == 'openid' %}
+                                <i class="fas fa-id-card text-[10px]"></i>
+                                {% elif s == 'profile' %}
+                                <i class="fas fa-user text-[10px]"></i>
+                                {% elif s == 'email' %}
+                                <i class="fas fa-envelope text-[10px]"></i>
+                                {% else %}
+                                <i class="fas fa-key text-[10px]"></i>
+                                {% endif %}
+                                {{ s }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- User info -->
+            <div class="px-8 pb-4">
+                <div class="flex items-center gap-2 text-sm text-slate-400">
+                    <i class="fas fa-user-check text-nordic-500/50"></i>
+                    <span>Signed in as <span class="text-white font-medium">{{ admin_user }}</span></span>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="px-8 pb-8">
+                <form method="POST" action="/oauth2/authorize">
+                    {% include "partials/csrf_field.html" %}
+                    <input type="hidden" name="response_type" value="{{ response_type }}">
+                    <input type="hidden" name="client_id" value="{{ client.client_id }}">
+                    <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+                    <input type="hidden" name="scope" value="{{ scope }}">
+                    {% if state %}
+                    <input type="hidden" name="state" value="{{ state }}">
+                    {% endif %}
+                    {% if code_challenge %}
+                    <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
+                    <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}">
+                    {% endif %}
+
+                    <div class="flex gap-3">
+                        <button type="submit" name="consent" value="deny"
+                                class="flex-1 px-5 py-3 rounded-xl bg-void-800 hover:bg-void-700 text-slate-300 font-medium transition-all text-center">
+                            Deny
+                        </button>
+                        <button type="submit" name="consent" value="allow"
+                                class="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-nordic-500 to-nordic-600 hover:from-nordic-400 hover:to-nordic-500 text-white font-medium transition-all text-center shadow-lg shadow-nordic-500/25">
+                            Allow
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-8 pb-6 text-center">
+                <p class="text-xs text-slate-500 flex items-center justify-center gap-2">
+                    <i class="fas fa-shield-halved text-nordic-500/50"></i>
+                    <span>OAuth2 Authorization with PKCE</span>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

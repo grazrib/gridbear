@@ -1,0 +1,32 @@
+{
+  "name": "tts-edge",
+  "version": "0.0.1",
+  "type": "service",
+  "instantiation": "per-agent",
+  "provides": "tts",
+  "display_name": "Edge TTS (Free)",
+  "description": "Text-to-speech service using Edge TTS (Microsoft voices, FREE)",
+  "entry_point": "service.py",
+  "class_name": "TTSService",
+  "config_schema": {
+    "default_voice": {
+      "type": "string",
+      "default": "en-US-AriaNeural",
+      "description": "Default voice for TTS"
+    },
+    "voices": {
+      "type": "object",
+      "default": {
+        "en": "en-US-AriaNeural",
+        "it": "it-IT-ElsaNeural"
+      },
+      "description": "Voice mapping per locale"
+    },
+    "output_dir": {
+      "type": "string",
+      "default": "data/tts",
+      "description": "Directory for temporary audio files"
+    }
+  },
+  "dependencies": []
+}

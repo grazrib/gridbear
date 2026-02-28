@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}Plugins - GridBear{% endblock %}
+{% block page_title %}Plugins{% endblock %}
+{% block breadcrumb_active %}Plugins{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage plugins, integrations, and services</p>{% endblock %}
+
+{% block content %}
+<!-- Feedback messages -->
+{% if request.query_params.get('installed') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Plugin <strong>{{ request.query_params.get('installed') }}</strong> installed successfully.
+    {% if request.query_params.get('warnings') %}
+    <br><span class="text-ember-500">Warnings: {{ request.query_params.get('warnings')|replace('|', ', ') }}</span>
+    {% endif %}
+    </span>
+</div>
+{% endif %}
+{% if request.query_params.get('uninstalled') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-trash-alt"></i>
+    <span>Plugin <strong>{{ request.query_params.get('uninstalled') }}</strong> uninstalled.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('enabled') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-power-off"></i>
+    <span>Plugin <strong>{{ request.query_params.get('enabled') }}</strong> enabled. Restart to activate.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('disabled') %}
+<div class="mb-6 p-4 rounded-xl bg-void-200/50 dark:bg-void-800/50 border border-void-300 dark:border-void-700 flex items-center gap-3 text-void-600 dark:text-void-400">
+    <i class="fas fa-power-off"></i>
+    <span>Plugin <strong>{{ request.query_params.get('disabled') }}</strong> disabled. Restart to deactivate.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('reload_requested') %}
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-600 dark:text-frost-400">
+    <i class="fas fa-sync-alt"></i>
+    <span>Plugin reload requested. Full reload requires a restart.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('rescanned') %}
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-600 dark:text-frost-400">
+    <i class="fas fa-search"></i>
+    <span>Plugin directories rescanned.</span>
+</div>
+{% endif %}
+
+<!-- Header Actions -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+    <p class="text-void-600 dark:text-void-300">
+        Install, configure, and manage your plugin ecosystem.
+    </p>
+    <div class="flex items-center gap-2">
+        <a href="/plugins/paths"
+           class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 font-medium transition-all text-sm">
+            <i class="fas fa-folder-tree"></i>
+            Plugin Paths
+        </a>
+        <form method="POST" action="/plugins/rescan" class="inline">
+            {% include "partials/csrf_field.html" %}
+            <button type="submit"
+                    class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 font-medium transition-all text-sm">
+                <i class="fas fa-arrows-rotate"></i>
+                Rescan
+            </button>
+        </form>
+        <form method="POST" action="/plugins/reload-all" class="inline">
+            {% include "partials/csrf_field.html" %}
+            <button type="submit"
+                    onclick="this.querySelector('i').classList.add('animate-spin'); setTimeout(() => this.disabled = true, 10);"
+                    class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 font-medium transition-all text-sm">
+                <i class="fas fa-arrows-rotate"></i>
+                Reload All
+            </button>
+        </form>
+    </div>
+</div>
+
+{# ── Plugin Card Macro ── #}
+{% macro render_plugin_card(plugin) %}
+<div class="group relative rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800
+    {% if plugin.state == 'not_available' %}opacity-50{% elif plugin.state == 'available' %}opacity-70{% endif %}
+    hover:border-nordic-500/30 dark:hover:border-nordic-500/30 transition-all card-hover overflow-hidden">
+    <!-- State badge -->
+    <div class="absolute top-4 right-4">
+        {% if plugin.state == 'installed' and plugin.enabled %}
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-nordic-500"></span>
+            Enabled
+        </span>
+        {% elif plugin.state == 'installed' %}
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            Installed
+        </span>
+        {% elif plugin.state == 'not_available' %}
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+            Missing
+        </span>
+        {% else %}
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-void-200 dark:bg-void-700 text-void-500 dark:text-void-400 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-void-400"></span>
+            Available
+        </span>
+        {% endif %}
+    </div>
+
+    <div class="p-5">
+        <!-- Header -->
+        <div class="flex items-start gap-4 mb-3">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0
+                {% if plugin.type == 'runner' %}bg-purple-500/10 text-purple-500
+                {% elif plugin.type == 'channel' %}bg-frost-500/10 text-frost-500
+                {% elif plugin.type == 'service' %}bg-nordic-500/10 text-nordic-500
+                {% elif plugin.type == 'theme' %}bg-pink-500/10 text-pink-500
+                {% else %}bg-ember-500/10 text-ember-500{% endif %}">
+                {% if plugin.type == 'runner' %}<i class="fas fa-microchip text-xl"></i>
+                {% elif plugin.type == 'channel' %}<i class="fas fa-tower-broadcast text-xl"></i>
+                {% elif plugin.type == 'service' %}<i class="fas fa-cube text-xl"></i>
+                {% elif plugin.type == 'theme' %}<i class="fas fa-palette text-xl"></i>
+                {% else %}<i class="fas fa-plug text-xl"></i>{% endif %}
+            </div>
+            <div class="flex-1 min-w-0 pr-16">
+                <h3 class="font-semibold text-void-900 dark:text-white truncate">{{ plugin.display_name }}</h3>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-mono text-void-500 dark:text-void-400">v{{ plugin.version }}</span>
+                    <span class="text-xs text-void-400">{{ plugin.type }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Description -->
+        <p class="text-sm text-void-600 dark:text-void-300 mb-4 line-clamp-2">{{ plugin.description or 'No description available' }}</p>
+
+        <!-- Provides -->
+        {% if plugin.provides %}
+        <div class="mb-4">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-void-100 dark:bg-void-800 text-void-600 dark:text-void-300 text-xs">
+                <i class="fas fa-puzzle-piece"></i>
+                {{ plugin.provides }}
+            </span>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex items-center gap-2 pt-4 border-t border-void-100 dark:border-void-800">
+            {% if plugin.state == 'installed' and plugin.enabled %}
+            {# Enabled: Configure + Disable #}
+            <a href="/plugins/{{ plugin.name }}" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
+                <i class="fas fa-cog"></i>
+                Configure
+            </a>
+            <form method="POST" action="/plugins/{{ plugin.name }}/disable" class="inline">
+                {% include "partials/csrf_field.html" %}
+                <button type="submit" class="px-4 py-2 rounded-xl hover:bg-amber-500/10 text-void-500 hover:text-amber-500 text-sm font-medium transition-colors" title="Disable">
+                    <i class="fas fa-pause"></i>
+                </button>
+            </form>
+
+            {% elif plugin.state == 'installed' %}
+            {# Installed but disabled: Configure + Enable + Uninstall #}
+            <a href="/plugins/{{ plugin.name }}" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
+                <i class="fas fa-cog"></i>
+                Configure
+            </a>
+            <form method="POST" action="/plugins/{{ plugin.name }}/enable" class="inline">
+                {% include "partials/csrf_field.html" %}
+                <button type="submit" class="px-4 py-2 rounded-xl hover:bg-nordic-500/10 text-void-500 hover:text-nordic-500 text-sm font-medium transition-colors" title="Enable">
+                    <i class="fas fa-play"></i>
+                </button>
+            </form>
+            <form method="POST" action="/plugins/{{ plugin.name }}/uninstall" class="inline"
+                  onsubmit="return confirm('Uninstall {{ plugin.display_name }}? This removes config, secrets, and data.')">
+                {% include "partials/csrf_field.html" %}
+                <button type="submit" class="px-4 py-2 rounded-xl hover:bg-red-500/10 text-void-500 hover:text-red-500 text-sm font-medium transition-colors" title="Uninstall">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </form>
+
+            {% elif plugin.state == 'available' %}
+            {# Available: Install #}
+            <form method="POST" action="/plugins/{{ plugin.name }}/install" class="flex-1">
+                {% include "partials/csrf_field.html" %}
+                <button type="submit" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                    <i class="fas fa-download"></i>
+                    Install
+                </button>
+            </form>
+
+            {% elif plugin.state == 'not_available' %}
+            {# Not available: Uninstall (cleanup) #}
+            <form method="POST" action="/plugins/{{ plugin.name }}/uninstall" class="flex-1"
+                  onsubmit="return confirm('Clean up {{ plugin.name }}? This removes any remaining config and data.')">
+                {% include "partials/csrf_field.html" %}
+                <button type="submit" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-sm font-medium transition-colors">
+                    <i class="fas fa-broom"></i>
+                    Clean Up
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# ── Group plugins by state ── #}
+{% set enabled_plugins = plugins|selectattr('state', 'equalto', 'installed')|selectattr('enabled')|list %}
+{% set installed_plugins = plugins|selectattr('state', 'equalto', 'installed')|rejectattr('enabled')|list %}
+{% set available_plugins = plugins|selectattr('state', 'equalto', 'available')|list %}
+{% set missing_plugins = plugins|selectattr('state', 'equalto', 'not_available')|list %}
+
+<!-- Enabled Plugins -->
+{% if enabled_plugins %}
+<div class="mb-8">
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+            <i class="fas fa-check-circle text-nordic-500"></i>
+        </div>
+        <div>
+            <h2 class="font-semibold text-void-900 dark:text-white">Enabled</h2>
+            <p class="text-sm text-void-500 dark:text-void-400">{{ enabled_plugins|length }} plugins active and running</p>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for plugin in enabled_plugins %}
+        {{ render_plugin_card(plugin) }}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Installed (Disabled) Plugins -->
+{% if installed_plugins %}
+<div class="mb-8">
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+            <i class="fas fa-pause-circle text-amber-500"></i>
+        </div>
+        <div>
+            <h2 class="font-semibold text-void-900 dark:text-white">Installed (Disabled)</h2>
+            <p class="text-sm text-void-500 dark:text-void-400">{{ installed_plugins|length }} plugins configured but not running</p>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for plugin in installed_plugins %}
+        {{ render_plugin_card(plugin) }}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Available Plugins -->
+{% if available_plugins %}
+<div class="mb-8">
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-void-200/50 dark:bg-void-800/50 flex items-center justify-center">
+            <i class="fas fa-box text-void-400"></i>
+        </div>
+        <div>
+            <h2 class="font-semibold text-void-900 dark:text-white">Available</h2>
+            <p class="text-sm text-void-500 dark:text-void-400">{{ available_plugins|length }} plugins found on disk, ready to install</p>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for plugin in available_plugins %}
+        {{ render_plugin_card(plugin) }}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Not Available Plugins -->
+{% if missing_plugins %}
+<div class="mb-8">
+    <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+            <i class="fas fa-exclamation-triangle text-red-500"></i>
+        </div>
+        <div>
+            <h2 class="font-semibold text-void-900 dark:text-white">Not Available</h2>
+            <p class="text-sm text-void-500 dark:text-void-400">{{ missing_plugins|length }} plugins no longer found on disk</p>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for plugin in missing_plugins %}
+        {{ render_plugin_card(plugin) }}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Info Banner -->
+<div class="rounded-2xl bg-ember-500/5 border border-ember-500/10 p-5 flex items-start gap-4">
+    <div class="w-10 h-10 rounded-xl bg-ember-500/10 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-triangle-exclamation text-ember-500"></i>
+    </div>
+    <div>
+        <h3 class="font-medium text-void-900 dark:text-white mb-1">Restart Required</h3>
+        <p class="text-sm text-void-600 dark:text-void-300">
+            After enabling or disabling plugins, restart GridBear for changes to take effect.
+            Go to <a href="/settings" class="text-nordic-600 dark:text-nordic-400 hover:underline">Settings</a> to restart.
+        </p>
+    </div>
+</div>
+{% endblock %}

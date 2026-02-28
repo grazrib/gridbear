@@ -1,0 +1,67 @@
+{% extends "auth/auth_base.html" %}
+
+{% block title %}2FA Verification - GridBear{% endblock %}
+
+{% block header %}
+<div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-nordic-500/10 flex items-center justify-center">
+    <i class="fas fa-shield-halved text-nordic-400 text-2xl"></i>
+</div>
+<h1 class="text-2xl font-semibold text-white mb-2">Two-Factor Authentication</h1>
+<p class="text-slate-400 text-sm">Enter the code from your authenticator app</p>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-400">
+    <i class="fas fa-circle-exclamation"></i>
+    <span class="text-sm">{{ error }}</span>
+</div>
+{% endif %}
+
+<form method="POST" action="/auth/2fa" class="space-y-5">
+    {% include "partials/csrf_field.html" %}
+
+    <div>
+        <input type="text"
+               name="code"
+               class="w-full bg-void-800/50 border border-white/10 rounded-xl py-4 px-4 text-white text-center text-2xl font-mono tracking-[0.5em] placeholder-slate-600 focus:outline-none focus:border-nordic-500/50 input-glow transition-all"
+               placeholder="000000"
+               required
+               autofocus
+               autocomplete="one-time-code"
+               inputmode="numeric"
+               pattern="[0-9A-Za-z\-]{6,12}"
+               maxlength="12">
+    </div>
+
+    <button type="submit"
+            class="w-full bg-gradient-to-r from-nordic-500 to-nordic-600 hover:from-nordic-400 hover:to-nordic-500 text-white font-medium py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-nordic-500/20">
+        <i class="fas fa-check"></i>
+        <span>Verify</span>
+    </button>
+</form>
+
+<div class="flex items-center gap-4 my-6">
+    <div class="flex-1 h-px bg-white/10"></div>
+    <span class="text-xs text-slate-500 uppercase tracking-wider">or</span>
+    <div class="flex-1 h-px bg-white/10"></div>
+</div>
+
+<p class="text-center text-sm text-slate-500 mb-4">
+    <i class="fas fa-key mr-1"></i>
+    You can also use a recovery code
+</p>
+
+<div class="text-center space-y-3">
+    {% if has_webauthn %}
+    <a href="/auth/2fa-passkey" class="text-sm text-frost-400 hover:text-frost-300 transition-colors flex items-center justify-center gap-2">
+        <i class="fas fa-fingerprint"></i>
+        Use passkey instead
+    </a>
+    {% endif %}
+    <a href="/auth/login" class="text-sm text-slate-500 hover:text-nordic-400 transition-colors flex items-center justify-center gap-2">
+        <i class="fas fa-arrow-left"></i>
+        Back to login
+    </a>
+</div>
+{% endblock %}

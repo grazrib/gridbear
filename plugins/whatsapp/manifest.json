@@ -1,0 +1,41 @@
+{
+  "name": "whatsapp",
+  "version": "0.0.1",
+  "type": "channel",
+  "description": "WhatsApp messaging channel via Evolution API",
+  "entry_point": "adapter.py",
+  "class_name": "WhatsAppChannel",
+  "config_schema": {
+    "evolution_api_key": {
+      "type": "secret",
+      "env": "EVOLUTION_API_KEY",
+      "description": "Evolution API authentication key",
+      "required": true
+    },
+    "evolution_api_url": {
+      "type": "config",
+      "env": "EVOLUTION_API_URL",
+      "description": "Evolution API base URL",
+      "default": "http://gridbear-evolution:8080"
+    }
+  },
+  "ui": {
+    "icon": "fab fa-whatsapp",
+    "color": "#25D366",
+    "display_name": "WhatsApp",
+    "badge_abbr": "WA"
+  },
+  "dependencies": {
+    "required": ["sessions", "attachments"],
+    "optional": ["memory", "adversarial", "image", "transcription", "tts"]
+  },
+  "service_connections": [{
+    "id": "whatsapp",
+    "name": "WhatsApp",
+    "description": "Connetti il tuo numero WhatsApp tramite QR code",
+    "auth_type": "whatsapp_qr",
+    "connect_url": "/me/connections/whatsapp/connect",
+    "icon": "fab fa-whatsapp",
+    "color": "green"
+  }]
+}

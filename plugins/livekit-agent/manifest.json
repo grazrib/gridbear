@@ -1,0 +1,55 @@
+{
+  "name": "livekit-agent",
+  "version": "0.0.1",
+  "type": "service",
+  "description": "LiveKit voice agent integration for real-time voice calls",
+  "entry_point": "service.py",
+  "class_name": "LiveKitService",
+  "provides": "livekit",
+  "model": "haiku",
+  "mcp_provider": "provider.py",
+  "mcp_provider_class": "LiveKitProvider",
+  "admin_routes": "admin/routes.py",
+  "config_schema": {
+    "ws_url": {
+      "type": "string",
+      "description": "LiveKit WebSocket URL (wss://...)",
+      "required": true
+    },
+    "livekit_api_key": {
+      "type": "secret",
+      "env": "LIVEKIT_API_KEY",
+      "description": "LiveKit API Key",
+      "required": true
+    },
+    "livekit_api_secret": {
+      "type": "secret",
+      "env": "LIVEKIT_API_SECRET",
+      "description": "LiveKit API Secret",
+      "required": true
+    },
+    "redis_url": {
+      "type": "string",
+      "description": "Redis URL for session persistence (optional)"
+    },
+    "stt_language": {
+      "type": "string",
+      "default": "it",
+      "description": "Language for speech-to-text"
+    },
+    "tts_voice": {
+      "type": "string",
+      "default": "nova",
+      "description": "OpenAI TTS voice"
+    },
+    "agent_name": {
+      "type": "string",
+      "default": "Peggy",
+      "description": "Agent display name in calls"
+    }
+  },
+  "dependencies": {
+    "required": ["transcription", "tts"],
+    "optional": []
+  }
+}

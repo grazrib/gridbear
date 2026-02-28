@@ -1,0 +1,103 @@
+{% extends "me/base.html" %}
+
+{% block title %}{{ _("Edit") if edit_mode else _("New") }} {{ _("Workflow") }} - GridBear{% endblock %}
+{% block page_title %}{{ _("Edit") if edit_mode else _("New") }} {{ _("Workflow") }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    {% if errors %}
+    <div class="mb-6 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 overflow-hidden">
+        <div class="p-4">
+            <h4 class="text-sm font-medium text-red-700 dark:text-red-300 mb-2">
+                <i class="fas fa-exclamation-circle mr-1"></i> {{ _("Validation Errors") }}
+            </h4>
+            <ul class="text-sm text-red-600 dark:text-red-400 space-y-1">
+                {% for err in errors %}
+                <li>
+                    {% if err.step_id %}<code class="font-mono text-xs">{{ err.step_id }}:</code> {% endif %}
+                    {{ err.error }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ '/me/workflows/' ~ workflow.id ~ '/edit' if edit_mode else '/me/workflows/new' }}">
+        {% include "partials/csrf_field.html" %}
+
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+            <div class="p-5 border-b border-void-200 dark:border-void-800">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-info-circle text-nordic-500"></i>
+                    {{ _("Workflow Details") }}
+                </h3>
+            </div>
+            <div class="p-5 space-y-4">
+                <!-- Name (slug) -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Name (slug)") }}</label>
+                    {% if edit_mode %}
+                    <input type="text" value="{{ workflow.name }}" disabled
+                           class="w-full px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-500 dark:text-void-400 font-mono text-sm">
+                    {% else %}
+                    <input type="text" name="name" required pattern="[a-z0-9][a-z0-9_\-]*"
+                           value="{{ workflow.name if workflow else '' }}"
+                           placeholder="{{ _("e.g. daily-report") }}"
+                           class="w-full px-4 py-2.5 rounded-xl bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20 font-mono">
+                    <p class="text-xs text-void-400 mt-1">{{ _("Lowercase letters, numbers, hyphens, underscores. Used as unique identifier.") }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Display Name -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Display Name") }}</label>
+                    <input type="text" name="display_name" required
+                           value="{{ workflow.display_name if workflow else '' }}"
+                           placeholder="{{ _("e.g. Daily Report Generator") }}"
+                           class="w-full px-4 py-2.5 rounded-xl bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20">
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Description") }}</label>
+                    <textarea name="description" rows="2"
+                              placeholder="{{ _("What does this workflow do?") }}"
+                              class="w-full px-4 py-2.5 rounded-xl bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20 resize-y">{{ workflow.description if workflow else '' }}</textarea>
+                </div>
+
+                <!-- Concurrency Policy -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Concurrency Policy") }}</label>
+                    <select name="concurrency_policy"
+                            class="w-full px-4 py-2.5 rounded-xl bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20">
+                        {% set current_policy = workflow.concurrency_policy if workflow else 'allow' %}
+                        <option value="allow" {{ 'selected' if current_policy == 'allow' }}>{{ _("Allow (concurrent executions)") }}</option>
+                        <option value="skip" {{ 'selected' if current_policy == 'skip' }}>{{ _("Skip (ignore if already running)") }}</option>
+                        <option value="queue" {{ 'selected' if current_policy == 'queue' }}>{{ _("Queue (run after current finishes)") }}</option>
+                        <option value="cancel_previous" {{ 'selected' if current_policy == 'cancel_previous' }}>{{ _("Cancel Previous (stop running, start new)") }}</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="{{ '/me/workflows/' ~ workflow.id if edit_mode else '/me/workflows' }}"
+               class="px-5 py-2.5 rounded-xl border border-void-200 dark:border-void-700 text-void-600 dark:text-void-300 hover:bg-void-50 dark:hover:bg-void-800 text-sm font-medium transition-colors">
+                {{ _("Cancel") }}
+            </a>
+            {% if edit_mode %}
+            <a href="/me/workflows/{{ workflow.id }}/editor"
+               class="px-5 py-2.5 rounded-xl border border-nordic-500/30 text-nordic-600 dark:text-nordic-400 hover:bg-nordic-500/10 text-sm font-medium transition-colors">
+                <i class="fas fa-diagram-project mr-1"></i> {{ _("Open Visual Editor") }}
+            </a>
+            {% endif %}
+            <button type="submit"
+                    class="px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                <i class="fas fa-save mr-1"></i> {{ _("Save Metadata") if edit_mode else _("Create Workflow") }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

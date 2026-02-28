@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gridbear.io/schemas/agent.schema.json",
+  "title": "GridBear Agent Configuration",
+  "description": "Configuration schema for GridBear multi-agent system",
+  "type": "object",
+  "required": ["id", "name", "channels"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "Internal identifier (lowercase, no spaces)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Agent description"
+    },
+    "personality": {
+      "type": "string",
+      "description": "System prompt / personality"
+    },
+    "locale": {
+      "type": "string",
+      "default": "it",
+      "description": "Default response language"
+    },
+    "voice": {
+      "type": "object",
+      "description": "Voice/TTS configuration",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "TTS provider plugin name (e.g., tts-openai)"
+        },
+        "voice_id": {
+          "type": "string",
+          "description": "Voice identifier"
+        },
+        "language": {
+          "type": "string",
+          "default": "it-IT",
+          "description": "Voice language code"
+        }
+      }
+    },
+    "channels": {
+      "type": "object",
+      "description": "Communication channels",
+      "properties": {
+        "telegram": {
+          "$ref": "#/definitions/telegramChannel"
+        },
+        "discord": {
+          "$ref": "#/definitions/discordChannel"
+        }
+      },
+      "additionalProperties": false
+    },
+    "services": {
+      "type": "object",
+      "description": "Per-agent plugin services (including MCP servers)",
+      "additionalProperties": {
+        "$ref": "#/definitions/serviceConfig"
+      }
+    },
+    "mcp_permissions": {
+      "type": "array",
+      "description": "Allowed SHARED MCP servers (services in 'services' have implicit permission)",
+      "items": {
+        "type": "string"
+      }
+    },
+    "plugins": {
+      "type": "object",
+      "description": "Plugin control (deprecated, use services)",
+      "properties": {
+        "enabled": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "exclusive": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "serviceConfig": {
+      "type": "object",
+      "description": "Per-agent service configuration",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Plugin name override (e.g., tts-openai instead of tts)"
+        },
+        "config": {
+          "type": "object",
+          "description": "Service-specific configuration (implies separate instance)"
+        },
+        "isolated": {
+          "type": "boolean",
+          "description": "Use separate instance with default config"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, agent fails to start if service initialization fails"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "config": { "type": "object" }
+          },
+          "required": ["config"],
+          "not": { "required": ["isolated"] }
+        },
+        {
+          "properties": {
+            "isolated": { "const": true }
+          },
+          "required": ["isolated"],
+          "not": { "required": ["config"] }
+        },
+        {
+          "not": {
+            "anyOf": [
+              { "required": ["config"] },
+              { "required": ["isolated"] }
+            ]
+          }
+        }
+      ]
+    },
+    "telegramChannel": {
+      "type": "object",
+      "required": ["token_secret"],
+      "properties": {
+        "token_secret": {
+          "type": "string",
+          "description": "Environment variable name for Telegram bot token"
+        },
+        "allowed_users": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Authorized Telegram usernames (with @)"
+        }
+      }
+    },
+    "discordChannel": {
+      "type": "object",
+      "required": ["token_secret"],
+      "properties": {
+        "token_secret": {
+          "type": "string",
+          "description": "Environment variable name for Discord bot token"
+        },
+        "allowed_guilds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Authorized Discord guild IDs"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chiamata con {{ agent_name }} — GridBear</title>
+
+    <!-- Geist Font -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-mono/style.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        nordic: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            200: '#99f6e4',
+                            300: '#5eead4',
+                            400: '#2dd4bf',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                            800: '#115e59',
+                            900: '#134e4a',
+                            950: '#042f2e',
+                        },
+                        void: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        ember: {
+                            400: '#fb923c',
+                            500: '#f97316',
+                            600: '#ea580c',
+                        },
+                        frost: {
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Geist Sans', 'system-ui', 'sans-serif'],
+                        mono: ['Geist Mono', 'monospace'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { boxShadow: '0 0 20px rgba(45, 212, 191, 0.3)' },
+                            '100%': { boxShadow: '0 0 30px rgba(45, 212, 191, 0.6)' },
+                        }
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-void-950 min-h-screen flex flex-col items-center justify-center p-4"
+      style="background: linear-gradient(160deg, #020617 0%, #0f172a 50%, #042f2e 100%);">
+
+    <div class="w-full max-w-md">
+        <div class="bg-void-900/80 backdrop-blur-lg rounded-2xl p-8 text-center border border-void-700/50 shadow-2xl">
+
+            <!-- Status: Connecting -->
+            <div id="status-connecting">
+                <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-frost-500/20 flex items-center justify-center">
+                    <i class="fas fa-spinner fa-spin text-frost-500 text-3xl"></i>
+                </div>
+                <p class="text-void-400 text-lg">Connessione in corso...</p>
+            </div>
+
+            <!-- Status: Active Call -->
+            <div id="status-active" class="hidden">
+                {% if agent_avatar %}
+                <img src="{{ agent_avatar }}" alt="{{ agent_name }}" class="w-24 h-24 mx-auto mb-4 rounded-full object-cover animate-glow">
+                {% else %}
+                <div class="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-nordic-500 to-frost-500 flex items-center justify-center animate-pulse-slow">
+                    <span class="text-white text-4xl font-bold">{{ agent_name[0] }}</span>
+                </div>
+                {% endif %}
+                <h2 class="text-2xl font-bold text-white mb-1">{{ agent_name }}</h2>
+                <p id="call-status-text" class="text-void-400 mb-6">In chiamata...</p>
+
+                <!-- Audio Visualizer -->
+                <div id="audio-viz" class="flex justify-center items-end h-12 gap-1 mb-4">
+                    <div class="viz-bar w-2 h-4 bg-nordic-500 rounded-full transition-all duration-100"></div>
+                    <div class="viz-bar w-2 h-8 bg-nordic-500 rounded-full transition-all duration-100"></div>
+                    <div class="viz-bar w-2 h-5 bg-nordic-500 rounded-full transition-all duration-100"></div>
+                    <div class="viz-bar w-2 h-10 bg-nordic-500 rounded-full transition-all duration-100"></div>
+                    <div class="viz-bar w-2 h-4 bg-nordic-500 rounded-full transition-all duration-100"></div>
+                </div>
+
+                <!-- Timer -->
+                <p id="timer" class="font-mono text-2xl text-void-300 mb-8">00:00</p>
+
+                <!-- Controls -->
+                <div class="flex justify-center gap-6">
+                    <button id="mute-btn" onclick="toggleMute()" class="w-16 h-16 rounded-full bg-void-800 hover:bg-void-700 transition-colors flex items-center justify-center border border-void-600/50">
+                        <i id="mic-icon" class="fas fa-microphone text-white text-2xl"></i>
+                    </button>
+                    <button onclick="hangup()" class="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center">
+                        <i class="fas fa-phone-slash text-white text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Status: Error -->
+            <div id="status-error" class="hidden">
+                <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-ember-500/20 flex items-center justify-center">
+                    <i class="fas fa-exclamation-triangle text-ember-500 text-3xl"></i>
+                </div>
+                <p id="error-message" class="text-ember-400 text-lg mb-6"></p>
+                <button onclick="location.reload()" class="px-6 py-3 bg-void-800 text-void-300 rounded-xl hover:bg-void-700 transition-colors border border-void-600/50">
+                    Riprova
+                </button>
+            </div>
+
+            <!-- Status: Call Ended -->
+            <div id="status-ended" class="hidden">
+                <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-nordic-500/20 flex items-center justify-center">
+                    <i class="fas fa-check text-nordic-500 text-3xl"></i>
+                </div>
+                <p class="text-void-300 text-lg mb-2">Chiamata terminata</p>
+                <p id="call-duration" class="font-mono text-void-500 mb-6"></p>
+                <p class="text-void-500 text-sm">Puoi chiudere questa pagina.</p>
+            </div>
+
+            <!-- Status: Expired -->
+            <div id="status-expired" class="hidden">
+                <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-void-700/50 flex items-center justify-center">
+                    <i class="fas fa-clock text-void-400 text-3xl"></i>
+                </div>
+                <p class="text-void-300 text-lg mb-2">Sessione scaduta o non valida</p>
+                <p class="text-void-500 text-sm">Puoi chiudere questa pagina.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Branding -->
+    <p class="mt-6 text-void-600 text-xs font-mono tracking-wider">GridBear</p>
+
+    <!-- Agent Audio Output -->
+    <audio id="agent-audio" autoplay></audio>
+
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.0.7/dist/livekit-client.umd.min.js"></script>
+    <script>
+    const wsUrl = "{{ ws_url }}";
+    const token = "{{ token }}";
+    const roomName = "{{ room_name }}";
+    const cleanupToken = "{{ cleanup_token|default('', true) }}";
+    const expired = {{ expired|default(false)|tojson }};
+
+    let room = null;
+    let isMuted = false;
+    let startTime = null;
+    let timerInterval = null;
+
+    if (expired) {
+        document.getElementById('status-connecting').classList.add('hidden');
+        document.getElementById('status-expired').classList.remove('hidden');
+    } else {
+        connect();
+    }
+
+    async function connect() {
+        try {
+            if (typeof LivekitClient === 'undefined') {
+                throw new Error('LiveKit non caricato');
+            }
+
+            room = new LivekitClient.Room({
+                adaptiveStream: true,
+                dynacast: true,
+            });
+
+            room.on(LivekitClient.RoomEvent.Connected, () => {
+                document.getElementById('status-connecting').classList.add('hidden');
+                document.getElementById('status-active').classList.remove('hidden');
+                startTimer();
+                animateViz();
+            });
+
+            room.on(LivekitClient.RoomEvent.Disconnected, () => {
+                showCallEnded();
+            });
+
+            room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                if (track.kind === 'audio' && participant.identity.startsWith('agent-')) {
+                    track.attach(document.getElementById('agent-audio'));
+                }
+            });
+
+            room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+                if (participant.identity.startsWith('agent-')) {
+                    document.getElementById('call-status-text').textContent = '{{ agent_name }} connesso';
+                }
+            });
+
+            await room.connect(wsUrl, token);
+            await room.localParticipant.setMicrophoneEnabled(true);
+
+        } catch (e) {
+            showError(e.message);
+        }
+    }
+
+    function toggleMute() {
+        if (!room) return;
+        isMuted = !isMuted;
+        room.localParticipant.setMicrophoneEnabled(!isMuted);
+
+        const icon = document.getElementById('mic-icon');
+        const btn = document.getElementById('mute-btn');
+
+        if (isMuted) {
+            icon.className = 'fas fa-microphone-slash text-red-400 text-2xl';
+            btn.classList.add('bg-red-500/20', 'border-red-500/50');
+            btn.classList.remove('bg-void-800', 'border-void-600/50');
+        } else {
+            icon.className = 'fas fa-microphone text-white text-2xl';
+            btn.classList.remove('bg-red-500/20', 'border-red-500/50');
+            btn.classList.add('bg-void-800', 'border-void-600/50');
+        }
+    }
+
+    async function hangup() {
+        if (!room) return;
+        await room.disconnect();
+        await endSession();
+        showCallEnded();
+    }
+
+    async function endSession() {
+        try {
+            await fetch('/plugin/livekit-agent/call/' + roomName + '/cleanup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cleanup_token: cleanupToken })
+            });
+        } catch (e) {
+            console.log('Session cleanup failed:', e);
+        }
+    }
+
+    function startTimer() {
+        startTime = Date.now();
+        timerInterval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('timer').textContent = mins + ':' + secs;
+        }, 1000);
+    }
+
+    function showError(message) {
+        document.getElementById('status-connecting').classList.add('hidden');
+        document.getElementById('status-error').classList.remove('hidden');
+        document.getElementById('error-message').textContent = message;
+    }
+
+    function showCallEnded() {
+        if (timerInterval) clearInterval(timerInterval);
+
+        document.getElementById('status-active').classList.add('hidden');
+        document.getElementById('status-connecting').classList.add('hidden');
+        document.getElementById('status-ended').classList.remove('hidden');
+
+        if (startTime) {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('call-duration').textContent = 'Durata: ' + Math.floor(elapsed / 60) + 'm ' + (elapsed % 60) + 's';
+        }
+    }
+
+    function animateViz() {
+        const bars = document.querySelectorAll('.viz-bar');
+        setInterval(() => {
+            bars.forEach(bar => {
+                bar.style.height = (Math.random() * 32 + 8) + 'px';
+            });
+        }, 150);
+    }
+
+    window.addEventListener('beforeunload', () => {
+        if (room) room.disconnect();
+        navigator.sendBeacon('/plugin/livekit-agent/call/' + roomName + '/cleanup?t=' + cleanupToken);
+    });
+    </script>
+</body>
+</html>

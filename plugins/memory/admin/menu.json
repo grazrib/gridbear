@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Memory",
+      "url": "/memory/",
+      "icon": "fas fa-brain",
+      "section": "data",
+      "priority": 10
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "theme-tailadmin",
+  "type": "theme",
+  "version": "0.1.0",
+  "description": "TailAdmin dashboard theme with brand blue palette and Outfit font",
+  "author": "GridBear",
+  "class_name": "TailAdminTheme",
+  "entry_point": "theme.py"
+}

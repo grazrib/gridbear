@@ -1,0 +1,90 @@
+{% extends "me/base.html" %}
+
+{% block title %}GridBear - {{ _("MCP Tools") }}{% endblock %}
+{% block page_title %}{{ _("My MCP Tools") }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if not tool_groups %}
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-8 text-center">
+        <i class="fas fa-wrench text-4xl text-void-300 dark:text-void-600 mb-4"></i>
+        <p class="text-sm text-void-500 dark:text-void-400">{{ _("No tools available.") }}</p>
+        <p class="text-xs text-void-400 mt-1">{{ _("Connect services to access tools.") }}</p>
+    </div>
+    {% else %}
+
+    <p class="text-sm text-void-500 dark:text-void-400">
+        {{ _("Enable or disable MCP tools. Disabled tools will not be available in chats and MCP connections.") }}
+    </p>
+
+    {% for group_name, tools in tool_groups.items() %}
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 overflow-hidden"
+         x-data="{ open: true }">
+        <button @click="open = !open"
+                class="w-full flex items-center justify-between px-5 py-4 hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+            <div class="flex items-center gap-3">
+                <h3 class="font-semibold text-sm">{{ group_name }}</h3>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-void-100 dark:bg-void-800 text-void-500">{{ tools|length }} {{ _("tools") if tools|length != 1 else _("tool") }}</span>
+            </div>
+            <i class="fas fa-chevron-down text-xs text-void-400 transition-transform duration-200"
+               :class="open ? '' : '-rotate-90'"></i>
+        </button>
+        <div x-show="open" x-collapse class="border-t border-void-100 dark:border-void-800">
+            {% for tool in tools %}
+            <div class="flex items-center justify-between px-5 py-3 {% if not loop.last %}border-b border-void-50 dark:border-void-800/50{% endif %}">
+                <div class="flex-1 min-w-0 mr-4">
+                    <p class="text-sm font-mono text-void-700 dark:text-void-200 truncate">{{ tool.short_name }}</p>
+                    <p class="text-xs text-void-400 truncate">{{ tool.description }}</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                    <input type="checkbox"
+                           class="sr-only peer"
+                           data-tool="{{ tool.full_name }}"
+                           {{ 'checked' if tool.enabled }}
+                           onchange="toggleTool(this)">
+                    <div class="w-9 h-5 bg-void-200 dark:bg-void-700 peer-focus:ring-2 peer-focus:ring-nordic-500/40 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-nordic-500"></div>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleTool(checkbox) {
+        var toolName = checkbox.dataset.tool;
+        var enabled = checkbox.checked;
+        var csrfInput = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfInput ? csrfInput.value : '';
+
+        fetch('/me/tools/toggle', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken,
+            },
+            body: JSON.stringify({tool_name: toolName, enabled: enabled}),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                showToast(enabled ? {{ _("Tool enabled")|tojson }} : {{ _("Tool disabled")|tojson }}, 'success');
+            } else {
+                showToast({{ _("Error:")|tojson }} + ' ' + (data.error || {{ _("unknown")|tojson }}), 'error');
+                checkbox.checked = !enabled;
+            }
+        })
+        .catch(function() {
+            showToast({{ _("Network error")|tojson }}, 'error');
+            checkbox.checked = !enabled;
+        });
+    }
+</script>
+<!-- Hidden CSRF for JS -->
+<form style="display:none">{% include "partials/csrf_field.html" %}</form>
+{% endblock %}

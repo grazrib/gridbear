@@ -1,0 +1,122 @@
+{% extends "plugins/plugin_base.html" %}
+
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Google Sheets integration via service account</p>{% endblock %}
+
+{% block plugin_content_after %}
+    <!-- Service Account Link -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-key text-nordic-500"></i>
+                Service Account
+            </h3>
+        </div>
+        <div class="p-5">
+            <p class="text-sm text-void-500 dark:text-void-400 mb-3">
+                Google service account credentials are managed centrally by the
+                <strong>google-sa</strong> plugin and shared across all Google integrations.
+            </p>
+            <a href="/plugins/google-sa"
+               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all">
+                <i class="fas fa-external-link-alt"></i>
+                Manage Service Account
+            </a>
+        </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-cog text-frost-500"></i>
+                Settings
+            </h3>
+        </div>
+        <div class="p-5">
+            <form method="POST" action="/plugins/google-sheets/settings" class="space-y-5">
+                {% include "partials/csrf_field.html" %}
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Drive Folder ID</label>
+                    <input type="text" name="drive_folder_id" value="{{ config.drive_folder_id }}"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all font-mono"
+                           placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms">
+                    <p class="text-sm text-void-500 dark:text-void-400">
+                        Scope <code class="text-frost-500">list_spreadsheets</code> to a specific Google Drive folder.
+                        Share the folder with the service account email. Leave empty to list all accessible spreadsheets.
+                    </p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Enabled Tools</label>
+                    <input type="text" name="enabled_tools" value="{{ config.enabled_tools }}"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all font-mono"
+                           placeholder="list_spreadsheets,get_sheet_data,update_cells">
+                    <p class="text-sm text-void-500 dark:text-void-400">
+                        Comma-separated list of tools to expose. Leave empty to enable all 19 tools.
+                    </p>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-all">
+                        <i class="fas fa-save"></i>
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Available Tools Reference -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-void-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-info-circle text-void-400"></i>
+                Available Tools (19)
+            </h3>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold text-void-500 dark:text-void-400 uppercase tracking-wider">Data Operations</p>
+                    <div class="space-y-1">
+                        <code class="block text-sm text-frost-500 font-mono">get_sheet_data</code>
+                        <code class="block text-sm text-frost-500 font-mono">get_sheet_formulas</code>
+                        <code class="block text-sm text-frost-500 font-mono">update_cells</code>
+                        <code class="block text-sm text-frost-500 font-mono">batch_update_cells</code>
+                        <code class="block text-sm text-frost-500 font-mono">get_multiple_sheet_data</code>
+                        <code class="block text-sm text-frost-500 font-mono">batch_update</code>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold text-void-500 dark:text-void-400 uppercase tracking-wider">Spreadsheet Management</p>
+                    <div class="space-y-1">
+                        <code class="block text-sm text-frost-500 font-mono">list_spreadsheets</code>
+                        <code class="block text-sm text-frost-500 font-mono">create_spreadsheet</code>
+                        <code class="block text-sm text-frost-500 font-mono">get_multiple_spreadsheet_summary</code>
+                        <code class="block text-sm text-frost-500 font-mono">search_spreadsheets</code>
+                        <code class="block text-sm text-frost-500 font-mono">share_spreadsheet</code>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold text-void-500 dark:text-void-400 uppercase tracking-wider">Sheet/Tab Management</p>
+                    <div class="space-y-1">
+                        <code class="block text-sm text-frost-500 font-mono">list_sheets</code>
+                        <code class="block text-sm text-frost-500 font-mono">create_sheet</code>
+                        <code class="block text-sm text-frost-500 font-mono">rename_sheet</code>
+                        <code class="block text-sm text-frost-500 font-mono">copy_sheet</code>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <p class="text-xs font-semibold text-void-500 dark:text-void-400 uppercase tracking-wider">Structure & Search</p>
+                    <div class="space-y-1">
+                        <code class="block text-sm text-frost-500 font-mono">add_rows</code>
+                        <code class="block text-sm text-frost-500 font-mono">add_columns</code>
+                        <code class="block text-sm text-frost-500 font-mono">find_in_spreadsheet</code>
+                        <code class="block text-sm text-frost-500 font-mono">list_folders</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

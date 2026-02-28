@@ -1,0 +1,21 @@
+{# Theme CSS variable injection — included in <head> of all base templates.
+   Renders nothing when no theme is active. #}
+{% if theme_css_vars %}
+<style id="gridbear-theme-vars">
+:root {
+{% for prop, val in theme_css_vars.light.items() %}
+    {{ prop }}: {{ val }};
+{% endfor %}
+}
+.dark {
+{% for prop, val in theme_css_vars.dark.items() %}
+    {{ prop }}: {{ val }};
+{% endfor %}
+}
+</style>
+{% endif %}
+{% if theme_custom_css %}
+<style id="gridbear-theme-custom">
+{{ theme_custom_css|safe }}
+</style>
+{% endif %}

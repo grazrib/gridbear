@@ -1,0 +1,27 @@
+# Dockerfile.fast - Fast rebuild using pre-built base image
+# Requires: docker build -f Dockerfile.base -t gridbear-base:latest .
+#
+# Usage: docker build -f Dockerfile.fast -t gridbear .
+# Rebuild time: ~10-20 seconds (vs ~15 minutes with full Dockerfile)
+
+# syntax=docker/dockerfile:1
+FROM gridbear-base:latest
+
+WORKDIR /app
+
+# Install remaining (lightweight) dependencies
+COPY pyproject.toml .
+COPY core/__version__.py core/__version__.py
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system .
+
+COPY . .
+
+# Create directories and set ownership
+RUN mkdir -p /app/data/attachments /app/credentials /home/gridbear/.claude && \
+    chown -R gridbear:gridbear /app /home/gridbear
+
+# Switch to non-root user
+USER gridbear
+
+CMD ["python", "main.py"]

@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Skills",
+      "url": "/plugin/skills",
+      "icon": "fas fa-magic",
+      "section": "services",
+      "priority": 4
+    }
+  ]
+}

@@ -1,0 +1,163 @@
+{% extends "auth/auth_base.html" %}
+
+{% block title %}Register Passkey - GridBear{% endblock %}
+{% block card_width %}max-w-lg{% endblock %}
+
+{% block header %}
+<div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-frost-500/10 flex items-center justify-center">
+    <i class="fas fa-fingerprint text-frost-400 text-2xl"></i>
+</div>
+<h1 class="text-2xl font-semibold text-white mb-2">Register a Passkey</h1>
+<p class="text-slate-400 text-sm">Use your fingerprint, Face ID, or a security key for quick login</p>
+{% endblock %}
+
+{% block content %}
+<div id="error-box" class="hidden mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-400">
+    <i class="fas fa-circle-exclamation"></i>
+    <span id="error-message" class="text-sm"></span>
+</div>
+
+<div id="unsupported-box" class="hidden mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-400">
+    <i class="fas fa-triangle-exclamation"></i>
+    <span class="text-sm">Your browser does not support passkeys.</span>
+</div>
+
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-start gap-3">
+    <span class="flex-shrink-0 w-6 h-6 rounded-full bg-frost-500/20 text-frost-400 flex items-center justify-center text-xs font-bold">1</span>
+    <span class="text-slate-300 text-sm">Give your passkey a name to identify this device</span>
+</div>
+
+<div class="mb-6">
+    <input type="text"
+           id="device_name"
+           class="w-full bg-void-800/50 border border-white/10 rounded-xl py-3 px-4 text-white placeholder-slate-600 focus:outline-none focus:border-nordic-500/50 input-glow transition-all"
+           placeholder="e.g. MacBook fingerprint, iPhone Face ID, YubiKey..."
+           value="Security Key"
+           maxlength="50">
+</div>
+
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-start gap-3">
+    <span class="flex-shrink-0 w-6 h-6 rounded-full bg-nordic-500/20 text-nordic-400 flex items-center justify-center text-xs font-bold">2</span>
+    <span class="text-slate-300 text-sm">Click the button and follow your device's prompts</span>
+</div>
+
+<button id="btn-register" onclick="registerPasskey()"
+        class="w-full bg-gradient-to-r from-frost-500 to-nordic-500 hover:from-frost-400 hover:to-nordic-400 text-white font-medium py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-frost-500/20">
+    <i class="fas fa-fingerprint"></i>
+    <span id="btn-text">Register Passkey</span>
+</button>
+
+<div class="text-center mt-6">
+    <a href="/auth/security" class="text-sm text-slate-500 hover:text-nordic-400 transition-colors flex items-center justify-center gap-2">
+        <i class="fas fa-arrow-left"></i>
+        Cancel setup
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var _webauthnOptions = '{{ options_json|safe }}';
+    var _csrfToken = '{{ csrf_token(request) }}';
+
+    function base64urlToUint8Array(base64url) {
+        var base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        var binary = atob(base64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    function uint8ArrayToBase64url(uint8Array) {
+        var binary = '';
+        uint8Array.forEach(function(byte) { binary += String.fromCharCode(byte); });
+        var base64 = btoa(binary);
+        return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    function showError(message) {
+        document.getElementById('error-box').classList.remove('hidden');
+        document.getElementById('error-message').textContent = message;
+    }
+
+    function setButtonState(loading) {
+        var btn = document.getElementById('btn-register');
+        var btnText = document.getElementById('btn-text');
+        btn.disabled = loading;
+        btnText.textContent = loading ? 'Registering...' : 'Register Passkey';
+    }
+
+    async function registerPasskey() {
+        var deviceName = document.getElementById('device_name').value.trim() || 'Security Key';
+        setButtonState(true);
+        document.getElementById('error-box').classList.add('hidden');
+
+        try {
+            var options = JSON.parse(_webauthnOptions);
+            options.challenge = base64urlToUint8Array(options.challenge);
+            options.user.id = base64urlToUint8Array(options.user.id);
+            if (options.excludeCredentials) {
+                options.excludeCredentials = options.excludeCredentials.map(function(cred) {
+                    return Object.assign({}, cred, {
+                        id: base64urlToUint8Array(cred.id)
+                    });
+                });
+            }
+
+            var credential = await navigator.credentials.create({ publicKey: options });
+
+            var response = {
+                id: credential.id,
+                rawId: uint8ArrayToBase64url(new Uint8Array(credential.rawId)),
+                response: {
+                    clientDataJSON: uint8ArrayToBase64url(new Uint8Array(credential.response.clientDataJSON)),
+                    attestationObject: uint8ArrayToBase64url(new Uint8Array(credential.response.attestationObject)),
+                },
+                type: credential.type,
+                authenticatorAttachment: credential.authenticatorAttachment || null,
+            };
+
+            var result = await fetch('/auth/webauthn-setup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': _csrfToken,
+                },
+                body: JSON.stringify({
+                    response: response,
+                    device_name: deviceName,
+                }),
+            });
+
+            if (result.ok) {
+                var data = await result.json();
+                window.location.href = (data.data && data.data.redirect) || '/auth/security';
+            } else {
+                var error = await result.json().catch(function() { return {}; });
+                showError(error.detail || 'Registration failed');
+                setButtonState(false);
+            }
+        } catch (err) {
+            if (err.name === 'NotAllowedError') {
+                showError('Registration was cancelled or timed out');
+            } else if (err.name === 'InvalidStateError') {
+                showError('This passkey is already registered');
+            } else {
+                showError(err.message || 'Failed to register passkey');
+            }
+            setButtonState(false);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!window.PublicKeyCredential) {
+            document.getElementById('unsupported-box').classList.remove('hidden');
+            document.getElementById('btn-register').disabled = true;
+            document.getElementById('btn-text').textContent = 'Not Supported';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}LiveKit - GridBear Admin{% endblock %}
+{% block page_title %}LiveKit Video Call{% endblock %}
+{% block breadcrumb_active %}LiveKit{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Real-time voice calls with AI agents</p>{% endblock %}
+
+{% block content_alerts %}
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Settings saved successfully. Restart container to apply changes.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('reload_requested') %}
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-600 dark:text-frost-400">
+    <i class="fas fa-info-circle"></i>
+    <span>Reload requested. Restart the gridbear container to apply changes.</span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Configuration -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-key text-frost-500"></i>
+            LiveKit Configuration
+        </h3>
+    </div>
+    <div class="p-5">
+        <form method="POST" action="/plugin/livekit-agent/settings" class="space-y-5">
+            {% include "partials/csrf_field.html" %}
+
+            <!-- Status indicator -->
+            <div class="p-4 rounded-xl {% if has_api_key and has_api_secret and ws_url %}bg-nordic-500/10 border border-nordic-500/20{% else %}bg-ember-500/10 border border-ember-500/20{% endif %} flex items-center gap-3">
+                {% if has_api_key and has_api_secret and ws_url %}
+                <i class="fas fa-check-circle text-nordic-500 text-xl"></i>
+                <div>
+                    <p class="font-semibold text-nordic-600 dark:text-nordic-400">LiveKit Configured</p>
+                    <p class="text-sm text-void-500">Ready for voice calls</p>
+                </div>
+                {% else %}
+                <i class="fas fa-exclamation-triangle text-ember-500 text-xl"></i>
+                <div>
+                    <p class="font-semibold text-ember-600 dark:text-ember-400">Configuration Required</p>
+                    <p class="text-sm text-void-500">
+                        {% if not has_api_key %}API Key missing. {% endif %}
+                        {% if not has_api_secret %}API Secret missing. {% endif %}
+                        {% if not ws_url %}WebSocket URL missing.{% endif %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- API Key -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-void-700 dark:text-void-200">
+                    LiveKit API Key
+                    <span class="text-ember-500">*</span>
+                </label>
+                <input type="password" name="livekit_api_key"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all"
+                       placeholder="{% if has_api_key %}Leave empty to keep existing{% else %}APIxxxxxxxxx{% endif %}">
+            </div>
+
+            <!-- API Secret -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-void-700 dark:text-void-200">
+                    LiveKit API Secret
+                    <span class="text-ember-500">*</span>
+                </label>
+                <input type="password" name="livekit_api_secret"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all"
+                       placeholder="{% if has_api_secret %}Leave empty to keep existing{% else %}Enter your API secret{% endif %}">
+            </div>
+
+            <!-- WebSocket URL -->
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-void-700 dark:text-void-200">
+                    WebSocket URL
+                    <span class="text-ember-500">*</span>
+                </label>
+                <input type="text" name="ws_url"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all"
+                       value="{{ ws_url or '' }}"
+                       placeholder="wss://your-project.livekit.cloud">
+                <p class="text-sm text-void-500">
+                    Get credentials from <a href="https://cloud.livekit.io" target="_blank" class="text-frost-500 hover:underline">cloud.livekit.io</a>
+                </p>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-all">
+                    <i class="fas fa-save"></i>
+                    Save Settings
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if service_enabled %}
+<!-- Start Call -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-phone text-nordic-500"></i>
+            New Call
+        </h3>
+    </div>
+    <div class="p-5">
+        <p class="text-void-500 dark:text-void-400 mb-4">Start a voice call with Peggy AI assistant.</p>
+        <button id="start-call-btn" class="px-6 py-3 bg-gradient-to-r from-nordic-500 to-frost-500 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-nordic-500/25 transition-all duration-200 flex items-center gap-2">
+            <i id="btn-icon" class="fas fa-phone"></i>
+            <span id="btn-text">Call Peggy</span>
+        </button>
+    </div>
+</div>
+
+<!-- Active Calls -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-list text-frost-500"></i>
+            Active Calls
+        </h3>
+    </div>
+    <div class="p-5">
+        {% if active_calls %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-void-500 dark:text-void-400 text-sm border-b border-void-200 dark:border-void-800">
+                        <th class="pb-3 font-medium">Room</th>
+                        <th class="pb-3 font-medium">User</th>
+                        <th class="pb-3 font-medium">Agent</th>
+                        <th class="pb-3 font-medium">Started</th>
+                        <th class="pb-3 font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-void-700 dark:text-void-300">
+                    {% for call in active_calls %}
+                    <tr class="border-b border-void-100 dark:border-void-800/50">
+                        <td class="py-3 font-mono text-sm">{{ call.room_name[:20] }}...</td>
+                        <td class="py-3">{{ call.user_id }}</td>
+                        <td class="py-3">{{ call.agent_id }}</td>
+                        <td class="py-3 text-sm">{{ call.created_at[:16] }}</td>
+                        <td class="py-3">
+                            <div class="flex gap-2">
+                                <a href="/plugin/livekit-agent/call/{{ call.room_name }}" class="px-3 py-1 bg-frost-500/10 text-frost-600 dark:text-frost-400 rounded-lg text-sm hover:bg-frost-500/20 transition-colors">
+                                    Join
+                                </a>
+                                <button onclick="endCall('{{ call.room_name }}')" class="px-3 py-1 bg-ember-500/10 text-ember-600 dark:text-ember-400 rounded-lg text-sm hover:bg-ember-500/20 transition-colors">
+                                    End
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-void-500 dark:text-void-400">No active calls.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+async function startCall() {
+    const btn = document.getElementById('start-call-btn');
+    const icon = document.getElementById('btn-icon');
+    const text = document.getElementById('btn-text');
+
+    btn.disabled = true;
+    icon.className = 'fas fa-spinner fa-spin';
+    text.textContent = 'Connecting...';
+
+    try {
+        const res = await fetch('/plugin/livekit-agent/call/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.detail || 'Error');
+        }
+
+        const data = await res.json();
+        window.location.href = data.call_url;
+    } catch (e) {
+        alert('Error: ' + e.message);
+        btn.disabled = false;
+        icon.className = 'fas fa-phone';
+        text.textContent = 'Call Peggy';
+    }
+}
+
+async function endCall(roomName) {
+    if (!confirm('End this call?')) return;
+
+    try {
+        const res = await fetch('/plugin/livekit-agent/call/' + roomName + '/end', { method: 'POST' });
+        if (res.ok) {
+            location.reload();
+        } else {
+            const error = await res.json();
+            alert('Error: ' + error.detail);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+document.getElementById('start-call-btn')?.addEventListener('click', startCall);
+</script>
+{% endblock %}

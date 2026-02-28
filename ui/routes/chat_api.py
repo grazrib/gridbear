@@ -1,0 +1,447 @@
+"""Chat history REST API for user portal (PostgreSQL).
+
+Provides conversation management and message persistence for WebChat.
+Storage: PostgreSQL chat.webchat_conversations / chat.webchat_messages.
+"""
+
+import json
+import os
+import re
+import time
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Request, UploadFile
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+
+from config.logging_config import logger
+from core.api_schemas import ApiResponse, api_error, api_ok
+from core.encryption import decrypt, encrypt, is_encrypted
+from ui.routes.auth import require_user
+
+router = APIRouter(prefix="/me/chat/api", tags=["chat-api"])
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+ATTACHMENTS_DIR = BASE_DIR / "data" / "attachments"
+
+# Max upload: 20MB per file, images + common doc types
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024
+ALLOWED_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".svg",
+    ".pdf",
+    ".txt",
+    ".csv",
+    ".json",
+    ".xml",
+    ".md",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".mp3",
+    ".wav",
+    ".m4a",
+    ".ogg",
+    ".flac",
+    ".webm",
+    ".mp4",
+}
+
+MIGRATION_NAME = "004_apps_webchat"
+MIGRATION_SQL = BASE_DIR / "scripts" / "migrations" / f"{MIGRATION_NAME}.sql"
+
+_db = None
+_initialized = False
+
+
+def _ensure_db():
+    """Initialize PG database reference and apply migration if needed."""
+    global _db, _initialized
+    if _initialized:
+        return
+
+    from core.registry import get_database
+
+    _db = get_database()
+    if _db is None:
+        raise RuntimeError("PostgreSQL database not available (chat API requires it)")
+
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM public._migrations WHERE name = %s",
+            (MIGRATION_NAME,),
+        ).fetchone()
+        if not row:
+            sql = MIGRATION_SQL.read_text()
+            conn.execute(sql)
+            conn.execute(
+                "INSERT INTO public._migrations (name) VALUES (%s)",
+                (MIGRATION_NAME,),
+            )
+            conn.commit()
+            logger.info(f"Applied {MIGRATION_NAME} migration (chat_api)")
+        else:
+            conn.rollback()
+
+    _initialized = True
+
+
+def _uid(user: dict) -> str:
+    return user.get("unified_id") or user.get("username")
+
+
+def _serialize_row(row: dict) -> dict:
+    """Convert datetime values to ISO strings for JSON serialization."""
+    return {k: v.isoformat() if hasattr(v, "isoformat") else v for k, v in row.items()}
+
+
+# --- Public helpers (used by ws_chat) ---
+
+
+def save_message(
+    conversation_id: str, role: str, content: str, metadata: dict | None = None
+):
+    """Save a message and update conversation timestamp. Auto-title if empty."""
+    _ensure_db()
+    encrypted_content = encrypt(content)
+    with _db.acquire_sync() as conn:
+        conn.execute(
+            """INSERT INTO chat.webchat_messages (conversation_id, role, content, metadata_json)
+               VALUES (%s, %s, %s, %s)""",
+            (
+                conversation_id,
+                role,
+                encrypted_content,
+                json.dumps(metadata) if metadata else None,
+            ),
+        )
+        conn.execute(
+            "UPDATE chat.webchat_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+            (conversation_id,),
+        )
+        # Auto-title: set title from first user message
+        if role == "user":
+            row = conn.execute(
+                "SELECT title FROM chat.webchat_conversations WHERE id = %s",
+                (conversation_id,),
+            ).fetchone()
+            if row and not row["title"]:
+                title = content[:80].strip()
+                if len(content) > 80:
+                    title += "..."
+                conn.execute(
+                    "UPDATE chat.webchat_conversations SET title = %s WHERE id = %s",
+                    (title, conversation_id),
+                )
+        conn.commit()
+
+
+def get_conversation_title(conversation_id: str) -> str:
+    """Get current title of a conversation."""
+    _ensure_db()
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT title FROM chat.webchat_conversations WHERE id = %s",
+            (conversation_id,),
+        ).fetchone()
+    return row["title"] if row else ""
+
+
+def validate_conversation_ownership(conversation_id: str, unified_id: str) -> bool:
+    """Check that a conversation belongs to the given user."""
+    _ensure_db()
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM chat.webchat_conversations WHERE id = %s AND unified_id = %s",
+            (conversation_id, unified_id),
+        ).fetchone()
+    return row is not None
+
+
+# --- REST endpoints ---
+
+
+@router.get(
+    "/conversations",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def list_conversations(request: Request, user: dict = Depends(require_user)):
+    _ensure_db()
+    agent = request.query_params.get("agent", "")
+    uid = _uid(user)
+    with _db.acquire_sync() as conn:
+        if agent:
+            cur = conn.execute(
+                """SELECT id, agent_name, title, created_at, updated_at
+                   FROM chat.webchat_conversations
+                   WHERE unified_id = %s AND agent_name = %s
+                   ORDER BY updated_at DESC""",
+                (uid, agent),
+            )
+        else:
+            cur = conn.execute(
+                """SELECT id, agent_name, title, created_at, updated_at
+                   FROM chat.webchat_conversations
+                   WHERE unified_id = %s
+                   ORDER BY updated_at DESC""",
+                (uid,),
+            )
+        rows = [_serialize_row(dict(r)) for r in cur.fetchall()]
+    return api_ok(data={"conversations": rows})
+
+
+@router.post(
+    "/conversations",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def create_conversation(request: Request, user: dict = Depends(require_user)):
+    try:
+        body = await request.json()
+    except Exception:
+        return api_error(400, "Invalid JSON", "validation_error")
+
+    agent_name = body.get("agent_name", "")
+    uid = _uid(user)
+    conv_id = str(uuid.uuid4())
+
+    _ensure_db()
+    with _db.acquire_sync() as conn:
+        conn.execute(
+            """INSERT INTO chat.webchat_conversations (id, unified_id, agent_name)
+               VALUES (%s, %s, %s)""",
+            (conv_id, uid, agent_name),
+        )
+        conn.commit()
+        row = conn.execute(
+            """SELECT id, agent_name, title, created_at, updated_at
+               FROM chat.webchat_conversations WHERE id = %s""",
+            (conv_id,),
+        ).fetchone()
+    return api_ok(data={"conversation": _serialize_row(dict(row))})
+
+
+@router.get(
+    "/conversations/{conv_id}/messages",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def get_messages(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    _ensure_db()
+    uid = _uid(user)
+    with _db.acquire_sync() as conn:
+        # Ownership check
+        row = conn.execute(
+            "SELECT 1 FROM chat.webchat_conversations WHERE id = %s AND unified_id = %s",
+            (conv_id, uid),
+        ).fetchone()
+        if not row:
+            return api_error(404, "Not found", "not_found")
+
+        limit = int(request.query_params.get("limit", "200"))
+        offset = int(request.query_params.get("offset", "0"))
+
+        cur = conn.execute(
+            """SELECT id, role, content, metadata_json, created_at
+               FROM chat.webchat_messages
+               WHERE conversation_id = %s
+               ORDER BY created_at ASC
+               LIMIT %s OFFSET %s""",
+            (conv_id, limit, offset),
+        )
+        rows = []
+        for r in cur.fetchall():
+            msg = _serialize_row(dict(r))
+            # Decrypt content (handles both encrypted and pre-migration plaintext)
+            raw = msg.get("content", "")
+            msg["content"] = decrypt(raw) if is_encrypted(raw) else raw
+            if msg["metadata_json"]:
+                msg["metadata"] = json.loads(msg["metadata_json"])
+            del msg["metadata_json"]
+            rows.append(msg)
+
+    return api_ok(data={"messages": rows})
+
+
+@router.post(
+    "/conversations/{conv_id}/rename",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def rename_conversation(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    try:
+        body = await request.json()
+    except Exception:
+        return api_error(400, "Invalid JSON", "validation_error")
+
+    title = (body.get("title") or "").strip()
+    if not title:
+        return api_error(400, "Title required", "validation_error")
+
+    _ensure_db()
+    uid = _uid(user)
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM chat.webchat_conversations WHERE id = %s AND unified_id = %s",
+            (conv_id, uid),
+        ).fetchone()
+        if not row:
+            return api_error(404, "Not found", "not_found")
+
+        conn.execute(
+            "UPDATE chat.webchat_conversations SET title = %s WHERE id = %s",
+            (title, conv_id),
+        )
+        conn.commit()
+    return api_ok(data={"title": title})
+
+
+@router.delete(
+    "/conversations/{conv_id}",
+    response_model=ApiResponse,
+    response_model_exclude_none=True,
+)
+async def delete_conversation(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    _ensure_db()
+    uid = _uid(user)
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM chat.webchat_conversations WHERE id = %s AND unified_id = %s",
+            (conv_id, uid),
+        ).fetchone()
+        if not row:
+            return api_error(404, "Not found", "not_found")
+
+        conn.execute(
+            "DELETE FROM chat.webchat_conversations WHERE id = %s",
+            (conv_id,),
+        )
+        conn.commit()
+    return api_ok()
+
+
+# --- File upload ---
+
+
+@router.post(
+    "/upload",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def upload_file(request: Request, user: dict = Depends(require_user)):
+    """Upload a file for chat attachment. Returns the server-side file path."""
+    uid = _uid(user)
+
+    form = await request.form()
+    file: UploadFile | None = form.get("file")
+    if not file or not file.filename:
+        return api_error(400, "No file provided", "validation_error")
+
+    # Validate extension
+    from handlers.attachment_handler import sanitize_filename
+
+    safe_name = sanitize_filename(file.filename)
+    ext = Path(safe_name).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return api_error(400, f"File type {ext} not allowed", "validation_error")
+
+    # Read with size limit
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        return api_error(400, "File too large (max 20MB)", "validation_error")
+
+    # Save to user-specific directory with timestamp prefix to avoid collisions
+    user_dir = ATTACHMENTS_DIR / "webchat" / uid
+    user_dir.mkdir(parents=True, exist_ok=True)
+    dest_name = f"{int(time.time())}_{safe_name}"
+    dest_path = user_dir / dest_name
+    dest_path.write_bytes(content)
+
+    logger.info(f"WebChat upload: {uid} -> {dest_path} ({len(content)} bytes)")
+
+    return api_ok(
+        data={
+            "path": str(dest_path),
+            "filename": safe_name,
+            "size": len(content),
+        }
+    )
+
+
+# --- TTS ---
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove markdown formatting for cleaner TTS input."""
+    text = re.sub(r"```[\s\S]*?```", " code block ", text)
+    text = re.sub(r"`[^`]+`", lambda m: m.group(0)[1:-1], text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"[#*_~>|]", "", text)
+    text = re.sub(r"\n{2,}", ". ", text)
+    text = text.replace("\n", " ").strip()
+    return text
+
+
+@router.get(
+    "/tts/config",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def tts_config(user: dict = Depends(require_user)):
+    """Return the current TTS provider setting."""
+    from ui.config_manager import ConfigManager
+
+    config = ConfigManager()
+    return api_ok(data={"provider": config.get_webchat_tts_provider()})
+
+
+@router.post("/tts")
+async def tts_synthesize(request: Request, user: dict = Depends(require_user)):
+    """Synthesize text to speech and return audio file."""
+    from ui import tts_service
+    from ui.config_manager import ConfigManager
+
+    try:
+        body = await request.json()
+    except Exception:
+        return api_error(400, "Invalid JSON", "validation_error")
+
+    text = (body.get("text") or "").strip()
+    if not text:
+        return api_error(400, "No text provided", "validation_error")
+
+    clean_text = _strip_markdown(text)
+    if not clean_text:
+        return api_error(400, "No speakable text", "validation_error")
+
+    config = ConfigManager()
+    provider = config.get_webchat_tts_provider()
+
+    try:
+        file_path = await tts_service.synthesize(clean_text, provider, locale="it")
+    except Exception as e:
+        logger.error(f"TTS synthesis error ({provider}): {e}")
+        return api_error(500, "TTS synthesis failed", "internal_error")
+
+    if not file_path:
+        return api_error(400, "Provider is browser", "browser_tts")
+
+    return FileResponse(
+        file_path,
+        media_type="audio/mpeg",
+        background=BackgroundTask(os.unlink, file_path),
+    )

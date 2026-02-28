@@ -1,0 +1,32 @@
+{
+  "name": "Memo & Reminders",
+  "version": "0.0.1",
+  "type": "service",
+  "instantiation": "per-agent",
+  "provides": "memo",
+  "description": "Scheduled tasks and reminders with natural language support",
+  "entry_point": "service.py",
+  "class_name": "MemoService",
+  "config_schema": {
+    "timezone": {
+      "type": "string",
+      "default": "Europe/Rome",
+      "description": "Default timezone for scheduling"
+    },
+    "max_memos_per_user": {
+      "type": "integer",
+      "default": 50,
+      "description": "Maximum memos per user (0 = unlimited)"
+    },
+    "max_prompts_per_user": {
+      "type": "integer",
+      "default": 100,
+      "description": "Maximum prompts per user (0 = unlimited)"
+    }
+  },
+  "context_skills": [{
+    "name": "memo-instructions",
+    "title": "Memo & Reminders Instructions",
+    "file": "skills/instructions.md"
+  }]
+}

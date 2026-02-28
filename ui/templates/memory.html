@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Memory Groups - GridBear{% endblock %}
+{% block page_title %}Shared Memory Groups{% endblock %}
+{% block breadcrumb_active %}Memory{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage shared memory groups for collaborative agent interactions</p>{% endblock %}
+
+{% block content %}
+<!-- Quick Actions -->
+<div class="mb-6 flex justify-end">
+    <a href="/memory/browse"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-frost-500 hover:bg-frost-600 text-white text-sm font-medium transition-colors">
+        <i class="fas fa-database"></i>
+        Browse Memories
+    </a>
+</div>
+
+<!-- Memory Groups -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 flex items-center justify-between">
+        <div>
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-users text-nordic-500"></i>
+                Memory Groups
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">Users in the same group share memories with each other</p>
+        </div>
+        <button type="button"
+                onclick="document.getElementById('newGroupForm').classList.toggle('hidden')"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+            <i class="fas fa-plus"></i>
+            New Group
+        </button>
+    </div>
+
+    <!-- New group form (hidden by default) -->
+    <div id="newGroupForm" class="hidden p-5 bg-nordic-500/5 border-b border-void-200 dark:border-void-800">
+        <h4 class="font-medium text-nordic-600 dark:text-nordic-400 mb-4">Create New Group</h4>
+        <form method="POST" action="/memory/group/add" class="flex flex-wrap items-end gap-4">
+            {% include "partials/csrf_field.html" %}
+            <div class="space-y-2">
+                <label class="block text-xs font-medium text-void-700 dark:text-void-200 uppercase tracking-wider">Group Name</label>
+                <input type="text" name="group_name" placeholder="e.g.: family, team" required
+                       class="bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 w-40">
+            </div>
+            <div class="flex-1 space-y-2">
+                <label class="block text-xs font-medium text-void-700 dark:text-void-200 uppercase tracking-wider">Initial members (comma separated)</label>
+                <input type="text" name="members" placeholder="e.g.: john, mary, bob"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50">
+            </div>
+            <div class="flex gap-2">
+                <button type="submit"
+                        class="px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                    Create
+                </button>
+                <button type="button"
+                        onclick="document.getElementById('newGroupForm').classList.add('hidden')"
+                        class="px-4 py-2 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 text-sm font-medium transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="p-5">
+        {% if memory_groups %}
+        <div class="space-y-4">
+            {% for group_name, members in memory_groups.items() %}
+            <div class="rounded-xl border border-void-200 dark:border-void-700 p-4 hover:border-nordic-500/30 dark:hover:border-nordic-500/30 transition-colors">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-nordic-600 dark:text-nordic-400 flex items-center gap-2">
+                        <i class="fas fa-layer-group"></i>
+                        {{ group_name }}
+                    </h3>
+                    <form method="POST" action="/memory/group/{{ group_name }}/delete" class="inline">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit"
+                                onclick="return confirm('Delete group {{ group_name }}?')"
+                                class="px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10 text-red-500 text-sm font-medium transition-colors">
+                            <i class="fas fa-trash mr-1"></i> Delete Group
+                        </button>
+                    </form>
+                </div>
+
+                <div class="mb-4">
+                    <span class="text-sm font-medium text-void-700 dark:text-void-200">Members:</span>
+                    {% if members %}
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        {% for member in members %}
+                        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-sm">
+                            <span>{{ member }}</span>
+                            <form method="POST" action="/memory/group/{{ group_name }}/remove-member" class="inline">
+                                {% include "partials/csrf_field.html" %}
+                                <input type="hidden" name="member" value="{{ member }}">
+                                <button type="submit" class="hover:text-red-500 transition-colors">
+                                    <i class="fas fa-times text-xs"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span class="text-void-500 dark:text-void-400 text-sm ml-2">No members</span>
+                    {% endif %}
+                </div>
+
+                <form method="POST" action="/memory/group/{{ group_name }}/add-member" class="flex gap-2">
+                    {% include "partials/csrf_field.html" %}
+                    <select name="member"
+                            class="flex-1 bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                        <option value="">-- Select user --</option>
+                        {% for unified_id in user_identities.keys() %}
+                            {% if unified_id not in members %}
+                            <option value="{{ unified_id }}">{{ unified_id }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <button type="submit"
+                            class="px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                        Add
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <i class="fas fa-users-slash text-4xl text-void-300 dark:text-void-600 mb-3"></i>
+            <p class="text-void-500 dark:text-void-400">No memory groups configured</p>
+            <p class="text-xs text-void-400 dark:text-void-500 mt-1">Memories are separate for each user</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Available User Identities -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-id-badge text-frost-500"></i>
+            Available User Identities
+        </h3>
+        <p class="text-sm text-void-500 dark:text-void-400 mt-1">These are the unified IDs you can add to groups</p>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                    <th class="px-5 py-3">Unified ID</th>
+                    <th class="px-5 py-3">Platforms</th>
+                    <th class="px-5 py-3">Current Group</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                {% for unified_id, platforms in user_identities.items() %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                    <td class="px-5 py-4 font-medium text-void-900 dark:text-white">{{ unified_id }}</td>
+                    <td class="px-5 py-4">
+                        <div class="flex flex-wrap gap-1">
+                            {% for platform, username in platforms.items() %}
+                            {% set cui = channel_ui.get(platform, {}) %}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium"
+                                  style="background: {{ cui.get('color', '#6B7280') }}15; color: {{ cui.get('color', '#6B7280') }}">
+                                <i class="{{ cui.get('icon', 'fas fa-user') }}"></i>
+                                @{{ username }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td class="px-5 py-4">
+                        {% set ns = namespace(user_group=None) %}
+                        {% for gname, gmembers in memory_groups.items() %}
+                            {% if unified_id in gmembers %}
+                                {% set ns.user_group = gname %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if ns.user_group %}
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">{{ ns.user_group }}</span>
+                        {% else %}
+                            <span class="text-void-400 dark:text-void-500">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not user_identities %}
+                <tr>
+                    <td colspan="3" class="px-5 py-12 text-center">
+                        <i class="fas fa-user-slash text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+                        <p class="text-void-500 dark:text-void-400">No user identities configured</p>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- How It Works -->
+<div class="rounded-2xl bg-gradient-to-br from-void-900 to-void-800 border border-void-700 p-5 text-white">
+    <h3 class="font-semibold flex items-center gap-2 mb-3">
+        <i class="fas fa-lightbulb text-ember-400"></i>
+        How It Works
+    </h3>
+    <ul class="text-sm space-y-2 text-void-300">
+        <li class="flex items-start gap-2">
+            <i class="fas fa-user-lock text-nordic-400 mt-0.5"></i>
+            <span><strong class="text-white">User without group</strong>: their memories are private</span>
+        </li>
+        <li class="flex items-start gap-2">
+            <i class="fas fa-users text-frost-400 mt-0.5"></i>
+            <span><strong class="text-white">User in a group</strong>: their memories are shared with all group members</span>
+        </li>
+        <li class="flex items-start gap-2">
+            <i class="fas fa-search text-purple-400 mt-0.5"></i>
+            <span>When a group member asks something, the assistant searches in all members' memories</span>
+        </li>
+        <li class="flex items-start gap-2">
+            <i class="fas fa-brain text-ember-400 mt-0.5"></i>
+            <span>When the assistant stores a fact, it is associated with the user who said it</span>
+        </li>
+    </ul>
+</div>
+{% endblock %}

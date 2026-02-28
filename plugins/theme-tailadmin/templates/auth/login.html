@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en" x-data="{ dark: localStorage.getItem('theme') !== 'light', showPassword: false, loading: false }" :class="dark ? 'dark' : ''"
+      x-init="$watch('dark', val => { document.documentElement.classList.toggle('dark', val); localStorage.setItem('theme', val ? 'dark' : 'light') })">
+<head>
+    <script>if(localStorage.getItem('theme')!=='light')document.documentElement.classList.add('dark')</script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login - GridBear</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#465fff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Outfit Font (TailAdmin) -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', '-apple-system', 'system-ui', 'sans-serif'],
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+                    },
+                    borderRadius: {
+                        'ios': '8px',
+                        'ios-lg': '10px',
+                        'ios-xl': '12px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; }
+        body { -webkit-font-smoothing: antialiased; }
+
+        :root {
+            --canvas: #f1f5f9;
+            --card-bg: #ffffff;
+            --card-border: #e7e7e9;
+            --label-0: #1a222c;
+            --label-1: #333a48;
+            --label-2: #667085;
+            --label-3: #98a2b3;
+            --input-bg: #ffffff;
+            --input-border: #d0d5dd;
+            --input-focus-border: #465fff;
+            --input-focus-ring: rgba(70,95,255,0.12);
+            --tint-accent: #465fff;
+            --tint-red: #f04438;
+            --btn-hover: #3641d5;
+            --shield-color: rgba(70,95,255,0.35);
+            --version-color: #98a2b3;
+        }
+        .dark {
+            --canvas: #101828;
+            --card-bg: #1d2a39;
+            --card-border: #2e3a47;
+            --label-0: #f0f0f0;
+            --label-1: #dee4ee;
+            --label-2: #8899a8;
+            --label-3: #4a5568;
+            --input-bg: #1d2a39;
+            --input-border: #2e3a47;
+            --input-focus-border: #6e8eff;
+            --input-focus-ring: rgba(110,142,255,0.20);
+            --tint-accent: #6e8eff;
+            --tint-red: #fb7185;
+            --btn-hover: #5a7aff;
+            --shield-color: rgba(110,142,255,0.35);
+            --version-color: #4a5568;
+        }
+
+        body {
+            background-color: var(--canvas);
+            color: var(--label-1);
+            font-family: 'Outfit', sans-serif;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .login-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            box-shadow: 0 1px 3px 0 rgba(16, 24, 40, 0.10),
+                        0 1px 2px 0 rgba(16, 24, 40, 0.06);
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        .input-field {
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--label-0);
+            transition: all 0.15s ease;
+        }
+        .input-field::placeholder { color: var(--label-3); }
+        .input-field:focus {
+            outline: none;
+            border-color: var(--input-focus-border);
+            box-shadow: 0 0 0 4px var(--input-focus-ring);
+        }
+
+        .btn-primary {
+            background: var(--tint-accent);
+            transition: all 0.15s ease;
+        }
+        .btn-primary:hover { background: var(--btn-hover); }
+        .btn-primary:active { filter: brightness(0.92); }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up { animation: fadeUp 0.25s ease-out forwards; }
+        .fade-d1 { animation-delay: 0.03s; opacity: 0; }
+        .fade-d2 { animation-delay: 0.06s; opacity: 0; }
+        .fade-d3 { animation-delay: 0.09s; opacity: 0; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { animation: spin 0.6s linear infinite; }
+
+        .theme-toggle {
+            position: fixed; top: 20px; right: 20px;
+            width: 36px; height: 36px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            background: transparent; color: var(--label-3);
+            cursor: pointer; border: 1px solid transparent;
+            transition: all 0.15s ease; z-index: 10;
+        }
+        .theme-toggle:hover { color: var(--label-2); border-color: var(--card-border); background: var(--card-bg); }
+    </style>
+</head>
+<body class="font-sans min-h-screen flex items-center justify-center p-4">
+
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" @click="dark = !dark" title="Toggle theme">
+        <i class="fas text-sm" :class="dark ? 'fa-sun' : 'fa-moon'"></i>
+    </button>
+
+    <div class="w-full max-w-sm fade-up fade-d1">
+        <div class="login-card rounded-ios-xl overflow-hidden">
+            <!-- Header -->
+            <div class="p-8 pb-6 text-center">
+                <div class="w-20 h-20 mx-auto mb-5">
+                    <img src="/static/theme/theme-tailadmin/logo-full.png" alt="GridBear"
+                         class="w-full h-full object-contain"
+                         onerror="this.src='/static/logo.png'">
+                </div>
+                <h1 class="text-xl font-semibold tracking-tight" style="color: var(--label-0);">Sign in to your account</h1>
+                <p class="text-sm mt-1.5" style="color: var(--label-2);">Welcome back to GridBear</p>
+            </div>
+
+            <!-- Form -->
+            <div class="px-8 pb-8">
+                {% if error %}
+                <div class="mb-5 p-3 rounded-ios flex items-center gap-2.5 text-sm"
+                     style="background: rgba(240,68,56,0.08); border: 1px solid rgba(240,68,56,0.15); color: var(--tint-red);">
+                    <i class="fas fa-circle-exclamation text-xs"></i>
+                    <span>{{ error }}</span>
+                </div>
+                {% endif %}
+
+                <form method="POST" action="/auth/login" class="space-y-4"
+                      @submit="loading = true">
+                    {% include "partials/csrf_field.html" %}
+
+                    <div class="fade-up fade-d2">
+                        <label class="block text-sm font-medium mb-1.5"
+                               style="color: var(--label-1);">Username</label>
+                        <input type="text"
+                               name="username"
+                               class="input-field w-full rounded-ios py-2.5 px-3.5 text-sm"
+                               placeholder="Enter your username"
+                               required
+                               autofocus
+                               autocomplete="username">
+                    </div>
+
+                    <div class="fade-up fade-d2">
+                        <label class="block text-sm font-medium mb-1.5"
+                               style="color: var(--label-1);">Password</label>
+                        <div class="relative">
+                            <input :type="showPassword ? 'text' : 'password'"
+                                   name="password"
+                                   class="input-field w-full rounded-ios py-2.5 px-3.5 pr-10 text-sm"
+                                   placeholder="Enter your password"
+                                   required
+                                   autocomplete="current-password">
+                            <button type="button"
+                                    @click="showPassword = !showPassword"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-xs transition-colors"
+                                    style="color: var(--label-3);">
+                                <i class="fas" :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="fade-up fade-d3 pt-2">
+                        <button type="submit"
+                                class="btn-primary w-full text-white font-medium py-2.5 rounded-ios text-sm flex items-center justify-center gap-2"
+                                :disabled="loading">
+                            <template x-if="loading">
+                                <i class="fas fa-circle-notch spinner text-sm"></i>
+                            </template>
+                            <span x-text="loading ? 'Signing in...' : 'Sign In'"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Footer inside card -->
+            <div class="px-8 pb-5 text-center">
+                <p class="text-[11px] flex items-center justify-center gap-1.5" style="color: var(--label-3);">
+                    <i class="fas fa-shield-halved" style="color: var(--shield-color);"></i>
+                    <span>Secure encrypted connection</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="mt-4 text-center text-[11px] font-mono" style="color: var(--version-color);">GridBear v{{ version }}</div>
+    </div>
+</body>
+</html>

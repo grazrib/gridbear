@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Agents - GridBear{% endblock %}
+{% block page_title %}Agents{% endblock %}
+{% block breadcrumb_active %}Agents{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage your AI agents and their configurations</p>{% endblock %}
+
+{% block content %}
+<!-- Feedback messages -->
+{% if request.query_params.get('reload') == 'success' %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Agents reloaded successfully.</span>
+</div>
+{% elif request.query_params.get('reload') == 'error' %}
+<div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-600 dark:text-red-400">
+    <i class="fas fa-exclamation-circle"></i>
+    <span>Reload failed: {{ request.query_params.get('msg', 'Unknown error') }}</span>
+</div>
+{% elif request.query_params.get('reload') == 'pending' %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-clock"></i>
+    <span>Reload in progress. Refresh the page in a few seconds.</span>
+</div>
+{% endif %}
+
+<!-- Header Actions -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+    <div class="flex items-center gap-3">
+        <form method="POST" action="/agents/reload" class="inline">
+            {% include "partials/csrf_field.html" %}
+            <button type="submit"
+                    onclick="this.querySelector('i').classList.add('animate-spin'); setTimeout(() => this.disabled = true, 10);"
+                    class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 font-medium transition-all">
+                <i class="fas fa-arrows-rotate"></i>
+                Reload
+            </button>
+        </form>
+    </div>
+    <a href="/agents/new" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all shadow-lg shadow-nordic-500/20 hover:shadow-nordic-500/30">
+        <i class="fas fa-plus"></i>
+        New Agent
+    </a>
+</div>
+
+{% if agents %}
+<!-- Agents Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+    {% for agent in agents %}
+    <div class="group relative rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 hover:border-nordic-500/30 dark:hover:border-nordic-500/30 transition-all card-hover overflow-hidden">
+        <!-- Status indicator -->
+        <div class="absolute top-4 right-4">
+            <div class="w-3 h-3 rounded-full bg-nordic-500 status-online"></div>
+        </div>
+
+        <div class="p-6">
+            <!-- Agent Header -->
+            <div class="flex items-start gap-4 mb-4">
+                {% if agent.avatar %}
+                <img src="/static/avatars/{{ agent.avatar }}" alt="{{ agent.name }}" class="w-14 h-14 rounded-xl object-cover shadow-lg shadow-nordic-500/20 group-hover:scale-105 transition-transform">
+                {% else %}
+                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-nordic-500 to-frost-500 flex items-center justify-center shadow-lg shadow-nordic-500/20 group-hover:scale-105 transition-transform">
+                    <span class="text-white text-xl font-bold">{{ agent.name[0]|upper }}</span>
+                </div>
+                {% endif %}
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-void-900 dark:text-white truncate">{{ agent.name }}</h3>
+                    <p class="text-sm font-mono text-void-500 dark:text-void-400">{{ agent.id }}</p>
+                </div>
+            </div>
+
+            {% if agent.description %}
+            <p class="text-sm text-void-600 dark:text-void-300 mb-4 line-clamp-2">{{ agent.description }}</p>
+            {% endif %}
+
+            <!-- Channels -->
+            <div class="flex flex-wrap gap-2 mb-4">
+                {% for channel_name in agent.channels %}
+                {% set cui = channel_ui.get(channel_name, {}) %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium"
+                      style="background: {{ cui.get('color', '#6B7280') }}15; color: {{ cui.get('color', '#6B7280') }}">
+                    <i class="{{ cui.get('icon', 'fas fa-comment') }}"></i> {{ cui.get('display_name', channel_name|title) }}
+                </span>
+                {% endfor %}
+                {% if not agent.channels %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-void-100 dark:bg-void-800 text-void-500 dark:text-void-400 text-xs">
+                    <i class="fas fa-plug"></i> No channels
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Stats -->
+            <div class="flex items-center gap-4 text-xs text-void-500 dark:text-void-400 mb-4 pt-4 border-t border-void-100 dark:border-void-800">
+                <span class="flex items-center gap-1.5" title="MCP Permissions">
+                    <i class="fas fa-plug"></i> {{ agent.mcp_permissions|length }}
+                </span>
+                <span class="flex items-center gap-1.5" title="Plugins">
+                    <i class="fas fa-puzzle-piece"></i> {{ agent.plugins|length }}
+                </span>
+                <span class="flex items-center gap-1.5" title="Tool calls (7d)">
+                    <i class="fas fa-wrench"></i> {{ tool_counts.get(agent.id, 0) }}
+                </span>
+                <span class="flex items-center gap-1.5" title="Tool budget">
+                    <i class="fas fa-gauge"></i> {{ agent.max_tools or '∞' }}
+                </span>
+                <span class="flex items-center gap-1.5" title="Locale">
+                    <i class="fas fa-globe"></i> {{ agent.locale|upper }}
+                </span>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-2">
+                <a href="/agents/{{ agent.id }}" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 font-medium transition-colors">
+                    <i class="fas fa-cog"></i>
+                    Configure
+                </a>
+                <form method="POST" action="/agents/{{ agent.id }}/delete"
+                      onsubmit="return confirm('Delete agent {{ agent.name }}? This cannot be undone.')">
+                    {% include "partials/csrf_field.html" %}
+                    <button type="submit" class="p-2.5 rounded-xl hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-colors" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<!-- Empty State -->
+<div class="text-center py-16">
+    <div class="w-24 h-24 mx-auto mb-6 rounded-2xl bg-void-100 dark:bg-void-800 flex items-center justify-center">
+        <i class="fas fa-robot text-4xl text-void-300 dark:text-void-600"></i>
+    </div>
+    <h3 class="text-xl font-semibold text-void-900 dark:text-white mb-2">No Agents Configured</h3>
+    <p class="text-void-500 dark:text-void-400 mb-6 max-w-md mx-auto">
+        Create your first AI agent to start building your multi-agent system.
+    </p>
+    <a href="/agents/new" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all shadow-lg shadow-nordic-500/20">
+        <i class="fas fa-plus"></i>
+        Create First Agent
+    </a>
+</div>
+{% endif %}
+
+<!-- Info Card -->
+<div class="mt-8 rounded-2xl bg-gradient-to-r from-nordic-500/5 to-frost-500/5 border border-nordic-500/10 p-6">
+    <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2 mb-3">
+        <i class="fas fa-lightbulb text-nordic-500"></i>
+        Multi-Agent Architecture
+    </h3>
+    <p class="text-sm text-void-600 dark:text-void-300 mb-4">
+        Each agent operates independently with its own configuration:
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg bg-nordic-500/10 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-brain text-nordic-500 text-sm"></i>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-void-900 dark:text-white">Personality</div>
+                <div class="text-xs text-void-500 dark:text-void-400">Custom behavior</div>
+            </div>
+        </div>
+        <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg bg-frost-500/10 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-tower-broadcast text-frost-500 text-sm"></i>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-void-900 dark:text-white">Channels</div>
+                <div class="text-xs text-void-500 dark:text-void-400">Separate bots</div>
+            </div>
+        </div>
+        <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg bg-ember-500/10 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-plug text-ember-500 text-sm"></i>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-void-900 dark:text-white">MCP Access</div>
+                <div class="text-xs text-void-500 dark:text-void-400">Integrations</div>
+            </div>
+        </div>
+        <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-comments text-purple-500 text-sm"></i>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-void-900 dark:text-white">Collaboration</div>
+                <div class="text-xs text-void-500 dark:text-void-400">[ASK_AGENT: id]</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

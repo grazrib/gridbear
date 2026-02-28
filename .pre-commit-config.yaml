@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.1
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-json
+      - id: detect-private-key
+        exclude: 'ui/templates/plugins/remote_dev_server\.html'
+
+  - repo: local
+    hooks:
+      - id: commit-msg-check
+        name: commit message format
+        entry: python3 scripts/check_commit_msg.py
+        language: system
+        stages: [commit-msg]
+        always_run: true
+
+      - id: pytest-quick
+        name: pytest (quick)
+        entry: pytest tests/unit -x -q --tb=no
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

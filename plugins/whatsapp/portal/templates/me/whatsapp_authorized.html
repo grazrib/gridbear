@@ -1,0 +1,364 @@
+{% extends "me/base.html" %}
+
+{% block title %}GridBear - Numeri autorizzati{% endblock %}
+{% block page_title %}Numeri autorizzati{% endblock %}
+
+{% block content %}
+<div x-data="authorizedNumbers()" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+
+    <!-- Instance Info -->
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+                    <i class="fab fa-whatsapp text-green-500 text-2xl"></i>
+                </div>
+                <div>
+                    <h2 class="font-semibold text-lg">{{ instance.agent_name }}</h2>
+                    <p class="text-sm text-void-500 dark:text-void-400">{{ instance.instance_name }}</p>
+                </div>
+            </div>
+            <span class="flex items-center gap-1.5 text-xs font-medium
+                {% if instance_state == 'open' %}text-nordic-600 dark:text-nordic-400{% else %}text-void-400{% endif %}">
+                <span class="w-2 h-2 rounded-full {% if instance_state == 'open' %}bg-nordic-500 animate-pulse{% else %}bg-void-300 dark:bg-void-600{% endif %}"></span>
+                {{ 'Connesso' if instance_state == 'open' else instance_state|title }}
+            </span>
+        </div>
+        <p class="text-sm text-void-500 dark:text-void-400">
+            Gestisci i numeri di telefono autorizzati a contattare l'agente tramite questa istanza.
+            Solo i numeri in questa lista potranno inviare messaggi.
+        </p>
+    </div>
+
+    <!-- Reject Settings -->
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">
+            <i class="fas fa-shield-alt text-void-400"></i>
+            Numeri non autorizzati
+        </h3>
+        <div class="space-y-4">
+            <label class="flex items-center gap-3 cursor-pointer">
+                <div class="relative">
+                    <input type="checkbox" x-model="silentReject" @change="saveSettings()" class="sr-only peer">
+                    <div class="w-10 h-5 bg-void-200 dark:bg-void-700 rounded-full peer-checked:bg-nordic-500 transition-colors"></div>
+                    <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow peer-checked:translate-x-5 transition-transform"></div>
+                </div>
+                <span class="text-sm text-void-700 dark:text-void-300">Ignora silenziosamente (non inviare risposta)</span>
+            </label>
+            <div x-show="!silentReject" x-transition>
+                <label class="block text-xs font-medium text-void-600 dark:text-void-400 mb-1">Messaggio di rifiuto</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" x-model="rejectMessage"
+                           placeholder="Non autorizzato."
+                           class="flex-1 bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 transition-all">
+                    <button @click="saveSettings()"
+                            :disabled="savingSettings"
+                            class="px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-300 text-sm font-medium transition-all">
+                        <span x-text="savingSettings ? 'Salvo...' : 'Salva'"></span>
+                    </button>
+                </div>
+                <p class="mt-1 text-xs text-void-400">Lascia vuoto per il messaggio predefinito "Non autorizzato."</p>
+            </div>
+            <p x-show="settingsSaved" x-transition class="text-xs text-nordic-500 flex items-center gap-1">
+                <i class="fas fa-check"></i> Impostazioni salvate
+            </p>
+        </div>
+    </div>
+
+    <!-- Wake Words (Auto-responses) -->
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <h3 class="font-semibold mb-2 flex items-center gap-2">
+            <i class="fas fa-reply text-void-400"></i>
+            Risposte automatiche
+        </h3>
+        <p class="text-sm text-void-500 dark:text-void-400 mb-4">
+            Se un numero non autorizzato invia un messaggio contenente una parola chiave, riceve la risposta associata.
+        </p>
+
+        <!-- Add Wake Word form -->
+        <div class="flex items-end gap-3 flex-wrap mb-4">
+            <div class="min-w-[140px]">
+                <label class="block text-xs font-medium text-void-600 dark:text-void-400 mb-1">Parola chiave</label>
+                <input type="text" x-model="newKeyword"
+                       placeholder="es. info"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 transition-all">
+            </div>
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs font-medium text-void-600 dark:text-void-400 mb-1">Risposta</label>
+                <input type="text" x-model="newResponse"
+                       placeholder="es. Visita example.com per info"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 transition-all">
+            </div>
+            <button @click="addWakeWord()"
+                    :disabled="!newKeyword.trim() || !newResponse.trim() || addingWake"
+                    class="px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 disabled:opacity-50 text-white text-sm font-medium transition-all">
+                <i class="fas fa-plus mr-1.5"></i>
+                <span x-text="addingWake ? 'Aggiunta...' : 'Aggiungi'"></span>
+            </button>
+        </div>
+        <p x-show="wakeError" x-text="wakeError" class="mb-3 text-sm text-red-500"></p>
+
+        <!-- Wake Words List -->
+        <template x-if="wakeWords.length === 0">
+            <div class="p-3 rounded-xl bg-void-50 dark:bg-void-800/30 text-sm text-void-400 flex items-center gap-2">
+                <i class="fas fa-info-circle"></i>
+                Nessuna risposta automatica configurata.
+            </div>
+        </template>
+
+        <div class="space-y-2">
+            <template x-for="ww in wakeWords" :key="ww.keyword">
+                <div class="flex items-center justify-between p-3 rounded-xl border border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-bolt text-amber-500 text-xs"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <span class="font-mono text-sm font-semibold" x-text="ww.keyword"></span>
+                            <span class="text-void-400 mx-1.5">&rarr;</span>
+                            <span class="text-sm text-void-600 dark:text-void-300 break-words" x-text="ww.response"></span>
+                        </div>
+                    </div>
+                    <button @click="removeWakeWord(ww.keyword)"
+                            class="p-2 rounded-lg text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-all flex-shrink-0"
+                            title="Rimuovi">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Add Number -->
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">
+            <i class="fas fa-plus-circle text-nordic-500"></i>
+            Aggiungi numero
+        </h3>
+        <div class="flex items-end gap-3 flex-wrap">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs font-medium text-void-600 dark:text-void-400 mb-1">Numero di telefono</label>
+                <input type="text" x-model="newPhone"
+                       placeholder="es. 393331234567"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 transition-all">
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label class="block text-xs font-medium text-void-600 dark:text-void-400 mb-1">Etichetta (opzionale)</label>
+                <input type="text" x-model="newLabel"
+                       placeholder="es. Mario"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 transition-all">
+            </div>
+            <button @click="addNumber()"
+                    :disabled="!newPhone.trim() || adding"
+                    class="px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 disabled:opacity-50 text-white text-sm font-medium transition-all">
+                <i class="fas fa-plus mr-1.5"></i>
+                <span x-text="adding ? 'Aggiunta...' : 'Aggiungi'"></span>
+            </button>
+        </div>
+        <p x-show="addError" x-text="addError" class="mt-2 text-sm text-red-500"></p>
+    </div>
+
+    <!-- Numbers List -->
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">
+            <i class="fas fa-user-shield text-void-400"></i>
+            Numeri autorizzati
+            <span class="text-xs font-normal text-void-400" x-text="'(' + numbers.length + ')'"></span>
+        </h3>
+
+        <template x-if="numbers.length === 0">
+            <div class="p-4 rounded-xl bg-ember-500/5 border border-ember-500/10 text-sm text-ember-600 dark:text-ember-400 flex items-center gap-2">
+                <i class="fas fa-info-circle"></i>
+                Nessun numero autorizzato. Aggiungi almeno un numero per permettere la comunicazione con l'agente.
+            </div>
+        </template>
+
+        <div class="space-y-2">
+            <template x-for="num in numbers" :key="num.phone">
+                <div class="flex items-center justify-between p-3 rounded-xl border border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-nordic-500/10 flex items-center justify-center">
+                            <i class="fas fa-phone text-nordic-500 text-xs"></i>
+                        </div>
+                        <div>
+                            <span class="font-mono text-sm" x-text="'+' + num.phone"></span>
+                            <span x-show="num.label" class="text-xs text-void-400 ml-2" x-text="num.label"></span>
+                        </div>
+                    </div>
+                    <button @click="removeNumber(num.phone)"
+                            class="p-2 rounded-lg text-red-500/60 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                            title="Rimuovi">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <div class="mt-6">
+        <a href="/me/connections/whatsapp/whatsapp/connect" class="text-sm text-nordic-500 hover:underline">
+            <i class="fas fa-arrow-left mr-1"></i> Torna alle connessioni WhatsApp
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function authorizedNumbers() {
+    return {
+        numbers: {{ numbers | tojson }},
+        newPhone: '',
+        newLabel: '',
+        adding: false,
+        addError: '',
+        silentReject: {{ 'true' if instance.silent_reject else 'false' }},
+        rejectMessage: {{ (instance.reject_message or '') | tojson }},
+        savingSettings: false,
+        settingsSaved: false,
+        wakeWords: {{ wake_words | tojson }},
+        newKeyword: '',
+        newResponse: '',
+        addingWake: false,
+        wakeError: '',
+
+        getCsrf() {
+            return document.querySelector('[name=csrf_token]')?.value || '';
+        },
+
+        async saveSettings() {
+            this.savingSettings = true;
+            this.settingsSaved = false;
+            try {
+                const formData = new FormData();
+                formData.append('silent_reject', this.silentReject ? 'on' : 'off');
+                formData.append('reject_message', this.rejectMessage);
+                formData.append('csrf_token', this.getCsrf());
+
+                const resp = await fetch('/me/connections/whatsapp/{{ instance.instance_name }}/authorized/settings', {
+                    method: 'POST',
+                    body: formData,
+                });
+                if (resp.ok) {
+                    this.settingsSaved = true;
+                    setTimeout(() => this.settingsSaved = false, 3000);
+                }
+            } catch (e) {
+                alert('Errore: ' + e.message);
+            } finally {
+                this.savingSettings = false;
+            }
+        },
+
+        async addNumber() {
+            this.adding = true;
+            this.addError = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('phone', this.newPhone.trim());
+                formData.append('label', this.newLabel.trim());
+                formData.append('csrf_token', this.getCsrf());
+
+                const resp = await fetch('/me/connections/whatsapp/{{ instance.instance_name }}/authorized/add', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+
+                if (resp.ok && data.number) {
+                    this.numbers.push(data.number);
+                    this.newPhone = '';
+                    this.newLabel = '';
+                } else {
+                    this.addError = data.error || 'Errore durante l\'aggiunta';
+                }
+            } catch (e) {
+                this.addError = 'Errore: ' + e.message;
+            } finally {
+                this.adding = false;
+            }
+        },
+
+        async addWakeWord() {
+            this.addingWake = true;
+            this.wakeError = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('keyword', this.newKeyword.trim().toLowerCase());
+                formData.append('response', this.newResponse.trim());
+                formData.append('csrf_token', this.getCsrf());
+
+                const resp = await fetch('/me/connections/whatsapp/{{ instance.instance_name }}/authorized/wake-word/add', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+
+                if (resp.ok && data.wake_word) {
+                    this.wakeWords.push(data.wake_word);
+                    this.newKeyword = '';
+                    this.newResponse = '';
+                } else {
+                    this.wakeError = data.error || 'Errore durante l\'aggiunta';
+                }
+            } catch (e) {
+                this.wakeError = 'Errore: ' + e.message;
+            } finally {
+                this.addingWake = false;
+            }
+        },
+
+        async removeWakeWord(keyword) {
+            if (!confirm('Rimuovere la risposta automatica per "' + keyword + '"?')) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('keyword', keyword);
+                formData.append('csrf_token', this.getCsrf());
+
+                const resp = await fetch('/me/connections/whatsapp/{{ instance.instance_name }}/authorized/wake-word/remove', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (resp.ok) {
+                    this.wakeWords = this.wakeWords.filter(w => w.keyword !== keyword);
+                } else {
+                    const data = await resp.json();
+                    alert('Errore: ' + (data.error || 'Rimozione fallita'));
+                }
+            } catch (e) {
+                alert('Errore: ' + e.message);
+            }
+        },
+
+        async removeNumber(phone) {
+            if (!confirm('Rimuovere il numero +' + phone + '?')) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('phone', phone);
+                formData.append('csrf_token', this.getCsrf());
+
+                const resp = await fetch('/me/connections/whatsapp/{{ instance.instance_name }}/authorized/remove', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (resp.ok) {
+                    this.numbers = this.numbers.filter(n => n.phone !== phone);
+                } else {
+                    const data = await resp.json();
+                    alert('Errore: ' + (data.error || 'Rimozione fallita'));
+                }
+            } catch (e) {
+                alert('Errore: ' + e.message);
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

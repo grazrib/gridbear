@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}REST API - GridBear{% endblock %}
+{% block page_title %}REST API{% endblock %}
+{% block breadcrumb_active %}REST API{% endblock %}
+{% block page_description %}
+<p class="text-void-500 dark:text-void-400 mt-1">
+    Manage model-level access control for the generic REST API
+    <a href="/api/docs" target="_blank" class="text-nordic-500 hover:text-nordic-400 ml-1">
+        <i class="fas fa-external-link-alt text-xs"></i> Swagger docs
+    </a>
+</p>
+{% endblock %}
+
+{% block content %}
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>REST API configuration saved and applied.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>Failed to save configuration.</span>
+</div>
+{% endif %}
+
+<form method="POST" action="/rest-api/save" x-data="restApiForm()" x-init="init()">
+    {% include "partials/csrf_field.html" %}
+
+    <!-- Enable toggle + info -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+        <div class="p-5 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+                    <i class="fas fa-plug text-nordic-500"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-void-900 dark:text-white">API Enabled</h3>
+                    <p class="text-sm text-void-500 dark:text-void-400">
+                        {{ model_count }} models registered &middot;
+                        Bearer token authentication required
+                    </p>
+                </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" name="enabled" x-model="enabled"
+                       {% if api_enabled %}checked{% endif %}
+                       class="sr-only peer">
+                <div class="w-11 h-6 bg-void-200 dark:bg-void-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-nordic-500"></div>
+            </label>
+        </div>
+    </div>
+
+    <!-- Wildcard default rule -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-void-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-asterisk text-void-400 text-sm"></i>
+                Default Rule
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">
+                Applies to all models without an explicit rule below
+            </p>
+        </div>
+        <div class="p-5">
+            <div class="flex items-center gap-6">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="read_*"
+                           {% if wildcard_perms.read %}checked{% endif %}
+                           class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-nordic-500 focus:ring-nordic-500/30 bg-void-50 dark:bg-void-800">
+                    <span class="text-sm text-void-700 dark:text-void-200">Read</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="write_*"
+                           {% if wildcard_perms.write %}checked{% endif %}
+                           class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-nordic-500 focus:ring-nordic-500/30 bg-void-50 dark:bg-void-800">
+                    <span class="text-sm text-void-700 dark:text-void-200">Write</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="delete_*"
+                           {% if wildcard_perms.delete %}checked{% endif %}
+                           class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-nordic-500 focus:ring-nordic-500/30 bg-void-50 dark:bg-void-800">
+                    <span class="text-sm text-void-700 dark:text-void-200">Delete</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Models by schema -->
+    {% for schema in schemas %}
+    {% set models = grouped_models[schema] %}
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r
+            {% if schema in ('admin', 'oauth2') %}from-ember-500/5{% else %}from-nordic-500/5{% endif %} to-transparent">
+            <div class="flex items-center justify-between">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    {% if schema in ('admin', 'oauth2') %}
+                    <i class="fas fa-shield-halved text-ember-500 text-sm"></i>
+                    {% else %}
+                    <i class="fas fa-database text-nordic-500 text-sm"></i>
+                    {% endif %}
+                    {{ schema }}
+                    <span class="text-xs font-normal text-void-400">({{ models|length }})</span>
+                </h3>
+                {% if schema in ('admin', 'oauth2') %}
+                <span class="text-[10px] font-semibold text-ember-600 dark:text-ember-400 bg-ember-500/10 px-2.5 py-1 rounded-full">
+                    Sensitive
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="divide-y divide-void-100 dark:divide-void-800/50">
+            {% for m in models %}
+            <div class="px-5 py-3 flex items-center justify-between gap-4 hover:bg-void-50/50 dark:hover:bg-void-800/20 transition-colors"
+                 x-data="{ denied: {{ 'true' if m.perms.denied else 'false' }} }">
+                <div class="min-w-0">
+                    <span class="text-sm font-medium text-void-900 dark:text-white">{{ m.name }}</span>
+                    {% if not m.explicit %}
+                    <span class="text-[10px] text-void-400 ml-1.5" title="Using wildcard default rule">
+                        <i class="fas fa-asterisk"></i>
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-4 shrink-0">
+                    <label class="flex items-center gap-1.5 cursor-pointer" :class="denied ? 'opacity-30 pointer-events-none' : ''">
+                        <input type="checkbox" name="read_{{ m.key }}"
+                               {% if m.perms.read and not m.perms.denied %}checked{% endif %}
+                               :disabled="denied"
+                               class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-nordic-500 focus:ring-nordic-500/30 bg-void-50 dark:bg-void-800">
+                        <span class="text-xs text-void-500 dark:text-void-400">R</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer" :class="denied ? 'opacity-30 pointer-events-none' : ''">
+                        <input type="checkbox" name="write_{{ m.key }}"
+                               {% if m.perms.write and not m.perms.denied %}checked{% endif %}
+                               :disabled="denied"
+                               class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-nordic-500 focus:ring-nordic-500/30 bg-void-50 dark:bg-void-800">
+                        <span class="text-xs text-void-500 dark:text-void-400">W</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer" :class="denied ? 'opacity-30 pointer-events-none' : ''">
+                        <input type="checkbox" name="delete_{{ m.key }}"
+                               {% if m.perms.delete and not m.perms.denied %}checked{% endif %}
+                               :disabled="denied"
+                               class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-nordic-500 focus:ring-nordic-500/30 bg-void-50 dark:bg-void-800">
+                        <span class="text-xs text-void-500 dark:text-void-400">D</span>
+                    </label>
+                    <div class="w-px h-5 bg-void-200 dark:bg-void-700"></div>
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" name="deny_{{ m.key }}"
+                               {% if m.perms.denied %}checked{% endif %}
+                               x-model="denied"
+                               class="w-4 h-4 rounded border-ember-300 dark:border-ember-600 text-ember-500 focus:ring-ember-500/30 bg-void-50 dark:bg-void-800">
+                        <span class="text-xs font-medium text-ember-600 dark:text-ember-400">Deny</span>
+                    </label>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Save button -->
+    <div class="flex justify-end">
+        <button type="submit"
+                class="px-6 py-2.5 bg-nordic-500 hover:bg-nordic-600 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-nordic-500/20">
+            <i class="fas fa-save mr-2"></i>Save Configuration
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function restApiForm() {
+    return {
+        enabled: {{ 'true' if api_enabled else 'false' }},
+        init() {}
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,180 @@
+{% extends "plugins/plugin_base.html" %}
+
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Configure GitHub MCP server (official)</p>{% endblock %}
+
+{% block plugin_content_after %}
+    <!-- API Settings -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fab fa-github text-nordic-500"></i>
+                API Settings
+            </h3>
+        </div>
+        <div class="p-5">
+            <form method="POST" action="/plugins/github/settings" class="space-y-5">
+                {% include "partials/csrf_field.html" %}
+
+                <!-- Token Status -->
+                <div class="p-4 rounded-xl {% if has_token %}bg-nordic-500/10 border border-nordic-500/20{% else %}bg-ember-500/10 border border-ember-500/20{% endif %} flex items-center gap-3">
+                    {% if has_token %}
+                    <i class="fas fa-check-circle text-nordic-500 text-xl"></i>
+                    <div>
+                        <p class="font-semibold text-nordic-600 dark:text-nordic-400">GitHub Token Configured</p>
+                        <p class="text-sm text-void-500 dark:text-void-400">Token is stored securely in secrets manager</p>
+                    </div>
+                    {% else %}
+                    <i class="fas fa-exclamation-triangle text-ember-500 text-xl"></i>
+                    <div>
+                        <p class="font-semibold text-ember-600 dark:text-ember-400">No GitHub Token</p>
+                        <p class="text-sm text-void-500 dark:text-void-400">Add a Personal Access Token to enable GitHub operations</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Token Input -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">GitHub Personal Access Token</label>
+                    <input type="password" name="github_token"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all"
+                           placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                    <p class="text-sm text-void-500 dark:text-void-400">
+                        Leave empty to keep existing.
+                        <a href="https://github.com/settings/tokens" target="_blank" class="text-frost-500 hover:text-frost-400">
+                            Generate token on GitHub <i class="fas fa-external-link-alt ml-1"></i>
+                        </a>
+                    </p>
+                </div>
+
+                <!-- Toolsets -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Enabled Toolsets</label>
+                    <select name="toolsets"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="all" {% if config.toolsets == 'all' %}selected{% endif %}>All toolsets</option>
+                        <option value="repos" {% if config.toolsets == 'repos' %}selected{% endif %}>Repos only</option>
+                        <option value="repos,issues" {% if config.toolsets == 'repos,issues' %}selected{% endif %}>Repos + Issues</option>
+                        <option value="repos,issues,pull_requests" {% if config.toolsets == 'repos,issues,pull_requests' %}selected{% endif %}>Repos + Issues + PRs</option>
+                    </select>
+                    <p class="text-sm text-void-500">Available: repos, issues, pull_requests, actions, code_security</p>
+                </div>
+
+                <!-- Read Only -->
+                <div class="flex items-start gap-3 p-4 rounded-xl bg-void-50 dark:bg-void-800/30 border border-void-200 dark:border-void-700">
+                    <input type="checkbox" name="read_only" id="read_only"
+                           class="mt-1 w-5 h-5 rounded border-void-300 text-nordic-500 focus:ring-nordic-500"
+                           {% if config.read_only %}checked{% endif %}>
+                    <label for="read_only" class="cursor-pointer">
+                        <span class="font-medium text-void-900 dark:text-white">Read Only Mode</span>
+                        <p class="text-sm text-void-500 dark:text-void-400">Only allow read operations, block any write/create/delete</p>
+                    </label>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all">
+                        <i class="fas fa-save"></i>
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Repositories -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent flex items-center justify-between">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-book text-frost-500"></i>
+                Allowed Repositories
+            </h3>
+            <a href="/plugins/github/repo/add"
+               class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-all text-sm">
+                <i class="fas fa-plus"></i>
+                Add Repository
+            </a>
+        </div>
+        <div class="p-5">
+            {% if repos %}
+            <div class="space-y-3">
+                {% for repo in repos %}
+                <a href="/plugins/github/repo/{{ repo.id }}"
+                   class="block p-4 rounded-xl bg-void-50 dark:bg-void-800/30 border border-void-200 dark:border-void-700 hover:border-frost-500/50 transition-all group">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-frost-500/20 to-nordic-500/20 flex items-center justify-center">
+                                <i class="fab fa-github text-frost-400 text-lg"></i>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-void-900 dark:text-white group-hover:text-frost-500 transition-colors font-mono">
+                                    {{ repo.pattern }}
+                                </div>
+                                <div class="text-sm text-void-500 dark:text-void-400 flex items-center gap-2 mt-1">
+                                    {% for branch in repo.protected_branches %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-void-200 dark:bg-void-700 text-xs">
+                                        <i class="fas fa-shield-alt text-nordic-500"></i>
+                                        {{ branch }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            {% if repo.allow_direct_push %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-ember-500/10 text-ember-500 text-xs font-medium">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Direct Push
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-nordic-500/10 text-nordic-500 text-xs font-medium">
+                                <i class="fas fa-code-branch"></i>
+                                PR Required
+                            </span>
+                            {% endif %}
+                            <i class="fas fa-chevron-right text-void-400 group-hover:text-frost-500 transition-colors"></i>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-12">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-void-100 dark:bg-void-800 flex items-center justify-center">
+                    <i class="fab fa-github text-void-400 text-2xl"></i>
+                </div>
+                <p class="text-void-500 dark:text-void-400 mb-4">No repositories configured yet</p>
+                <a href="/plugins/github/repo/add"
+                   class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-all">
+                    <i class="fas fa-plus"></i>
+                    Add Your First Repository
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Help Card -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-void-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-info-circle text-void-400"></i>
+                Pattern Matching
+            </h3>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-4 rounded-xl bg-void-50 dark:bg-void-800/30 border border-void-200 dark:border-void-700">
+                    <code class="text-frost-500 font-mono">owner/repo</code>
+                    <p class="text-sm text-void-500 dark:text-void-400 mt-2">Exact repository match</p>
+                </div>
+                <div class="p-4 rounded-xl bg-void-50 dark:bg-void-800/30 border border-void-200 dark:border-void-700">
+                    <code class="text-frost-500 font-mono">owner/*</code>
+                    <p class="text-sm text-void-500 dark:text-void-400 mt-2">All repos from owner</p>
+                </div>
+                <div class="p-4 rounded-xl bg-void-50 dark:bg-void-800/30 border border-void-200 dark:border-void-700">
+                    <code class="text-frost-500 font-mono">owner/prefix-*</code>
+                    <p class="text-sm text-void-500 dark:text-void-400 mt-2">Repos starting with prefix</p>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

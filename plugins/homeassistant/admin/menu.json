@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Home Assistant",
+      "url": "/plugins/homeassistant",
+      "icon": "fas fa-home",
+      "section": "integrations",
+      "priority": 30
+    }
+  ]
+}

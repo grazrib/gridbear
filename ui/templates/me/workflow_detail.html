@@ -1,0 +1,202 @@
+{% extends "me/base.html" %}
+
+{% block title %}{{ workflow.display_name }} - {{ _("Workflows") }} - GridBear{% endblock %}
+{% block page_title %}{{ workflow.display_name }}{% endblock %}
+
+{% block content %}
+<div x-data="{ showDefinition: false }">
+    <div class="mb-4">
+        <a href="/me/workflows" class="text-sm text-void-500 hover:text-nordic-500 transition-colors">
+            <i class="fas fa-arrow-left mr-1"></i> {{ _("Back to Workflows") }}
+        </a>
+    </div>
+
+    <!-- Header Card -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+        <div class="p-5">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-3 mb-2">
+                        <h2 class="text-lg font-semibold text-void-900 dark:text-white truncate">{{ workflow.display_name }}</h2>
+                        {% if workflow.enabled %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium flex-shrink-0">
+                            {{ _("Enabled") }}
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-void-100 dark:bg-void-800 text-void-500 text-xs font-medium flex-shrink-0">
+                            {{ _("Disabled") }}
+                        </span>
+                        {% endif %}
+                        <span class="text-xs text-void-400 dark:text-void-500 font-mono flex-shrink-0">v{{ workflow.version }}</span>
+                    </div>
+                    <p class="text-sm text-void-500 dark:text-void-400 font-mono mb-1">{{ workflow.name }}</p>
+                    {% if workflow.description %}
+                    <p class="text-sm text-void-600 dark:text-void-300 mt-2">{{ workflow.description }}</p>
+                    {% endif %}
+                    <div class="flex items-center gap-4 mt-3 text-xs text-void-400 dark:text-void-500">
+                        <span><i class="fas fa-layer-group mr-1"></i>{{ workflow.concurrency_policy }}</span>
+                        {% if workflow.updated_at %}
+                        <span><i class="fas fa-clock mr-1"></i>{{ workflow.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <a href="/me/workflows/{{ workflow.id }}/editor"
+                       class="px-3 py-2 rounded-xl border border-nordic-500/30 text-nordic-600 dark:text-nordic-400 hover:bg-nordic-500/10 text-sm font-medium transition-colors">
+                        <i class="fas fa-diagram-project mr-1"></i> {{ _("Editor") }}
+                    </a>
+                    <a href="/me/workflows/{{ workflow.id }}/edit"
+                       class="px-3 py-2 rounded-xl border border-void-200 dark:border-void-700 text-void-600 dark:text-void-300 hover:bg-void-50 dark:hover:bg-void-800 text-sm font-medium transition-colors">
+                        <i class="fas fa-pen mr-1"></i> {{ _("Metadata") }}
+                    </a>
+                    <a href="/me/workflows/{{ workflow.id }}/triggers"
+                       class="px-3 py-2 rounded-xl border border-void-200 dark:border-void-700 text-void-600 dark:text-void-300 hover:bg-void-50 dark:hover:bg-void-800 text-sm font-medium transition-colors">
+                        <i class="fas fa-clock mr-1"></i> {{ _("Triggers") }}
+                    </a>
+                    <form method="POST" action="/me/workflows/{{ workflow.id }}/toggle" class="inline">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit"
+                                class="px-3 py-2 rounded-xl border border-void-200 dark:border-void-700 text-void-600 dark:text-void-300 hover:bg-void-50 dark:hover:bg-void-800 text-sm font-medium transition-colors">
+                            {% if workflow.enabled %}
+                            <i class="fas fa-pause mr-1"></i> {{ _("Disable") }}
+                            {% else %}
+                            <i class="fas fa-play mr-1"></i> {{ _("Enable") }}
+                            {% endif %}
+                        </button>
+                    </form>
+                    {% if workflow.enabled %}
+                    <form method="POST" action="/me/workflows/{{ workflow.id }}/run" class="inline">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit"
+                                class="px-3 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                            <i class="fas fa-play mr-1"></i> {{ _("Run") }}
+                        </button>
+                    </form>
+                    {% endif %}
+                    <form method="POST" action="/me/workflows/{{ workflow.id }}/delete" class="inline">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit"
+                                class="px-3 py-2 rounded-xl border border-red-200 dark:border-red-800 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium transition-colors"
+                                onclick="return confirm({{ _("Delete this workflow permanently?")|tojson }})">
+                            <i class="fas fa-trash mr-1"></i> {{ _("Delete") }}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Definition (collapsible) -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+        <button @click="showDefinition = !showDefinition"
+                class="w-full flex items-center justify-between p-5 text-left hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-code text-nordic-500"></i>
+                {{ _("Definition") }}
+            </h3>
+            <i class="fas text-void-400 transition-transform" :class="showDefinition ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+        </button>
+        <div x-show="showDefinition" x-collapse>
+            <div class="px-5 pb-5">
+                <pre class="p-4 rounded-xl bg-void-50 dark:bg-void-800 text-sm font-mono text-void-700 dark:text-void-300 overflow-x-auto leading-relaxed">{{ workflow.definition | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution History -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-history text-nordic-500"></i>
+                {{ _("Execution History") }}
+            </h3>
+        </div>
+
+        {% if executions %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                        <th class="px-2 sm:px-5 py-3">{{ _("Status") }}</th>
+                        <th class="px-2 sm:px-5 py-3 hidden sm:table-cell">{{ _("Trigger") }}</th>
+                        <th class="px-2 sm:px-5 py-3">{{ _("Started") }}</th>
+                        <th class="px-2 sm:px-5 py-3 hidden md:table-cell">{{ _("Duration") }}</th>
+                        <th class="px-2 sm:px-5 py-3 hidden lg:table-cell">{{ _("Initiated By") }}</th>
+                        <th class="px-2 sm:px-5 py-3 text-right">{{ _("Actions") }}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                    {% for ex in executions %}
+                    <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                        <td class="px-2 sm:px-5 py-4">
+                            {% if ex.status == 'completed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium">
+                                <i class="fas fa-check-circle mr-1"></i>{{ _("Completed") }}
+                            </span>
+                            {% elif ex.status == 'running' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-frost-500/10 text-frost-600 dark:text-frost-400 text-xs font-medium">
+                                <i class="fas fa-spinner fa-spin mr-1"></i>{{ _("Running") }}
+                            </span>
+                            {% elif ex.status == 'failed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium">
+                                <i class="fas fa-times-circle mr-1"></i>{{ _("Failed") }}
+                            </span>
+                            {% elif ex.status == 'cancelled' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-void-100 dark:bg-void-800 text-void-500 text-xs font-medium">
+                                <i class="fas fa-ban mr-1"></i>{{ _("Cancelled") }}
+                            </span>
+                            {% elif ex.status == 'paused' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">
+                                <i class="fas fa-pause-circle mr-1"></i>{{ _("Paused") }}
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-void-100 dark:bg-void-800 text-void-500 text-xs font-medium">
+                                {{ ex.status }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-2 sm:px-5 py-4 hidden sm:table-cell">
+                            <span class="text-xs text-void-500 dark:text-void-400">{{ ex.trigger_type }}</span>
+                        </td>
+                        <td class="px-2 sm:px-5 py-4">
+                            <span class="text-xs text-void-500 dark:text-void-400">
+                                {{ ex.started_at.strftime('%Y-%m-%d %H:%M:%S') if ex.started_at else '-' }}
+                            </span>
+                        </td>
+                        <td class="px-2 sm:px-5 py-4 hidden md:table-cell">
+                            <span class="text-xs text-void-500 dark:text-void-400 font-mono">
+                                {% if ex.completed_at and ex.started_at %}
+                                    {% set delta = ex.completed_at - ex.started_at %}
+                                    {{ delta.total_seconds() | round(1) }}s
+                                {% elif ex.status == 'running' %}
+                                    ...
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td class="px-2 sm:px-5 py-4 hidden lg:table-cell">
+                            <span class="text-xs text-void-500 dark:text-void-400">{{ ex.initiated_by or '-' }}</span>
+                        </td>
+                        <td class="px-2 sm:px-5 py-4 text-right">
+                            <a href="/me/workflows/executions/{{ ex.id }}"
+                               class="px-2.5 py-1.5 rounded-lg hover:bg-void-100 dark:hover:bg-void-800 text-void-500 hover:text-nordic-500 text-sm transition-colors"
+                               title="{{ _("View details") }}">
+                                <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-5 py-12 text-center">
+            <i class="fas fa-history text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+            <p class="text-void-500 dark:text-void-400">{{ _("No executions yet") }}</p>
+            <p class="text-void-400 dark:text-void-500 text-sm mt-1">{{ _("Run this workflow to see execution history") }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Memory Browser - GridBear{% endblock %}
+{% block page_title %}Memory Browser{% endblock %}
+{% block breadcrumb_active %}Memory Browser{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Browse, search, and manage individual memories</p>{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 p-5">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider">Episodic</p>
+                <p class="text-2xl font-bold text-void-900 dark:text-white mt-1">{{ stats.episodic }}</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-frost-500/10 flex items-center justify-center">
+                <i class="fas fa-comments text-frost-500 text-xl"></i>
+            </div>
+        </div>
+        <p class="text-xs text-void-400 dark:text-void-500 mt-2">Conversation history</p>
+    </div>
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 p-5">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider">Declarative</p>
+                <p class="text-2xl font-bold text-void-900 dark:text-white mt-1">{{ stats.declarative }}</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+                <i class="fas fa-brain text-nordic-500 text-xl"></i>
+            </div>
+        </div>
+        <p class="text-xs text-void-400 dark:text-void-500 mt-2">Extracted facts</p>
+    </div>
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 p-5">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider">Total</p>
+                <p class="text-2xl font-bold text-void-900 dark:text-white mt-1">{{ stats.total }}</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-ember-500/10 flex items-center justify-center">
+                <i class="fas fa-database text-ember-500 text-xl"></i>
+            </div>
+        </div>
+        <p class="text-xs text-void-400 dark:text-void-500 mt-2">All memories</p>
+    </div>
+</div>
+
+<!-- Search & Filters -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-search text-nordic-500"></i>
+            Search & Filter
+        </h3>
+    </div>
+    <div class="p-5">
+        <!-- Semantic Search -->
+        <div class="mb-4" x-data="{ searchQuery: '', searching: false, results: [] }">
+            <label class="block text-xs font-medium text-void-700 dark:text-void-200 uppercase tracking-wider mb-2">Semantic Search</label>
+            <div class="flex gap-2">
+                <input type="text"
+                       x-model="searchQuery"
+                       placeholder="Search memories by meaning..."
+                       class="flex-1 bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50">
+                <button @click="
+                    if (searchQuery.length >= 2) {
+                        searching = true;
+                        const params = new URLSearchParams({ query: searchQuery });
+                        {% if current_user_id %}params.append('user_id', '{{ current_user_id }}');{% endif %}
+                        {% if current_memory_type %}params.append('memory_type', '{{ current_memory_type }}');{% endif %}
+                        fetch('/memory/api/search?' + params)
+                            .then(r => r.json())
+                            .then(data => {
+                                results = (data.data && data.data.results) || [];
+                                searching = false;
+                            })
+                            .catch(() => { searching = false; });
+                    }
+                "
+                        :disabled="searchQuery.length < 2"
+                        class="px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 disabled:bg-void-300 dark:disabled:bg-void-700 text-white text-sm font-medium transition-colors">
+                    <i class="fas fa-search mr-1"></i> Search
+                </button>
+            </div>
+
+            <!-- Search Results -->
+            <div x-show="results.length > 0" x-cloak class="mt-4">
+                <p class="text-sm text-void-500 dark:text-void-400 mb-2">Found <span x-text="results.length"></span> results</p>
+                <div class="space-y-2 max-h-96 overflow-y-auto">
+                    <template x-for="(result, index) in results" :key="index">
+                        <div class="rounded-xl border border-void-200 dark:border-void-700 p-3 hover:border-nordic-500/30 transition-colors">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm text-void-900 dark:text-white line-clamp-3" x-text="result.content"></p>
+                                    <div class="flex items-center gap-2 mt-2 text-xs text-void-400">
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg"
+                                              :class="result.memory_type === 'episodic' ? 'bg-frost-500/10 text-frost-500' : 'bg-nordic-500/10 text-nordic-500'">
+                                            <i :class="result.memory_type === 'episodic' ? 'fas fa-comments' : 'fas fa-brain'"></i>
+                                            <span x-text="result.memory_type"></span>
+                                        </span>
+                                        <span x-text="result.user_id"></span>
+                                        <span class="text-nordic-500" x-text="Math.round(result.relevance * 100) + '% match'"></span>
+                                    </div>
+                                </div>
+                                <form method="POST" :action="'/memory/' + result.id + '/delete'" class="inline">
+                                    {% include "partials/csrf_field.html" %}
+                                    <input type="hidden" name="memory_type" :value="result.memory_type">
+                                    <input type="hidden" name="redirect_url" value="/memory/browse">
+                                    <button type="submit"
+                                            onclick="return confirm('Delete this memory?')"
+                                            class="px-2 py-1 rounded-lg hover:bg-red-500/10 text-red-500 text-xs transition-colors">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <form method="GET" action="/memory/browse" class="flex flex-wrap items-end gap-3 sm:gap-4">
+            <div class="space-y-2 flex-1 min-w-[120px] sm:flex-none">
+                <label class="block text-xs font-medium text-void-700 dark:text-void-200 uppercase tracking-wider">User</label>
+                <select name="user_id"
+                        class="w-full sm:w-auto bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 sm:min-w-[180px]">
+                    <option value="">All users</option>
+                    {% for user in users %}
+                    <option value="{{ user }}" {% if user == current_user_id %}selected{% endif %}>{{ user }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="space-y-2 flex-1 min-w-[100px] sm:flex-none">
+                <label class="block text-xs font-medium text-void-700 dark:text-void-200 uppercase tracking-wider">Type</label>
+                <select name="memory_type"
+                        class="w-full sm:w-auto bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                    <option value="">All types</option>
+                    <option value="episodic" {% if current_memory_type == 'episodic' %}selected{% endif %}>Episodic</option>
+                    <option value="declarative" {% if current_memory_type == 'declarative' %}selected{% endif %}>Declarative</option>
+                </select>
+            </div>
+            <div class="flex gap-2">
+                <button type="submit"
+                        class="px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                    Filter
+                </button>
+                <a href="/memory/browse"
+                   class="px-4 py-2 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 text-sm font-medium transition-colors">
+                    Reset
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Error Message -->
+{% if error %}
+<div class="rounded-2xl bg-red-500/10 border border-red-500/30 p-4 mb-6">
+    <p class="text-red-500 flex items-center gap-2">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ error }}
+    </p>
+</div>
+{% endif %}
+
+<!-- Success Message -->
+{% if 'success' in request.query_params %}
+<div class="rounded-2xl bg-nordic-500/10 border border-nordic-500/30 p-4 mb-6">
+    <p class="text-nordic-500 flex items-center gap-2">
+        <i class="fas fa-check-circle"></i>
+        Memory deleted successfully
+    </p>
+</div>
+{% endif %}
+
+<!-- Memories List -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 flex items-center justify-between">
+        <div>
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-list text-frost-500"></i>
+                Memories
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">{{ total }} memories found</p>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                    <th class="px-2 sm:px-5 py-3">Content</th>
+                    <th class="px-2 sm:px-5 py-3 w-24 hidden sm:table-cell">Type</th>
+                    <th class="px-2 sm:px-5 py-3 w-32 hidden md:table-cell">User</th>
+                    <th class="px-2 sm:px-5 py-3 w-36 hidden lg:table-cell">Created</th>
+                    <th class="px-2 sm:px-5 py-3 w-20">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                {% for memory in memories %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                    <td class="px-2 sm:px-5 py-4">
+                        <p class="text-sm text-void-900 dark:text-white line-clamp-2 max-w-xl">{{ memory.content[:200] }}{% if memory.content|length > 200 %}...{% endif %}</p>
+                    </td>
+                    <td class="px-2 sm:px-5 py-4 hidden sm:table-cell">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium
+                            {% if memory.memory_type == 'episodic' %}bg-frost-500/10 text-frost-500
+                            {% else %}bg-nordic-500/10 text-nordic-500{% endif %}">
+                            {% if memory.memory_type == 'episodic' %}<i class="fas fa-comments"></i>
+                            {% else %}<i class="fas fa-brain"></i>{% endif %}
+                            {{ memory.memory_type }}
+                        </span>
+                    </td>
+                    <td class="px-2 sm:px-5 py-4 text-sm text-void-600 dark:text-void-300 truncate max-w-[120px] hidden md:table-cell" title="{{ memory.user_id }}">
+                        {{ memory.user_id }}
+                    </td>
+                    <td class="px-2 sm:px-5 py-4 text-sm text-void-500 dark:text-void-400 hidden lg:table-cell">
+                        {{ memory.created_at|datefmt('%Y-%m-%d') }}
+                    </td>
+                    <td class="px-2 sm:px-5 py-4">
+                        <form method="POST" action="/memory/{{ memory.id }}/delete" class="inline">
+                            {% include "partials/csrf_field.html" %}
+                            <input type="hidden" name="memory_type" value="{{ memory.memory_type }}">
+                            <input type="hidden" name="redirect_url" value="/memory/browse{% if current_user_id %}?user_id={{ current_user_id }}{% endif %}{% if current_memory_type %}&amp;memory_type={{ current_memory_type }}{% endif %}">
+                            <button type="submit"
+                                    onclick="return confirm('Delete this memory?')"
+                                    class="px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10 text-red-500 text-sm font-medium transition-colors">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not memories %}
+                <tr>
+                    <td colspan="5" class="px-5 py-12 text-center">
+                        <i class="fas fa-brain text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+                        <p class="text-void-500 dark:text-void-400">No memories found</p>
+                        <p class="text-xs text-void-400 dark:text-void-500 mt-1">Memories will appear here as users interact with agents</p>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="p-5 border-t border-void-200 dark:border-void-800 flex items-center justify-between">
+        <p class="text-sm text-void-500 dark:text-void-400">
+            Page {{ page }} of {{ total_pages }}
+        </p>
+        <div class="flex gap-2">
+            {% if page > 1 %}
+            <a href="/memory/browse?page={{ page - 1 }}{% if current_user_id %}&amp;user_id={{ current_user_id }}{% endif %}{% if current_memory_type %}&amp;memory_type={{ current_memory_type }}{% endif %}"
+               class="px-3 py-1.5 rounded-lg border border-void-200 dark:border-void-700 hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 text-sm transition-colors">
+                <i class="fas fa-chevron-left mr-1"></i> Previous
+            </a>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="/memory/browse?page={{ page + 1 }}{% if current_user_id %}&amp;user_id={{ current_user_id }}{% endif %}{% if current_memory_type %}&amp;memory_type={{ current_memory_type }}{% endif %}"
+               class="px-3 py-1.5 rounded-lg border border-void-200 dark:border-void-700 hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 text-sm transition-colors">
+                Next <i class="fas fa-chevron-right ml-1"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Navigation -->
+<div class="flex items-center justify-between">
+    <a href="/memory" class="text-sm text-nordic-500 hover:text-nordic-600 flex items-center gap-2">
+        <i class="fas fa-arrow-left"></i> Back to Memory Groups
+    </a>
+</div>
+{% endblock %}

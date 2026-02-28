@@ -1,0 +1,167 @@
+# Local development overrides (gitignored)
+# Loaded automatically by docker compose — no -f flag needed.
+
+services:
+  gridbear:
+    volumes:
+      # DEV ONLY - SSH keys for git operations
+      - ~/.ssh:/home/gridbear/.ssh:ro
+      # Dev Projects mounts
+      # - /path/to/project:/projects/project-name:rw
+      - ./plugins:/projects/gridbear-plugins:rw
+    environment:
+      - OLLAMA_URL=http://gridbear-ollama:11434
+    networks:
+      # Connect to executor isolated network
+      - executor-internal
+
+  ui:
+    init: true
+    command: uvicorn ui.app:app --host 0.0.0.0 --port 8080 --reload --timeout-graceful-shutdown 5
+
+  # Sandboxed code execution (no internet access)
+  executor:
+    build: ./executor
+    container_name: gridbear-executor
+    restart: unless-stopped
+    group_add:
+      - "${DOCKER_GID:-983}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/executor.json:/app/config/executor.json:ro
+      - ./data/executor_audit:/app/data/audit
+    environment:
+      - EXECUTOR_AUTH_TOKEN=${EXECUTOR_TOKEN:-}
+    networks:
+      - executor-internal
+    expose:
+      - "8090"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=50M,mode=1777
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # WhatsApp gateway (Evolution API)
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: gridbear-evolution-redis
+    restart: unless-stopped
+    networks:
+      - gridbear-internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: gridbear-evolution
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_started
+    ports:
+      - "8082:8080"
+    environment:
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      - SERVER_URL=http://gridbear-evolution:8080
+      - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_URL=http://gridbear:8000/api/whatsapp/webhook
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
+      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - WEBHOOK_EVENTS_MESSAGES_UPDATE=true
+      - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
+      - WEBHOOK_EVENTS_SEND_MESSAGE=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:${POSTGRES_PASSWORD}@gridbear-postgres:5432/evolution?schema=public
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=false
+      - DATABASE_SAVE_MESSAGE_UPDATE=false
+      - DATABASE_SAVE_DATA_CONTACTS=false
+      - DATABASE_SAVE_DATA_CHATS=false
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://gridbear-evolution-redis:6379/0
+      - CACHE_REDIS_TTL=604800
+      - CACHE_LOCAL_ENABLED=false
+      - WEBSOCKET_ENABLED=false
+      - QRCODE_LIMIT=10
+      - LOG_LEVEL=WARN
+    volumes:
+      - ./data/evolution:/evolution/instances
+    networks:
+      - gridbear-internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # n8n workflow automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: gridbear-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://gridbear-n8n:5678/
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=gridbear-postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=gridbear
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gridbear-internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Ollama local LLM server
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gridbear-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    expose:
+      - "11434"
+    networks:
+      - gridbear-internal
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  executor-internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  ollama_data:

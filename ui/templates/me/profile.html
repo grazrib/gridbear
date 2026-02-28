@@ -1,0 +1,103 @@
+{% extends "me/base.html" %}
+
+{% block title %}GridBear - {{ _("Profile") }}{% endblock %}
+{% block page_title %}{{ _("Profile") }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-6">
+    {% if success %}
+    <div class="bg-nordic-500/10 border border-nordic-500/20 rounded-xl p-4 text-sm text-nordic-700 dark:text-nordic-300">
+        {{ _("Profile updated.") }}
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-700 dark:text-red-300">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Avatar -->
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <div class="flex items-center gap-5">
+            {% if user.avatar_url %}
+            <img src="{{ user.avatar_url }}" alt="" class="w-16 h-16 rounded-xl object-cover">
+            {% else %}
+            <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-nordic-500 to-frost-500 flex items-center justify-center">
+                <span class="text-white text-2xl font-bold">{{ (user.display_name or user.username or '?')[0]|upper }}</span>
+            </div>
+            {% endif %}
+            <div class="flex-1">
+                <h3 class="font-semibold text-sm mb-2">{{ _("Profile picture") }}</h3>
+                <form method="POST" action="/me/profile/avatar" enctype="multipart/form-data" class="flex items-center gap-3">
+                    {% include "partials/csrf_field.html" %}
+                    <label class="cursor-pointer px-4 py-2 rounded-xl border border-void-200 dark:border-void-700 text-xs font-medium hover:bg-void-50 dark:hover:bg-void-800 transition-all">
+                        <i class="fas fa-camera mr-1.5"></i>{{ _("Choose image") }}
+                        <input type="file" name="avatar" accept="image/*" class="hidden" onchange="this.form.submit()">
+                    </label>
+                    <span class="text-[10px] text-void-400">{{ _("JPG, PNG or WebP. Max 2 MB.") }}</span>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Form -->
+    <form method="POST" action="/me/profile" class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6 space-y-5">
+        {% include "partials/csrf_field.html" %}
+
+        <div>
+            <label class="block text-sm font-medium mb-1.5">{{ _("Username") }}</label>
+            <input type="text" value="{{ user.username }}" disabled
+                   class="w-full px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-void-500 text-sm cursor-not-allowed">
+            <p class="mt-1 text-xs text-void-400">{{ _("Username cannot be modified.") }}</p>
+        </div>
+
+        <div>
+            <label for="display_name" class="block text-sm font-medium mb-1.5">{{ _("Display name") }}</label>
+            <input type="text" id="display_name" name="display_name" value="{{ user.display_name or '' }}"
+                   class="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all"
+                   placeholder="{{ _('Your name') }}">
+        </div>
+
+        <div>
+            <label for="email" class="block text-sm font-medium mb-1.5">{{ _("Email") }}</label>
+            <input type="email" id="email" name="email" value="{{ user.email or '' }}"
+                   class="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all"
+                   placeholder="email@example.com">
+        </div>
+
+        <div>
+            <label for="locale" class="block text-sm font-medium mb-1.5">{{ _("Language") }}</label>
+            <select id="locale" name="locale"
+                    class="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all">
+                {% for code, lang in available_languages.items() %}
+                <option value="{{ code }}" {{ 'selected' if (user.locale or 'en') == code }}>{{ lang.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="pt-2">
+            <button type="submit"
+                    class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-nordic-500 to-nordic-600 text-white text-sm font-medium hover:from-nordic-600 hover:to-nordic-700 transition-all shadow-lg shadow-nordic-500/20">
+                {{ _("Save") }}
+            </button>
+        </div>
+    </form>
+
+    <!-- Security -->
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <h3 class="font-semibold text-sm mb-4">{{ _("Security") }}</h3>
+        <div class="space-y-3">
+            <a href="/auth/change-password"
+               class="flex items-center gap-3 text-sm text-void-600 dark:text-void-300 hover:text-nordic-600 dark:hover:text-nordic-400 transition-colors">
+                <i class="fas fa-key w-5 text-center"></i>
+                {{ _("Change password") }}
+            </a>
+            <a href="/auth/security"
+               class="flex items-center gap-3 text-sm text-void-600 dark:text-void-300 hover:text-nordic-600 dark:hover:text-nordic-400 transition-colors">
+                <i class="fas fa-shield-halved w-5 text-center"></i>
+                {{ _("Security settings and 2FA") }}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

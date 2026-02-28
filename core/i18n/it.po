@@ -1,0 +1,17 @@
+# Italian translations for GridBear core
+# Copyright (C) 2024 GridBear
+# This file is distributed under the same license as GridBear.
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: it\n"
+
+msgid "No runner available."
+msgstr "Nessun runner disponibile."
+
+msgid "Error: {error}"
+msgstr "Errore: {error}"
+
+msgid "Error: all retries failed."
+msgstr "Errore: tutti i tentativi falliti."

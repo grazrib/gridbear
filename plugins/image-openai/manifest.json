@@ -1,0 +1,26 @@
+{
+  "name": "image-openai",
+  "version": "0.0.1",
+  "type": "service",
+  "provides": "image",
+  "instantiation": "per-agent",
+  "display_name": "OpenAI DALL-E",
+  "description": "Image generation using OpenAI DALL-E API",
+  "entry_point": "service.py",
+  "class_name": "OpenAIImageService",
+  "config_schema": {
+    "model": {
+      "type": "string",
+      "default": "dall-e-3",
+      "enum": ["dall-e-3", "dall-e-2"],
+      "description": "DALL-E model"
+    },
+    "quality": {
+      "type": "string",
+      "default": "standard",
+      "enum": ["standard", "hd"],
+      "description": "Image quality (dall-e-3 only)"
+    }
+  },
+  "dependencies": []
+}

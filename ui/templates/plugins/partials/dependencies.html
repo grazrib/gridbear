@@ -1,0 +1,47 @@
+<!-- Plugin Dependencies Card -->
+{% if plugin_dependencies or plugin_dependents %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-diagram-project text-nordic-500"></i>
+            Dependencies
+        </h3>
+    </div>
+    <div class="p-5 space-y-4">
+        {% if plugin_dependencies %}
+        <div>
+            <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-2">Requires</p>
+            <div class="flex flex-wrap gap-2">
+                {% for dep in plugin_dependencies.get('required', []) %}
+                <a href="/plugins/{{ dep }}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium hover:bg-nordic-500/20 transition-colors">
+                    <i class="fas fa-link text-[10px]"></i>
+                    {{ dep }}
+                </a>
+                {% endfor %}
+                {% for dep in plugin_dependencies.get('optional', []) %}
+                <a href="/plugins/{{ dep }}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-void-200 dark:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium hover:bg-void-300 dark:hover:bg-void-600 transition-colors">
+                    <i class="fas fa-link text-[10px]"></i>
+                    {{ dep }}
+                    <span class="text-void-400 dark:text-void-500">(optional)</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if plugin_dependents %}
+        <div>
+            <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-2">Used by</p>
+            <div class="flex flex-wrap gap-2">
+                {% for dep in plugin_dependents %}
+                <a href="/plugins/{{ dep }}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-frost-500/10 text-frost-600 dark:text-frost-400 text-xs font-medium hover:bg-frost-500/20 transition-colors">
+                    <i class="fas fa-arrow-left text-[10px]"></i>
+                    {{ dep }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

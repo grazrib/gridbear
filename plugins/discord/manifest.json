@@ -1,0 +1,31 @@
+{
+  "name": "discord",
+  "version": "0.0.1",
+  "type": "channel",
+  "description": "Discord messaging channel",
+  "entry_point": "adapter.py",
+  "class_name": "DiscordChannel",
+  "config_schema": {
+    "bot_token": {
+      "type": "secret",
+      "env": "DISCORD_TOKEN",
+      "description": "Discord Bot Token",
+      "required": true
+    },
+    "command_prefix": {
+      "type": "string",
+      "default": "!",
+      "description": "Command prefix for Discord commands"
+    }
+  },
+  "ui": {
+    "icon": "fab fa-discord",
+    "color": "#5865F2",
+    "display_name": "Discord",
+    "badge_abbr": "DC"
+  },
+  "dependencies": {
+    "required": ["sessions", "attachments"],
+    "optional": ["image"]
+  }
+}

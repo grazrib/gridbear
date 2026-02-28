@@ -1,0 +1,77 @@
+{# Channel card macro for authorized users management.
+   channel = {name, icon, color, display_name, badge_abbr}
+   users   = {ids: [...], usernames: [...]}
+   request = FastAPI Request object (needed for CSRF token)
+#}
+
+{% macro channel_users_card(channel, users, request) %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800"
+         style="background: linear-gradient(to right, {{ channel.color }}08, transparent)">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="{{ channel.icon }}" style="color: {{ channel.color }}"></i>
+            {{ channel.display_name }}
+        </h3>
+        {% if not users.ids and not users.usernames %}
+        <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">No restrictions</span>
+        {% else %}
+        <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium"
+              style="background: {{ channel.color }}15; color: {{ channel.color }}">{{ users.ids|length + users.usernames|length }} users</span>
+        {% endif %}
+    </div>
+
+    <ul class="divide-y divide-void-100 dark:divide-void-800">
+        {% for uid in users.ids %}
+        <li class="flex items-center justify-between px-5 py-3 hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+            <span class="flex items-center gap-2 text-void-700 dark:text-void-200">
+                <i class="fas fa-id-badge text-void-400"></i>
+                ID: <strong class="font-mono">{{ uid }}</strong>
+            </span>
+            <form method="POST" action="/users/{{ channel.name }}/remove">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                <input type="hidden" name="user_id" value="{{ uid }}">
+                <button type="submit" class="p-2 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-colors">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </form>
+        </li>
+        {% endfor %}
+        {% for uname in users.usernames %}
+        <li class="flex items-center justify-between px-5 py-3 hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+            <span class="flex items-center gap-2 text-void-700 dark:text-void-200">
+                <i class="fas {{ 'fa-phone' if channel.name == 'whatsapp' else 'fa-at' }} text-void-400"></i>
+                <strong>{{ uname if channel.name == 'whatsapp' else '@' ~ uname }}</strong>
+            </span>
+            <form method="POST" action="/users/{{ channel.name }}/remove">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                <input type="hidden" name="username" value="{{ uname }}">
+                <button type="submit" class="p-2 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-colors">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </form>
+        </li>
+        {% endfor %}
+        {% if not users.ids and not users.usernames %}
+        <li class="px-5 py-8 text-center">
+            <p class="text-void-500 dark:text-void-400">Everyone can access (no restrictions)</p>
+        </li>
+        {% endif %}
+    </ul>
+
+    <div class="p-4 border-t border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+        <form method="POST" action="/users/{{ channel.name }}/add" class="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+            <input type="text" name="user_id"
+                   class="flex-1 min-w-[80px] bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
+                   placeholder="User ID">
+            <span class="text-void-400 text-sm">or</span>
+            <input type="text" name="username"
+                   class="flex-1 min-w-[100px] bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
+                   placeholder="{% if channel.name == 'whatsapp' %}Phone (es. 393401234567){% elif channel.name == 'telegram' %}@username{% else %}username{% endif %}">
+            <button type="submit" class="px-4 py-2 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors flex items-center gap-1">
+                <i class="fas fa-plus"></i> Add
+            </button>
+        </form>
+    </div>
+</div>
+{% endmacro %}

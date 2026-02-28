@@ -1,0 +1,55 @@
+{
+  "name": "tts-openai",
+  "version": "0.0.1",
+  "type": "service",
+  "instantiation": "per-agent",
+  "provides": "tts",
+  "display_name": "OpenAI TTS",
+  "description": "Text-to-speech service using OpenAI TTS",
+  "entry_point": "service.py",
+  "class_name": "OpenAITTSService",
+  "config_schema": {
+    "api_key": {
+      "type": "secret",
+      "env": "OPENAI_API_KEY",
+      "description": "OpenAI API key",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "default": "tts-1",
+      "enum": [
+        "tts-1",
+        "tts-1-hd"
+      ],
+      "description": "TTS model (tts-1 for speed, tts-1-hd for quality)"
+    },
+    "default_voice": {
+      "type": "string",
+      "default": "nova",
+      "enum": [
+        "alloy",
+        "echo",
+        "fable",
+        "onyx",
+        "nova",
+        "shimmer"
+      ],
+      "description": "Default voice"
+    },
+    "voices": {
+      "type": "object",
+      "default": {
+        "en": "nova",
+        "it": "nova"
+      },
+      "description": "Voice mapping per locale (OpenAI voices work for all languages)"
+    },
+    "output_dir": {
+      "type": "string",
+      "default": "data/tts",
+      "description": "Directory for temporary audio files"
+    }
+  },
+  "dependencies": []
+}

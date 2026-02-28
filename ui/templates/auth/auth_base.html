@@ -1,0 +1,87 @@
+{# Shared base for all standalone auth pages (login, 2FA, setup, etc.).
+   Themes can override this single file to restyle every auth page at once
+   via the Jinja2 ChoiceLoader priority mechanism. #}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}GridBear{% endblock %}</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+
+    <!-- Geist Font -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-sans/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.2.0/dist/fonts/geist-mono/style.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        nordic: { 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488' },
+                        void: { 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
+                        frost: { 400: '#38bdf8', 500: '#0ea5e9' },
+                        ember: { 400: '#fb923c', 500: '#f97316' }
+                    },
+                    fontFamily: {
+                        sans: ['Geist Sans', 'system-ui', 'sans-serif'],
+                        mono: ['Geist Mono', 'monospace'],
+                    },
+                    {% block extra_tailwind_config %}{% endblock %}
+                }
+            }
+        }
+    </script>
+    <style>
+        .bg-grid {
+            background-image:
+                linear-gradient(rgba(45, 212, 191, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(45, 212, 191, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .input-glow:focus {
+            box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.15);
+        }
+        {% block extra_css %}{% endblock %}
+    </style>
+    {% include "partials/theme_head.html" ignore missing %}
+</head>
+<body class="font-sans antialiased bg-void-950 min-h-screen flex items-center justify-center p-4 {% block body_class %}{% endblock %}">
+    {# Background effects — override for custom orb colors or particles #}
+    {% block background %}
+    <div class="fixed inset-0 bg-grid"></div>
+    <div class="fixed inset-0">
+        <div class="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-nordic-500/10 rounded-full blur-[100px] animate-pulse"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-frost-500/10 rounded-full blur-[100px] animate-pulse" style="animation-delay: 2s;"></div>
+    </div>
+    {% endblock %}
+
+    {# Card container #}
+    <div class="relative w-full {% block card_width %}max-w-md{% endblock %}">
+        <div class="absolute inset-0 bg-gradient-to-r {% block glow_colors %}from-nordic-500/20 via-frost-500/20 to-nordic-500/20{% endblock %} rounded-3xl blur-xl transform scale-105 {% block glow_class %}{% endblock %}"></div>
+
+        <div class="relative glass-card rounded-3xl border border-white/10 overflow-hidden">
+            {% block card_content %}
+            <div class="p-8 pb-4 text-center">
+                {% block header %}{% endblock %}
+            </div>
+            <div class="px-8 pb-8">
+                {% block content %}{% endblock %}
+            </div>
+            {% endblock %}
+        </div>
+    </div>
+
+    {% block after_card %}{% endblock %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

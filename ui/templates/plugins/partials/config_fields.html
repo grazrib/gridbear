@@ -1,0 +1,83 @@
+<!-- Configuration Fields Section -->
+{% set config_fields = [] %}
+{% set _schema_props = plugin.config_schema.get('properties', plugin.config_schema) if plugin.config_schema else {} %}
+{% for key, schema in _schema_props.items() %}
+    {% if schema is mapping and key not in ('type', 'properties', 'definitions', 'required', '$schema') and schema.get('type') != 'secret' %}
+        {% set _ = config_fields.append({'key': key, 'schema': schema}) %}
+    {% endif %}
+{% endfor %}
+
+{% if config_fields %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-sliders text-nordic-500"></i>
+            Configuration
+        </h3>
+        <p class="text-sm text-void-500 dark:text-void-400 mt-1">Plugin settings and options</p>
+    </div>
+    <form method="POST" action="/plugins/{{ plugin_name }}">
+        {% include "partials/csrf_field.html" %}
+        <div class="p-5 space-y-5">
+            {% for item in config_fields %}
+            {% set key = item.key %}
+            {% set schema = item.schema %}
+            {% set current_value = plugin.current_config.get(key, schema.get('default', '')) %}
+            {% set field_type = schema.get('type', 'string') %}
+
+            <div class="space-y-2">
+                <label for="{{ key }}" class="block text-sm font-medium text-void-700 dark:text-void-200">
+                    {{ schema.get('description', key) }}
+                </label>
+
+                {% if schema.get('enum') %}
+                <select id="{{ key }}" name="{{ key }}"
+                        class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                    {% for option in schema.enum %}
+                    <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>
+                        {{ option }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                {% elif field_type == 'boolean' %}
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="{{ key }}" name="{{ key }}" {% if current_value %}checked{% endif %}
+                           class="sr-only peer">
+                    <div class="w-11 h-6 bg-void-200 dark:bg-void-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-nordic-500"></div>
+                    <span class="ms-3 text-sm text-void-600 dark:text-void-300">Enabled</span>
+                </label>
+
+                {% elif field_type == 'integer' %}
+                <input type="number" id="{{ key }}" name="{{ key }}"
+                       value="{{ current_value }}" placeholder="{{ schema.get('default', '') }}"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+
+                {% elif field_type == 'object' or field_type == 'array' %}
+                <textarea id="{{ key }}" name="{{ key }}" rows="4"
+                          placeholder="JSON format"
+                          class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all font-mono text-sm">{{ current_value|tojson(indent=2) if current_value else '' }}</textarea>
+                <p class="text-xs text-void-500 dark:text-void-400">Enter valid JSON</p>
+
+                {% else %}
+                <input type="text" id="{{ key }}" name="{{ key }}"
+                       value="{{ current_value }}" placeholder="{{ schema.get('default', '') }}"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                {% endif %}
+
+                {% if schema.get('default') is not none and field_type != 'secret' %}
+                <p class="text-xs text-void-500 dark:text-void-400">Default: <code class="font-mono bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded">{{ schema.get('default') }}</code></p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="p-5 border-t border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+            <button type="submit"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all shadow-lg shadow-nordic-500/20">
+                <i class="fas fa-save"></i>
+                Save Configuration
+            </button>
+        </div>
+    </form>
+</div>
+{% endif %}

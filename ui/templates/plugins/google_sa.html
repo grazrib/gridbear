@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Google Service Account - GridBear{% endblock %}
+{% block page_title %}Google Service Account{% endblock %}
+{% block breadcrumb_active %}google-sa{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Centralized Google service account for all Google plugins</p>{% endblock %}
+
+{% block content_alerts %}
+{% if request.query_params.get('saved') == 'sa' %}
+<div class="p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 text-nordic-600 dark:text-nordic-400 flex items-center gap-2">
+    <i class="fas fa-check-circle"></i> Service account uploaded successfully.
+</div>
+{% elif request.query_params.get('saved') == 'agent_sa' %}
+<div class="p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 text-nordic-600 dark:text-nordic-400 flex items-center gap-2">
+    <i class="fas fa-check-circle"></i> Agent service account uploaded successfully.
+</div>
+{% elif request.query_params.get('deleted') == 'sa' %}
+<div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 text-ember-600 dark:text-ember-400 flex items-center gap-2">
+    <i class="fas fa-trash-alt"></i> Service account removed.
+</div>
+{% elif request.query_params.get('deleted') == 'agent_sa' %}
+<div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 text-ember-600 dark:text-ember-400 flex items-center gap-2">
+    <i class="fas fa-trash-alt"></i> Agent service account removed.
+</div>
+{% elif request.query_params.get('error') == 'invalid_sa' %}
+<div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 text-ember-600 dark:text-ember-400 flex items-center gap-2">
+    <i class="fas fa-exclamation-triangle"></i> Invalid SA JSON — must contain client_email and private_key.
+</div>
+{% elif request.query_params.get('error') == 'invalid_agent' %}
+<div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 text-ember-600 dark:text-ember-400 flex items-center gap-2">
+    <i class="fas fa-exclamation-triangle"></i> Unknown agent.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+    <!-- Global Service Account -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-key text-nordic-500"></i>
+                Global Service Account
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">Shared across all Google plugins (Sheets, Calendar, Drive) unless overridden per-agent.</p>
+        </div>
+        <div class="p-5 space-y-4">
+            <!-- Status -->
+            <div class="p-4 rounded-xl {% if has_sa %}bg-nordic-500/10 border border-nordic-500/20{% else %}bg-ember-500/10 border border-ember-500/20{% endif %} flex items-center gap-3">
+                {% if has_sa %}
+                <i class="fas fa-check-circle text-nordic-500 text-xl"></i>
+                <div>
+                    <p class="font-semibold text-nordic-600 dark:text-nordic-400">Service Account Configured</p>
+                    {% if sa_email %}
+                    <p class="text-sm text-void-500 dark:text-void-400 font-mono">{{ sa_email }}</p>
+                    {% endif %}
+                </div>
+                {% else %}
+                <i class="fas fa-exclamation-triangle text-ember-500 text-xl"></i>
+                <div>
+                    <p class="font-semibold text-ember-600 dark:text-ember-400">No Service Account</p>
+                    <p class="text-sm text-void-500 dark:text-void-400">Upload a Google Cloud service account JSON key to enable Google API access</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Upload SA -->
+            <form method="POST" action="/plugins/google-sa/upload-sa" enctype="multipart/form-data" class="space-y-3">
+                {% include "partials/csrf_field.html" %}
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Service Account JSON Key</label>
+                    <input type="file" name="sa_file" accept=".json"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-nordic-500/10 file:text-nordic-500 file:cursor-pointer">
+                    <p class="text-sm text-void-500 dark:text-void-400">
+                        Upload the JSON key file from
+                        <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" class="text-frost-500 hover:text-frost-400">
+                            Google Cloud Console <i class="fas fa-external-link-alt ml-1"></i>
+                        </a>
+                    </p>
+                </div>
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all">
+                    <i class="fas fa-upload"></i>
+                    Upload Service Account
+                </button>
+            </form>
+
+            {% if has_sa %}
+            <!-- Delete SA -->
+            <form method="POST" action="/plugins/google-sa/delete-sa"
+                  onsubmit="return confirm('Remove the global service account? All Google plugins will lose API access unless agents have their own SA.')">
+                {% include "partials/csrf_field.html" %}
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-ember-500/30 text-ember-500 hover:bg-ember-500/10 font-medium transition-all text-sm">
+                    <i class="fas fa-trash-alt"></i>
+                    Remove Service Account
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Per-Agent Service Accounts -->
+    {% if agent_sas %}
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-aurora-purple-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-user-cog text-aurora-purple-500"></i>
+                Per-Agent Service Accounts
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">Each agent can use its own Google service account. If not set, the global SA above is used.</p>
+        </div>
+        <div class="p-5 space-y-4">
+            {% for agent in agent_sas %}
+            <div class="p-4 rounded-xl border {% if agent.has_sa %}border-nordic-500/20 bg-nordic-500/5{% else %}border-void-200 dark:border-void-700 bg-void-50 dark:bg-void-800/30{% endif %}">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg {% if agent.has_sa %}bg-nordic-500/20 text-nordic-500{% else %}bg-void-200 dark:bg-void-700 text-void-400{% endif %}">
+                            <i class="fas fa-robot text-sm"></i>
+                        </span>
+                        <div>
+                            <p class="font-semibold text-void-900 dark:text-white">{{ agent.name }}</p>
+                            {% if agent.has_sa and agent.sa_email %}
+                            <p class="text-xs text-void-500 dark:text-void-400 font-mono">{{ agent.sa_email }}</p>
+                            {% elif not agent.has_sa %}
+                            <p class="text-xs text-void-500 dark:text-void-400">Using global SA</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if agent.has_sa %}
+                    <form method="POST" action="/plugins/google-sa/agent-sa/delete"
+                          onsubmit="return confirm('Remove SA for {{ agent.name }}? This agent will fall back to the global SA.')">
+                        {% include "partials/csrf_field.html" %}
+                        <input type="hidden" name="agent_name" value="{{ agent.id }}">
+                        <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ember-500/30 text-ember-500 hover:bg-ember-500/10 text-xs font-medium transition-all">
+                            <i class="fas fa-trash-alt"></i>
+                            Remove
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                <form method="POST" action="/plugins/google-sa/agent-sa/upload" enctype="multipart/form-data" class="flex items-center gap-3">
+                    {% include "partials/csrf_field.html" %}
+                    <input type="hidden" name="agent_name" value="{{ agent.id }}">
+                    <input type="file" name="sa_file" accept=".json"
+                           class="flex-1 bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all file:mr-3 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-xs file:bg-nordic-500/10 file:text-nordic-500 file:cursor-pointer">
+                    <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-xs font-medium transition-all whitespace-nowrap">
+                        <i class="fas fa-upload"></i>
+                        {% if agent.has_sa %}Replace{% else %}Upload{% endif %} SA
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}

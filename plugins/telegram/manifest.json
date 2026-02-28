@@ -1,0 +1,27 @@
+{
+  "name": "telegram",
+  "version": "0.0.1",
+  "type": "channel",
+  "description": "Telegram messaging channel",
+  "entry_point": "adapter.py",
+  "class_name": "TelegramChannel",
+  "config_schema": {
+    "bot_token": {
+      "type": "secret",
+      "env": "TELEGRAM_BOT_TOKEN",
+      "description": "Telegram Bot Token (from @BotFather)",
+      "required": true
+    }
+  },
+  "ui": {
+    "icon": "fab fa-telegram",
+    "color": "#0088cc",
+    "display_name": "Telegram",
+    "badge_abbr": "TG",
+    "username_prefix": "@"
+  },
+  "dependencies": {
+    "required": ["sessions", "attachments"],
+    "optional": ["memory", "adversarial", "image", "transcription", "tts"]
+  }
+}

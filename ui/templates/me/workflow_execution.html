@@ -1,0 +1,334 @@
+{% extends "me/base.html" %}
+
+{% block title %}{{ _("Execution") }} #{{ execution.id }} - {{ workflow.display_name }} - GridBear{% endblock %}
+{% block page_title %}{{ _("Execution") }} #{{ execution.id }}{% endblock %}
+
+{% block content %}
+<input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+<div x-data="executionLive()" x-init="init()">
+    <!-- Back link -->
+    <div class="mb-4">
+        <a href="/me/workflows/{{ workflow.id }}" class="text-sm text-void-500 hover:text-nordic-500 transition-colors">
+            <i class="fas fa-arrow-left mr-1"></i> {{ _("Back to") }} {{ workflow.display_name }}
+        </a>
+    </div>
+
+    <!-- Execution Header -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+        <div class="p-5">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-3 mb-2">
+                        <h2 class="text-lg font-semibold text-void-900 dark:text-white">{{ workflow.display_name }}</h2>
+                        <template x-if="exec.status === 'completed'">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium">
+                                <i class="fas fa-check-circle mr-1.5"></i>{{ _("Completed") }}
+                            </span>
+                        </template>
+                        <template x-if="exec.status === 'running'">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-frost-500/10 text-frost-600 dark:text-frost-400 text-xs font-medium">
+                                <i class="fas fa-spinner fa-spin mr-1.5"></i>{{ _("Running") }}
+                            </span>
+                        </template>
+                        <template x-if="exec.status === 'failed'">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium">
+                                <i class="fas fa-times-circle mr-1.5"></i>{{ _("Failed") }}
+                            </span>
+                        </template>
+                        <template x-if="exec.status === 'cancelled'">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-void-100 dark:bg-void-800 text-void-500 text-xs font-medium">
+                                <i class="fas fa-ban mr-1.5"></i>{{ _("Cancelled") }}
+                            </span>
+                        </template>
+                        <template x-if="exec.status === 'paused'">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">
+                                <i class="fas fa-pause-circle mr-1.5"></i>{{ _("Paused") }}
+                            </span>
+                        </template>
+                        <template x-if="exec.status === 'pending'">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-void-100 dark:bg-void-800 text-void-500 text-xs font-medium">
+                                <i class="fas fa-hourglass-start mr-1.5"></i>{{ _("Pending") }}
+                            </span>
+                        </template>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-4 text-xs text-void-400 dark:text-void-500">
+                        <span><i class="fas fa-bolt mr-1"></i>{{ execution.trigger_type }}</span>
+                        {% if execution.initiated_by %}
+                        <span><i class="fas fa-user mr-1"></i>{{ execution.initiated_by }}</span>
+                        {% endif %}
+                        <span x-show="exec.started_at"><i class="fas fa-clock mr-1"></i><span x-text="exec.started_at"></span></span>
+                        <span x-show="exec.duration != null"><i class="fas fa-stopwatch mr-1"></i><span x-text="exec.duration + 's'"></span></span>
+                        <span x-show="exec.current_step"><i class="fas fa-map-pin mr-1"></i><span x-text="exec.current_step"></span></span>
+                    </div>
+                </div>
+                <template x-if="exec.status === 'running' || exec.status === 'paused'">
+                    <form method="POST" action="/me/workflows/executions/{{ execution.id }}/cancel" class="flex-shrink-0">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit"
+                                class="px-4 py-2 rounded-xl border border-red-200 dark:border-red-800 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium transition-colors"
+                                onclick="return confirm({{ _("Cancel this execution?")|tojson }})">
+                            <i class="fas fa-stop mr-1"></i> {{ _("Cancel") }}
+                        </button>
+                    </form>
+                </template>
+            </div>
+
+            <template x-if="exec.error">
+                <div class="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <p class="text-sm text-red-700 dark:text-red-300">
+                        <i class="fas fa-exclamation-triangle mr-1"></i> <span x-text="exec.error"></span>
+                    </p>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Approval Banner -->
+    <template x-if="approval">
+        <div class="rounded-2xl bg-ember-50 dark:bg-ember-900/20 border border-ember-200 dark:border-ember-800 overflow-hidden mb-6">
+            <div class="p-5">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-ember-500/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-hand text-ember-500 text-lg"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-semibold text-void-900 dark:text-white mb-1">{{ _("Approval Required") }}</h3>
+                        <p class="text-sm text-void-600 dark:text-void-400 mb-1"
+                           x-text="'Step: ' + approval.step_id"></p>
+                        <p class="text-sm text-void-700 dark:text-void-300 mb-4"
+                           x-text="approval.message"></p>
+                        <template x-if="approval.data_preview && Object.keys(approval.data_preview).length > 0">
+                            <div class="mb-4">
+                                <p class="text-xs font-medium text-void-500 dark:text-void-400 mb-1">{{ _("Data Preview") }}</p>
+                                <pre class="p-3 rounded-xl bg-white dark:bg-void-800 text-xs font-mono text-void-600 dark:text-void-400 overflow-x-auto"
+                                     x-text="JSON.stringify(approval.data_preview, null, 2)"></pre>
+                            </div>
+                        </template>
+                        <div class="flex items-center gap-3">
+                            <button @click="respondApproval(true)"
+                                    :disabled="approvalLoading"
+                                    class="px-5 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                                <i class="fas fa-check mr-1.5"></i> {{ _("Approve") }}
+                            </button>
+                            <button @click="respondApproval(false)"
+                                    :disabled="approvalLoading"
+                                    class="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                                <i class="fas fa-times mr-1.5"></i> {{ _("Reject") }}
+                            </button>
+                            <span x-show="approvalLoading" class="text-xs text-void-400">
+                                <i class="fas fa-spinner fa-spin mr-1"></i> {{ _("Sending...") }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Step Progress -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-list-check text-nordic-500"></i>
+                {{ _("Steps") }} (<span x-text="steps.length"></span>)
+                <template x-if="polling">
+                    <span class="ml-2 text-xs text-void-400 font-normal">
+                        <i class="fas fa-circle text-green-400 text-[6px] animate-pulse mr-1"></i>{{ _("Live") }}
+                    </span>
+                </template>
+            </h3>
+        </div>
+
+        <template x-if="steps.length > 0">
+            <div class="divide-y divide-void-100 dark:divide-void-800">
+                <template x-for="(step, idx) in steps" :key="step.step_id">
+                    <div>
+                        <button @click="expandedStep = expandedStep === idx ? null : idx"
+                                class="w-full flex items-center justify-between p-4 text-left hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <!-- Status icon -->
+                                <template x-if="step.status === 'completed'">
+                                    <div class="w-7 h-7 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-check text-green-500 text-xs"></i>
+                                    </div>
+                                </template>
+                                <template x-if="step.status === 'running'">
+                                    <div class="w-7 h-7 rounded-full bg-frost-500/10 flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-spinner fa-spin text-frost-500 text-xs"></i>
+                                    </div>
+                                </template>
+                                <template x-if="step.status === 'failed'">
+                                    <div class="w-7 h-7 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-times text-red-500 text-xs"></i>
+                                    </div>
+                                </template>
+                                <template x-if="step.status === 'skipped'">
+                                    <div class="w-7 h-7 rounded-full bg-void-100 dark:bg-void-800 flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-forward text-void-400 text-xs"></i>
+                                    </div>
+                                </template>
+                                <template x-if="step.status === 'waiting_approval'">
+                                    <div class="w-7 h-7 rounded-full bg-ember-500/10 flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-hand text-ember-500 text-xs"></i>
+                                    </div>
+                                </template>
+                                <template x-if="!['completed','running','failed','skipped','waiting_approval'].includes(step.status)">
+                                    <div class="w-7 h-7 rounded-full bg-void-100 dark:bg-void-800 flex items-center justify-center flex-shrink-0">
+                                        <i class="fas fa-circle text-void-300 dark:text-void-600 text-[6px]"></i>
+                                    </div>
+                                </template>
+                                <div class="min-w-0">
+                                    <span class="text-sm font-medium text-void-900 dark:text-white" x-text="step.step_id"></span>
+                                    <div class="flex items-center gap-3 text-xs text-void-400 dark:text-void-500 mt-0.5">
+                                        <span x-text="step.status"></span>
+                                        <span x-show="step.started_at" x-text="step.started_at"></span>
+                                        <span x-show="step.duration != null" x-text="step.duration + 's'"></span>
+                                        <span x-show="step.retry_count" x-text="step.retry_count + ' retries'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <i class="fas text-void-300 dark:text-void-600 text-xs transition-transform"
+                               :class="expandedStep === idx ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                        </button>
+
+                        <div x-show="expandedStep === idx" x-collapse>
+                            <div class="px-4 pb-4 pl-14 space-y-3">
+                                <template x-if="step.error">
+                                    <div class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                                        <p class="text-xs font-medium text-red-700 dark:text-red-300 mb-1">{{ _("Error") }}</p>
+                                        <pre class="text-xs text-red-600 dark:text-red-400 font-mono whitespace-pre-wrap" x-text="step.error"></pre>
+                                    </div>
+                                </template>
+
+                                <template x-if="step.input_data && Object.keys(step.input_data).length > 0">
+                                    <div>
+                                        <p class="text-xs font-medium text-void-500 dark:text-void-400 mb-1">{{ _("Input") }}</p>
+                                        <pre class="p-3 rounded-xl bg-void-50 dark:bg-void-800 text-xs font-mono text-void-600 dark:text-void-400 overflow-x-auto" x-text="JSON.stringify(step.input_data, null, 2)"></pre>
+                                    </div>
+                                </template>
+
+                                <template x-if="step.output_data && Object.keys(step.output_data).length > 0">
+                                    <div>
+                                        <p class="text-xs font-medium text-void-500 dark:text-void-400 mb-1">{{ _("Output") }}</p>
+                                        <pre class="p-3 rounded-xl bg-void-50 dark:bg-void-800 text-xs font-mono text-void-600 dark:text-void-400 overflow-x-auto" x-text="JSON.stringify(step.output_data, null, 2)"></pre>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+        <template x-if="steps.length === 0">
+            <div class="px-5 py-12 text-center">
+                <i class="fas fa-list-check text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+                <p class="text-void-500 dark:text-void-400">
+                    <span x-show="exec.status === 'running'">{{ _("Waiting for first step...") }}</span>
+                    <span x-show="exec.status !== 'running'">{{ _("No step executions recorded") }}</span>
+                </p>
+            </div>
+        </template>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function executionLive() {
+    return {
+        exec: {
+            status: '{{ execution.status }}',
+            current_step: {{ execution.current_step | tojson }},
+            error: {{ execution.error | tojson }},
+            started_at: {{ execution.started_at.strftime('%Y-%m-%d %H:%M:%S') | tojson if execution.started_at else 'null' }},
+            completed_at: {{ execution.completed_at.strftime('%Y-%m-%d %H:%M:%S') | tojson if execution.completed_at else 'null' }},
+            duration: {% if execution.completed_at and execution.started_at %}{{ ((execution.completed_at - execution.started_at).total_seconds()) | round(1) }}{% else %}null{% endif %},
+        },
+        steps: [],
+        approval: null,
+        approvalLoading: false,
+        expandedStep: null,
+        polling: false,
+        _timer: null,
+        _loaded: false,
+
+        async init() {
+            // Always load steps from API to avoid datetime serialization issues
+            await this.poll();
+            this._loaded = true;
+            if (['running', 'paused', 'pending'].includes(this.exec.status)) {
+                this.startPolling();
+            }
+        },
+
+        startPolling() {
+            this.polling = true;
+            this._timer = setInterval(() => this.poll(), 3000);
+            // Immediate first poll to catch approval state
+            this.poll();
+        },
+
+        stopPolling() {
+            this.polling = false;
+            if (this._timer) {
+                clearInterval(this._timer);
+                this._timer = null;
+            }
+        },
+
+        async poll() {
+            try {
+                const resp = await fetch('/me/workflows/executions/{{ execution.id }}/status');
+                if (!resp.ok) return;
+                const data = await resp.json();
+
+                this.exec.status = data.status;
+                this.exec.current_step = data.current_step;
+                this.exec.error = data.error;
+                this.exec.started_at = data.started_at;
+                this.exec.completed_at = data.completed_at;
+                this.exec.duration = data.duration;
+
+                this.steps = data.steps;
+                this.approval = data.approval;
+
+                if (!['running', 'paused', 'pending'].includes(data.status)) {
+                    this.stopPolling();
+                }
+            } catch (e) {
+                // Silently retry on next tick
+            }
+        },
+
+        async respondApproval(approved) {
+            if (!this.approval || this.approvalLoading) return;
+            this.approvalLoading = true;
+            try {
+                const csrfEl = document.querySelector('input[name="csrf_token"]');
+                const headers = { 'Content-Type': 'application/json' };
+                if (csrfEl) headers['X-CSRF-Token'] = csrfEl.value;
+
+                const resp = await fetch('/me/workflows/api/approval/respond', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        token: this.approval.token,
+                        approved: approved,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    this.approval = null;
+                    // Resume polling to track remaining steps
+                    if (!this.polling) this.startPolling();
+                }
+            } catch (e) {
+                console.error('Approval response failed:', e);
+            } finally {
+                this.approvalLoading = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

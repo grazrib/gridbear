@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Memos - GridBear Admin{% endblock %}
+{% block page_title %}Scheduled Memos{% endblock %}
+
+{% block content_alerts %}
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Saved successfully.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('deleted') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-trash"></i>
+    <span>Deleted successfully.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('toggled') %}
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-600 dark:text-frost-400">
+    <i class="fas fa-toggle-on"></i>
+    <span>Memo toggled.</span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent flex items-center justify-between">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-clock text-nordic-500"></i>
+            Scheduled Memos
+        </h3>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-void-200 dark:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium">{{ memos|length }} memos</span>
+    </div>
+    <div class="p-0">
+        {% if memos %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-xs font-medium text-void-500 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                        <th class="px-5 py-3">ID</th>
+                        <th class="px-5 py-3">Skill</th>
+                        <th class="px-5 py-3">User</th>
+                        <th class="px-5 py-3">Platform</th>
+                        <th class="px-5 py-3">Schedule</th>
+                        <th class="px-5 py-3">Status</th>
+                        <th class="px-5 py-3">Last Run</th>
+                        <th class="px-5 py-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                    {% for memo in memos %}
+                    <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                        <td class="px-5 py-4">{{ memo.id }}</td>
+                        <td class="px-5 py-4">
+                            <a href="/plugin/memo/memo/{{ memo.id }}" class="font-semibold text-nordic-600 dark:text-nordic-400 hover:underline">
+                                {{ memo.skill_title or 'No skill' }}
+                            </a>
+                            <br><span class="text-xs text-void-500"><code>{{ memo.skill_name or 'N/A' }}</code></span>
+                        </td>
+                        <td class="px-5 py-4">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-void-200 dark:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium">{{ memo.username }}</span>
+                        </td>
+                        <td class="px-5 py-4">
+                            {% if memo.platform == 'telegram' %}
+                            <i class="fab fa-telegram text-frost-500"></i>
+                            {% elif memo.platform == 'discord' %}
+                            <i class="fab fa-discord text-frost-400"></i>
+                            {% else %}
+                            {{ memo.platform }}
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-4">
+                            {% if memo.schedule_type == 'cron' %}
+                            <code class="text-sm bg-void-100 dark:bg-void-800 px-2 py-0.5 rounded">{{ memo.cron }}</code>
+                            {% elif memo.schedule_type == 'once' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">Once</span>
+                            <br><span class="text-xs text-void-500">{{ memo.run_at[:16] if memo.run_at else 'N/A' }}</span>
+                            {% else %}
+                            {{ memo.schedule_type }}
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-4">
+                            {% if memo.enabled %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium"><i class="fas fa-check"></i> Active</span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-void-200 dark:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium"><i class="fas fa-pause"></i> Disabled</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-4">
+                            {% if memo.last_run %}
+                            <span class="text-sm text-void-500">{{ memo.last_run[:16] }}</span>
+                            {% else %}
+                            <span class="text-sm text-void-400">Never</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-4">
+                            <div class="flex items-center gap-1">
+                                <a href="/plugin/memo/memo/{{ memo.id }}" class="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-frost-500/30 text-frost-500 hover:bg-frost-500/10 text-sm transition-colors" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form action="/plugin/memo/memo/{{ memo.id }}/toggle" method="POST" style="display:inline;">
+                                    {% include "partials/csrf_field.html" %}
+                                    <button type="submit" class="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-nordic-500/30 text-nordic-500 hover:bg-nordic-500/10 text-sm transition-colors" title="Toggle">
+                                        {% if memo.enabled %}
+                                        <i class="fas fa-pause"></i>
+                                        {% else %}
+                                        <i class="fas fa-play"></i>
+                                        {% endif %}
+                                    </button>
+                                </form>
+                                <form action="/plugin/memo/memo/{{ memo.id }}/delete" method="POST" style="display:inline;"
+                                      onsubmit="return confirm('Delete this memo?');">
+                                    {% include "partials/csrf_field.html" %}
+                                    <button type="submit" class="inline-flex items-center px-2.5 py-1.5 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 text-sm transition-colors" title="Delete">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="py-12 text-center">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-void-100 dark:bg-void-800 flex items-center justify-center">
+                <i class="fas fa-inbox text-void-400 text-2xl"></i>
+            </div>
+            <p class="text-void-500 dark:text-void-400">No scheduled memos yet.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block content_sidebar %}
+<!-- Skills Summary -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent flex items-center justify-between">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-magic text-frost-500"></i>
+            Available Skills
+        </h3>
+        <a href="/plugin/skills" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-600 dark:text-void-300 text-sm font-medium transition-colors">
+            <i class="fas fa-cog"></i> Manage
+        </a>
+    </div>
+    <div class="divide-y divide-void-100 dark:divide-void-800">
+        {% if skills %}
+        {% for skill in skills[:10] %}
+        <div class="px-5 py-3 flex items-center justify-between">
+            <div>
+                <p class="font-semibold text-sm text-void-900 dark:text-white">{{ skill.title }}</p>
+                <p class="text-xs text-void-500"><code>{{ skill.name }}</code></p>
+            </div>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">{{ skill.memo_count }} memo(s)</span>
+        </div>
+        {% endfor %}
+        {% if skills|length > 10 %}
+        <div class="px-5 py-3 text-center">
+            <a href="/plugin/skills" class="text-sm text-nordic-500 hover:underline">View all {{ skills|length }} skills</a>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="py-8 text-center">
+            <div class="w-12 h-12 mx-auto mb-3 rounded-xl bg-void-100 dark:bg-void-800 flex items-center justify-center">
+                <i class="fas fa-magic text-void-400 text-lg"></i>
+            </div>
+            <p class="text-sm text-void-500 dark:text-void-400 mb-3">No skills yet.</p>
+            <a href="/plugin/skills/new" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-all">
+                <i class="fas fa-plus"></i> Create Skill
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Info Card -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-info-circle text-void-400"></i>
+            Info
+        </h3>
+    </div>
+    <div class="p-5">
+        <ul class="text-sm text-void-600 dark:text-void-400 space-y-2">
+            <li>Memos are scheduled tasks using skills</li>
+            <li>Cron format: <code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded text-xs">min hour day month weekday</code></li>
+            <li>Example: <code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded text-xs">0 9 * * 1-5</code> = 9:00 weekdays</li>
+            <li><a href="/plugin/skills" class="text-nordic-500 hover:underline">Manage skills</a> to add/edit prompts</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

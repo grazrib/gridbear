@@ -1,0 +1,90 @@
+{% extends "me/base.html" %}
+
+{% block title %}{{ _("Credential Vault") }} - GridBear{% endblock %}
+{% block page_title %}{{ _("Credential Vault") }}{% endblock %}
+
+{% block content %}
+
+{% if error %}
+<div class="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+    <i class="fas fa-exclamation-circle mr-2"></i>{{ error }}
+</div>
+{% endif %}
+
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-vault text-nordic-500"></i>
+            {{ _("Services") }}
+        </h3>
+        <a href="/me/vault/add"
+           class="px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+            <i class="fas fa-plus mr-1"></i> {{ _("Add Service") }}
+        </a>
+    </div>
+
+    {% if services %}
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                    <th class="px-2 sm:px-5 py-3">{{ _("ID") }}</th>
+                    <th class="px-2 sm:px-5 py-3">{{ _("Name") }}</th>
+                    <th class="px-2 sm:px-5 py-3 hidden sm:table-cell">{{ _("URL") }}</th>
+                    <th class="px-2 sm:px-5 py-3 text-center">{{ _("Credentials") }}</th>
+                    <th class="px-2 sm:px-5 py-3 text-right">{{ _("Actions") }}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                {% for svc in services %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                    <td class="px-2 sm:px-5 py-4">
+                        <code class="text-sm font-mono text-void-900 dark:text-white">{{ svc.service_id }}</code>
+                    </td>
+                    <td class="px-2 sm:px-5 py-4 text-sm text-void-700 dark:text-void-300">
+                        {{ svc.name }}
+                    </td>
+                    <td class="px-2 sm:px-5 py-4 hidden sm:table-cell">
+                        {% if svc.url %}
+                        <span class="text-xs text-void-500 dark:text-void-400 truncate max-w-[200px] inline-block">{{ svc.url }}</span>
+                        {% else %}
+                        <span class="text-void-300 dark:text-void-600">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-2 sm:px-5 py-4 text-center">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+                            {{ svc.credentials | length }}
+                        </span>
+                    </td>
+                    <td class="px-2 sm:px-5 py-4 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <a href="/me/vault/{{ svc.service_id }}/edit"
+                               class="px-3 py-1.5 rounded-lg hover:bg-void-100 dark:hover:bg-void-800 text-void-500 hover:text-nordic-500 text-sm font-medium transition-colors"
+                               title="{{ _("Edit") }}">
+                                <i class="fas fa-pen"></i>
+                            </a>
+                            <form method="POST" action="/me/vault/{{ svc.service_id }}/delete" class="inline">
+                                {% include "partials/csrf_field.html" %}
+                                <button type="submit"
+                                        class="px-3 py-1.5 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 text-sm font-medium transition-colors"
+                                        onclick="return confirm({{ _('Delete service') | tojson }} + ' ' + {{ svc.service_id | tojson }} + '?')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="px-5 py-12 text-center">
+        <i class="fas fa-vault text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+        <p class="text-void-500 dark:text-void-400">{{ _("No credential vault services configured") }}</p>
+        <p class="text-void-400 dark:text-void-500 text-sm mt-1">{{ _("Add a service to enable secure agent form-filling") }}</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

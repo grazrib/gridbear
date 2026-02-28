@@ -1,0 +1,159 @@
+{% extends "auth/auth_base.html" %}
+
+{% block title %}Passkey Verification - GridBear{% endblock %}
+
+{% block header %}
+<div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-frost-500/10 flex items-center justify-center">
+    <i class="fas fa-fingerprint text-frost-400 text-2xl"></i>
+</div>
+<h1 class="text-2xl font-semibold text-white mb-2">Use Your Passkey</h1>
+<p class="text-slate-400 text-sm">Touch your fingerprint sensor, use Face ID, or insert your security key</p>
+{% endblock %}
+
+{% block content %}
+<div id="error-box" class="hidden mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-400">
+    <i class="fas fa-circle-exclamation"></i>
+    <span id="error-message" class="text-sm"></span>
+</div>
+
+<div id="status-box" class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-400">
+    <i class="fas fa-spinner fa-spin"></i>
+    <span id="status-message" class="text-sm">Waiting for your passkey...</span>
+</div>
+
+<button id="btn-authenticate" onclick="authenticatePasskey()"
+        class="w-full bg-gradient-to-r from-frost-500 to-nordic-500 hover:from-frost-400 hover:to-nordic-400 text-white font-medium py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-frost-500/20 mb-4">
+    <i class="fas fa-fingerprint"></i>
+    <span id="btn-text">Authenticate with Passkey</span>
+</button>
+
+<div class="flex items-center gap-4 my-5">
+    <div class="flex-1 h-px bg-white/10"></div>
+    <span class="text-xs text-slate-500 uppercase tracking-wider">or</span>
+    <div class="flex-1 h-px bg-white/10"></div>
+</div>
+
+<div class="text-center space-y-3">
+    {% if has_totp %}
+    <a href="/auth/2fa" class="text-sm text-slate-400 hover:text-nordic-400 transition-colors flex items-center justify-center gap-2">
+        <i class="fas fa-mobile-screen"></i>
+        Use authenticator app instead
+    </a>
+    {% endif %}
+    <a href="/auth/login" class="text-sm text-slate-500 hover:text-nordic-400 transition-colors flex items-center justify-center gap-2">
+        <i class="fas fa-arrow-left"></i>
+        Back to login
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var _webauthnOptions = '{{ options_json|safe }}';
+    var _csrfToken = '{{ csrf_token(request) }}';
+
+    function base64urlToUint8Array(base64url) {
+        var base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        var binary = atob(base64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    function uint8ArrayToBase64url(uint8Array) {
+        var binary = '';
+        uint8Array.forEach(function(byte) { binary += String.fromCharCode(byte); });
+        var base64 = btoa(binary);
+        return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    function showError(message) {
+        document.getElementById('error-box').classList.remove('hidden');
+        document.getElementById('error-message').textContent = message;
+        document.getElementById('status-box').classList.add('hidden');
+    }
+
+    function setButtonState(loading) {
+        var btn = document.getElementById('btn-authenticate');
+        var btnText = document.getElementById('btn-text');
+        btn.disabled = loading;
+        btnText.textContent = loading ? 'Authenticating...' : 'Try Again';
+    }
+
+    async function authenticatePasskey() {
+        setButtonState(true);
+        document.getElementById('error-box').classList.add('hidden');
+        document.getElementById('status-box').classList.remove('hidden');
+        document.getElementById('status-message').textContent = 'Touch your sensor or approve the prompt...';
+
+        try {
+            var options = JSON.parse(_webauthnOptions);
+            options.challenge = base64urlToUint8Array(options.challenge);
+            if (options.allowCredentials) {
+                options.allowCredentials = options.allowCredentials.map(function(cred) {
+                    return Object.assign({}, cred, {
+                        id: base64urlToUint8Array(cred.id)
+                    });
+                });
+            }
+
+            var credential = await navigator.credentials.get({ publicKey: options });
+
+            var response = {
+                id: credential.id,
+                rawId: uint8ArrayToBase64url(new Uint8Array(credential.rawId)),
+                response: {
+                    clientDataJSON: uint8ArrayToBase64url(new Uint8Array(credential.response.clientDataJSON)),
+                    authenticatorData: uint8ArrayToBase64url(new Uint8Array(credential.response.authenticatorData)),
+                    signature: uint8ArrayToBase64url(new Uint8Array(credential.response.signature)),
+                    userHandle: credential.response.userHandle
+                        ? uint8ArrayToBase64url(new Uint8Array(credential.response.userHandle))
+                        : null,
+                },
+                type: credential.type,
+                authenticatorAttachment: credential.authenticatorAttachment || null,
+            };
+
+            document.getElementById('status-message').textContent = 'Verifying...';
+
+            var result = await fetch('/auth/2fa-passkey', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': _csrfToken,
+                },
+                body: JSON.stringify({ response: response }),
+            });
+
+            if (result.ok) {
+                var data = await result.json();
+                document.getElementById('status-message').textContent = 'Success! Redirecting...';
+                window.location.href = data.redirect || '/';
+            } else {
+                var error = await result.json().catch(function() { return {}; });
+                showError(error.detail || 'Authentication failed');
+                setButtonState(false);
+            }
+        } catch (err) {
+            if (err.name === 'NotAllowedError') {
+                showError('Authentication was cancelled or timed out');
+            } else {
+                showError(err.message || 'Failed to authenticate');
+            }
+            setButtonState(false);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.PublicKeyCredential) {
+            setTimeout(authenticatePasskey, 500);
+        } else {
+            showError('Your browser does not support passkeys. Please use the authenticator app instead.');
+            document.getElementById('btn-authenticate').style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

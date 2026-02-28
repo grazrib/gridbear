@@ -1,0 +1,25 @@
+{
+  "name": "google-workspace",
+  "version": "0.0.1",
+  "type": "mcp",
+  "description": "Google Workspace MCP (Docs, Sheets, Slides, Drive)",
+  "entry_point": "provider.py",
+  "class_name": "GoogleWorkspaceProvider",
+  "mcp_category": "communication",
+  "mcp_naming": "per_account",
+  "mcp_name_template": "gws-{account}",
+  "context_skills": [{
+    "name": "google-workspace-instructions",
+    "title": "Google Workspace Instructions",
+    "file": "skills/instructions.md"
+  }],
+  "depends": ["gmail"],
+  "config_schema": {
+    "export_dir": {
+      "type": "string",
+      "default": "/app/data/exports",
+      "description": "Directory for exported files (PDF, DOCX)"
+    }
+  },
+  "private_only": true
+}

@@ -1,0 +1,30 @@
+{
+  "name": "gmail",
+  "version": "0.0.2",
+  "type": "mcp",
+  "description": "Gmail MCP server provider (multi-account, encrypted tokens)",
+  "entry_point": "provider.py",
+  "class_name": "GmailProvider",
+  "mcp_category": "communication",
+  "mcp_naming": "per_account",
+  "mcp_name_template": "gmail-{account}",
+  "config_schema": {
+    "download_dir": {
+      "type": "string",
+      "default": "/app/data/attachments",
+      "description": "Directory to save downloaded attachments"
+    }
+  },
+  "dependencies": [],
+  "private_only": true,
+  "service_connections": [{
+    "id": "gmail",
+    "name": "Gmail & Google Workspace",
+    "description": "Email, calendario, documenti, fogli di calcolo",
+    "auth_type": "oauth2_google",
+    "connect_url": "/me/connections/gmail/connect",
+    "icon": "fab fa-google",
+    "color": "red",
+    "multi_account": true
+  }]
+}

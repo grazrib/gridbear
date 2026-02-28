@@ -1,0 +1,115 @@
+{% extends "me/base.html" %}
+
+{% block title %}GridBear - {{ _("Connections") }}{% endblock %}
+{% block page_title %}{{ _("My Connections") }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if not connections %}
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-8 text-center">
+        <i class="fas fa-plug text-4xl text-void-300 dark:text-void-600 mb-4"></i>
+        <p class="text-sm text-void-500 dark:text-void-400">{{ _("No services available for connection.") }}</p>
+        <p class="text-xs text-void-400 mt-1">{{ _("Active plugins do not declare service_connections.") }}</p>
+    </div>
+    {% else %}
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for conn in connections %}
+        <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-5 card-hover">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center
+                        {% if conn.connected %}bg-nordic-500/10{% else %}bg-void-100 dark:bg-void-800{% endif %}">
+                        <i class="{{ conn.icon or 'fas fa-cube' }}
+                           {% if conn.connected %}text-nordic-500{% else %}text-void-400{% endif %} text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-sm">{{ conn.name }}</h3>
+                        <p class="text-[10px] text-void-400">{{ conn.plugin_name }}</p>
+                    </div>
+                </div>
+                <span class="flex items-center gap-1.5 text-[10px] font-medium
+                    {% if conn.token_expired %}text-amber-600 dark:text-amber-400
+                    {% elif conn.connected %}text-nordic-600 dark:text-nordic-400
+                    {% else %}text-void-400{% endif %}">
+                    <span class="w-2 h-2 rounded-full
+                        {% if conn.token_expired %}bg-amber-500
+                        {% elif conn.connected %}bg-nordic-500
+                        {% else %}bg-void-300 dark:bg-void-600{% endif %}"></span>
+                    {% if conn.multi_account %}
+                        {{ conn.accounts|selectattr('connected')|list|length }} {{ _("account") }}
+                    {% elif conn.token_expired %}
+                        {{ _("Expired") }}
+                    {% else %}
+                        {{ _("Connected") if conn.connected else _("Not connected") }}
+                    {% endif %}
+                </span>
+            </div>
+
+            <p class="text-xs text-void-500 dark:text-void-400 mb-4">{{ conn.description }}</p>
+
+            {% if conn.multi_account %}
+                {# Multi-account: list of emails + add button #}
+                {% for account in conn.accounts %}
+                    {% if account.connected %}
+                    <div class="flex items-center justify-between py-1.5 border-b border-void-100 dark:border-void-800 last:border-0">
+                        <span class="text-xs text-void-600 dark:text-void-300 font-mono">{{ account.email }}</span>
+                        {% if conn.disconnect_url %}
+                        <form method="POST" action="{{ conn.disconnect_url }}" class="inline">
+                        {% else %}
+                        <form method="POST" action="/me/connections/{{ conn.plugin_name }}/{{ conn.id }}/disconnect" class="inline">
+                        {% endif %}
+                            {% include "partials/csrf_field.html" %}
+                            <input type="hidden" name="email" value="{{ account.email }}">
+                            <button type="submit" class="text-red-400 hover:text-red-600 text-xs"
+                                    onclick="return confirm('{{ _("Disconnect") }} {{ account.email }}?')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </form>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+
+                <a href="{{ conn.connect_url or ('/me/connections/' ~ conn.plugin_name ~ '/' ~ conn.id ~ '/connect') }}"
+                   class="block w-full mt-3 px-4 py-2 rounded-xl border border-nordic-500/30 text-nordic-600
+                          dark:text-nordic-400 text-xs font-medium text-center hover:bg-nordic-500/10 transition-all">
+                    <i class="fas fa-plus mr-1.5"></i>{{ _("Add account") }}
+                </a>
+
+            {% elif conn.connected %}
+                {% if conn.token_expired %}
+                <div class="mb-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
+                    <i class="fas fa-exclamation-triangle text-amber-500 text-xs"></i>
+                    <span class="text-xs text-amber-600 dark:text-amber-400 font-medium">{{ _("Expired token") }}</span>
+                </div>
+                <a href="{{ conn.connect_url or ('/me/connections/' ~ conn.plugin_name ~ '/' ~ conn.id ~ '/connect') }}"
+                   class="block w-full mb-2 px-4 py-2 rounded-xl bg-gradient-to-r from-nordic-500 to-nordic-600 text-white text-xs font-medium text-center hover:from-nordic-600 hover:to-nordic-700 transition-all shadow-lg shadow-nordic-500/20">
+                    <i class="fas fa-rotate mr-1.5"></i>{{ _("Renew connection") }}
+                </a>
+                {% endif %}
+                {% if conn.account_info %}
+                <p class="text-xs text-void-600 dark:text-void-300 mb-3 font-mono">{{ conn.account_info }}</p>
+                {% endif %}
+                <form method="POST" action="/me/connections/{{ conn.plugin_name }}/{{ conn.id }}/disconnect">
+                    {% include "partials/csrf_field.html" %}
+                    <button type="submit"
+                            class="w-full px-4 py-2 rounded-xl border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-medium hover:bg-red-500/10 transition-all"
+                            onclick="return confirm('{{ _("Disconnect") }} {{ conn.name }}?')">
+                        <i class="fas fa-unlink mr-1.5"></i>{{ _("Disconnect") }}
+                    </button>
+                </form>
+            {% elif conn.auth_type == 'none' %}
+                <p class="text-xs text-void-400 italic">{{ _("No authentication required") }}</p>
+            {% else %}
+                <a href="{{ conn.connect_url or ('/me/connections/' ~ conn.plugin_name ~ '/' ~ conn.id ~ '/connect') }}"
+                   class="block w-full px-4 py-2 rounded-xl bg-gradient-to-r from-nordic-500 to-nordic-600 text-white text-xs font-medium text-center hover:from-nordic-600 hover:to-nordic-700 transition-all shadow-lg shadow-nordic-500/20">
+                    <i class="fas fa-link mr-1.5"></i>{{ _("Connect") }}
+                </a>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% endif %}
+</div>
+{% endblock %}

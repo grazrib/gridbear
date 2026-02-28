@@ -1,0 +1,43 @@
+{
+  "name": "tts-elevenlabs",
+  "version": "0.0.1",
+  "type": "service",
+  "instantiation": "per-agent",
+  "provides": "tts",
+  "display_name": "ElevenLabs",
+  "description": "Text-to-speech service using ElevenLabs (highest quality)",
+  "entry_point": "service.py",
+  "class_name": "ElevenLabsTTSService",
+  "config_schema": {
+    "api_key": {
+      "type": "secret",
+      "env": "ELEVENLABS_API_KEY",
+      "description": "ElevenLabs API key",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "default": "eleven_multilingual_v2",
+      "description": "TTS model"
+    },
+    "default_voice": {
+      "type": "string",
+      "default": "Rachel",
+      "description": "Default voice name or ID"
+    },
+    "voices": {
+      "type": "object",
+      "default": {
+        "en": "Rachel",
+        "it": "Rachel"
+      },
+      "description": "Voice mapping per locale"
+    },
+    "output_dir": {
+      "type": "string",
+      "default": "data/tts",
+      "description": "Directory for temporary audio files"
+    }
+  },
+  "dependencies": []
+}

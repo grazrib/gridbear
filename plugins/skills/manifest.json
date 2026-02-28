@@ -1,0 +1,16 @@
+{
+  "name": "skills",
+  "version": "0.0.1",
+  "type": "service",
+  "description": "Reusable prompt templates and skills",
+  "entry_point": "service.py",
+  "class_name": "SkillsService",
+  "provides": "skills",
+  "config_schema": {
+    "categories": {
+      "type": "array",
+      "default": ["work", "personal", "automation", "report", "other"],
+      "description": "Available skill categories"
+    }
+  }
+}

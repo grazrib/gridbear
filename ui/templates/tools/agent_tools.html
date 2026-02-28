@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Tools - {{ agent.name }} - GridBear{% endblock %}
+{% block page_title %}{{ agent.name }} - Tools{% endblock %}
+{% block breadcrumb_active %}{{ agent.name }}{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Enable or disable individual MCP tools for this agent</p>{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center gap-3">
+    <a href="/tools/"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
+        <i class="fas fa-arrow-left"></i>
+        Tools Dashboard
+    </a>
+    <a href="/agents/{{ agent_id }}"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
+        <i class="fas fa-cog"></i>
+        Agent Config
+    </a>
+</div>
+
+<div class="space-y-4">
+    {% if not tool_groups %}
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 p-8 text-center">
+        <i class="fas fa-wrench text-4xl text-void-300 dark:text-void-600 mb-4"></i>
+        <p class="text-sm text-void-500 dark:text-void-400">No tools available for this agent.</p>
+        <p class="text-xs text-void-400 mt-1">Check that MCP servers are connected and agent has permissions.</p>
+    </div>
+    {% else %}
+
+    <p class="text-sm text-void-500 dark:text-void-400">
+        Disabled tools will not be loaded for this agent. This applies globally to all users interacting via this agent.
+    </p>
+
+    {% for group_name, tools in tool_groups.items() %}
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden"
+         x-data="{ open: true }">
+        <button @click="open = !open"
+                class="w-full flex items-center justify-between px-5 py-4 hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+            <div class="flex items-center gap-3">
+                <h3 class="font-semibold text-sm text-void-900 dark:text-white">{{ group_name }}</h3>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-void-100 dark:bg-void-800 text-void-500">{{ tools|length }} tools</span>
+            </div>
+            <i class="fas fa-chevron-down text-xs text-void-400 transition-transform duration-200"
+               :class="open ? '' : '-rotate-90'"></i>
+        </button>
+        <div x-show="open" x-collapse class="border-t border-void-100 dark:border-void-800">
+            {% for tool in tools %}
+            <div class="flex items-center justify-between px-5 py-3 {% if not loop.last %}border-b border-void-50 dark:border-void-800/50{% endif %}">
+                <div class="flex-1 min-w-0 mr-4">
+                    <p class="text-sm font-mono text-void-700 dark:text-void-200 truncate">{{ tool.short_name }}</p>
+                    <p class="text-xs text-void-400 truncate">{{ tool.description }}</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                    <input type="checkbox"
+                           class="sr-only peer"
+                           data-tool="{{ tool.full_name }}"
+                           {{ 'checked' if tool.enabled }}
+                           onchange="toggleTool(this)">
+                    <div class="w-9 h-5 bg-void-200 dark:bg-void-700 peer-focus:ring-2 peer-focus:ring-nordic-500/40 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-nordic-500"></div>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleTool(checkbox) {
+        var toolName = checkbox.dataset.tool;
+        var enabled = checkbox.checked;
+        var csrfInput = document.querySelector('input[name="csrf_token"]');
+        var csrfToken = csrfInput ? csrfInput.value : '';
+
+        fetch('/tools/{{ agent_id }}/tools/toggle', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken,
+            },
+            body: JSON.stringify({tool_name: toolName, enabled: enabled}),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                showToast(enabled ? 'Tool enabled' : 'Tool disabled', 'success');
+            } else {
+                showToast('Error: ' + (data.error || 'unknown'), 'error');
+                checkbox.checked = !enabled;
+            }
+        })
+        .catch(function() {
+            showToast('Network error', 'error');
+            checkbox.checked = !enabled;
+        });
+    }
+</script>
+<!-- Hidden CSRF for JS -->
+<form style="display:none">{% include "partials/csrf_field.html" %}</form>
+{% endblock %}

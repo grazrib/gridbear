@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block breadcrumb %}
+<a href="/" class="text-void-500 dark:text-void-400 hover:text-nordic-600 dark:hover:text-nordic-400 transition-colors">
+    <i class="fas fa-home"></i>
+</a>
+<i class="fas fa-chevron-right text-void-300 dark:text-void-600 text-xs"></i>
+<a href="/plugins/" class="text-void-500 dark:text-void-400 hover:text-nordic-600 dark:hover:text-nordic-400 transition-colors">
+    Plugins
+</a>
+<i class="fas fa-chevron-right text-void-300 dark:text-void-600 text-xs"></i>
+<a href="/plugins/{{ plugin_name }}" class="text-void-500 dark:text-void-400 hover:text-nordic-600 dark:hover:text-nordic-400 transition-colors">
+    {{ parent_title }}
+</a>
+<i class="fas fa-chevron-right text-void-300 dark:text-void-600 text-xs"></i>
+<span class="text-void-700 dark:text-void-200 font-medium">{% block breadcrumb_active %}{% endblock %}</span>
+{% endblock %}
+
+{% block content %}
+<!-- Standard alerts -->
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Saved successfully.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('deleted') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-trash"></i>
+    <span>Item deleted.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>{{ request.query_params.get('error') }}</span>
+</div>
+{% endif %}
+
+<div class="space-y-6">
+    <!-- Back Link -->
+    <div>
+        <a href="/plugins/{{ plugin_name }}" class="inline-flex items-center gap-2 text-void-500 hover:text-frost-500 transition-colors">
+            <i class="fas fa-arrow-left"></i>
+            Back to {{ parent_title }}
+        </a>
+    </div>
+
+    {% block subpage_content %}{% endblock %}
+</div>
+{% endblock %}

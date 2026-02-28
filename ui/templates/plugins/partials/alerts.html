@@ -1,0 +1,48 @@
+<!-- Standard Alert Messages for Plugin Pages -->
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Configuration saved. Restart GridBear to apply changes.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('secret_saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-lock"></i>
+    <span>Secret saved and encrypted.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('secret_deleted') %}
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-600 dark:text-frost-400">
+    <i class="fas fa-trash"></i>
+    <span>Secret deleted.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('deleted') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-trash"></i>
+    <span>Item deleted successfully.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('reload_requested') %}
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-600 dark:text-frost-400">
+    <i class="fas fa-sync-alt fa-spin"></i>
+    <span>Plugin reload requested. Refreshing...</span>
+</div>
+<script>
+    setTimeout(function() {
+        window.location.href = '/plugins/{{ plugin_name }}?reloaded=1';
+    }, 1500);
+</script>
+{% endif %}
+{% if request.query_params.get('reloaded') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Plugin reloaded successfully</span>
+</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>{{ request.query_params.get('error') }}</span>
+</div>
+{% endif %}

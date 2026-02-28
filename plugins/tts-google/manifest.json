@@ -1,0 +1,32 @@
+{
+  "name": "tts-google",
+  "version": "0.0.1",
+  "type": "service",
+  "instantiation": "per-agent",
+  "provides": "tts",
+  "display_name": "Google Cloud TTS",
+  "description": "Text-to-speech service using Google Cloud TTS",
+  "entry_point": "service.py",
+  "class_name": "GoogleTTSService",
+  "config_schema": {
+    "default_voice": {
+      "type": "string",
+      "default": "en-US-Neural2-F",
+      "description": "Default voice for TTS"
+    },
+    "voices": {
+      "type": "object",
+      "default": {
+        "en": "en-US-Neural2-F",
+        "it": "it-IT-Neural2-A"
+      },
+      "description": "Voice mapping per locale"
+    },
+    "output_dir": {
+      "type": "string",
+      "default": "data/tts",
+      "description": "Directory for temporary audio files"
+    }
+  },
+  "dependencies": []
+}

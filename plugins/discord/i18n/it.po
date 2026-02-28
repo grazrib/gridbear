@@ -1,0 +1,59 @@
+# Italian translations for GridBear Discord adapter
+# Copyright (C) 2024 GridBear
+# This file is distributed under the same license as GridBear.
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: it\n"
+
+msgid "Not authorized."
+msgstr "Non sei autorizzato."
+
+msgid "Session reset. Start a new chat!"
+msgstr "Sessione resettata. Inizia una nuova chat!"
+
+msgid "**Commands**\n\n**Chat:**\n`!gridbear <message>` - Talk to the assistant\n`!reset` - Reset session\n`!stop` - Stop current request\n\n**Memory:**\n`!memory` - Memory management\n\n**Memos/Reminders:**\n`!memo` - List memos\n`!delmemo <id>` - Delete memo\n`!delmemo all` - Delete all\n\n**Creating memos:**\n\"remind me every Monday at 9 to X\"\n\"in 30 minutes tell me Y\"\n\nYou can also mention @bot, use the trigger word, or send attachments (documents, images, voice)."
+msgstr "**Comandi**\n\n**Chat:**\n`!gridbear <messaggio>` - Parla con l'assistente\n`!reset` - Resetta la sessione\n`!stop` - Ferma la richiesta in corso\n\n**Memoria:**\n`!memory` - Gestione memoria\n\n**Memo/Promemoria:**\n`!memo` - Lista memo\n`!delmemo <id>` - Elimina memo\n`!delmemo all` - Elimina tutti\n\n**Creare memo:**\n\"ricordami ogni lunedi alle 9 di X\"\n\"tra 30 minuti dimmi Y\"\n\nPuoi anche menzionare @bot, usare la trigger word, o inviare allegati (documenti, immagini, vocali)."
+
+msgid "Write a message after !gridbear"
+msgstr "Scrivi un messaggio dopo !gridbear"
+
+msgid "Scheduler not available."
+msgstr "Scheduler non disponibile."
+
+msgid "Services not available."
+msgstr "Servizi non disponibili."
+
+msgid "[Attachments received]"
+msgstr "[Allegati ricevuti]"
+
+msgid "Error: {error}"
+msgstr "Errore: {error}"
+
+msgid "Handler not configured."
+msgstr "Handler non configurato."
+
+msgid "Generating image..."
+msgstr "Genero l'immagine..."
+
+msgid "Thinking..."
+msgstr "Sto pensando..."
+
+msgid "Invalid type. Use: all, episodic, facts"
+msgstr "Tipo non valido. Usa: all, episodic, facts"
+
+msgid "Memories cleared (type: {mode})."
+msgstr "Memorie cancellate (tipo: {mode})."
+
+msgid "A request is already running. Use !stop to cancel it."
+msgstr "Una richiesta è già in corso. Usa !stop per annullarla."
+
+msgid "Request cancelled."
+msgstr "Richiesta annullata."
+
+msgid "No active request to stop."
+msgstr "Nessuna richiesta attiva da fermare."
+
+msgid "Stopping..."
+msgstr "Fermo..."

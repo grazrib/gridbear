@@ -1,0 +1,764 @@
+# Italian translations for GridBear UI
+# Copyright (C) 2026 GridBear
+# This file is distributed under the same license as GridBear.
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: it\n"
+
+msgid "(keep existing)"
+msgstr "(mantieni esistente)"
+
+msgid "API Key / Token"
+msgstr "Chiave API / Token"
+
+msgid "AI Agent Orchestration Platform"
+msgstr "Piattaforma di orchestrazione agenti AI"
+
+msgid "Active in multi-agent orchestration"
+msgstr "Attivi nell'orchestrazione multi-agente"
+
+msgid "Actions"
+msgstr "Azioni"
+
+msgid "Active"
+msgstr "Attivo"
+
+msgid "Active plugins do not declare service_connections."
+msgstr "I plugin attivi non dichiarano service_connections."
+
+msgid "Add"
+msgstr "Aggiungi"
+
+msgid "Add Field"
+msgstr "Aggiungi campo"
+
+msgid "Add User"
+msgstr "Aggiungi utente"
+
+msgid "Add Service"
+msgstr "Aggiungi servizio"
+
+msgid "Add a service to enable secure agent form-filling"
+msgstr "Aggiungi un servizio per abilitare la compilazione sicura dei form"
+
+msgid "Add account"
+msgstr "Aggiungi account"
+
+msgid "Admin Panel"
+msgstr "Pannello admin"
+
+msgid "Agent"
+msgstr "Agente"
+
+msgid "Agents"
+msgstr "Agenti"
+
+msgid "AI Runners"
+msgstr "Runner AI"
+
+msgid "All clear"
+msgstr "Tutto in ordine"
+
+msgid "All users have access"
+msgstr "Tutti gli utenti hanno accesso"
+
+msgid "Authorize user"
+msgstr "Autorizza utente"
+
+msgid "Authorized Users"
+msgstr "Utenti autorizzati"
+
+msgid "Allow (concurrent executions)"
+msgstr "Consenti (esecuzioni simultanee)"
+
+msgid "Approval Required"
+msgstr "Approvazione richiesta"
+
+msgid "Approve"
+msgstr "Approva"
+
+msgid "Attach file"
+msgstr "Allega file"
+
+msgid "Audio recorded - press enter to send"
+msgstr "Audio registrato - premi invio per inviare"
+
+msgid "Audio recording..."
+msgstr "Registrazione audio..."
+
+msgid "Back to Workflows"
+msgstr "Torna ai workflow"
+
+msgid "Back to connections"
+msgstr "Torna alle connessioni"
+
+msgid "Cancel"
+msgstr "Annulla"
+
+msgid "Cancel Previous (stop running, start new)"
+msgstr "Annulla precedente (ferma e avvia nuovo)"
+
+msgid "Cancel this execution?"
+msgstr "Annullare questa esecuzione?"
+
+msgid "Cancelled"
+msgstr "Annullato"
+
+msgid "Change password"
+msgstr "Cambia password"
+
+msgid "Channels"
+msgstr "Canali"
+
+msgid "Chat"
+msgstr "Chat"
+
+msgid "Choose image"
+msgstr "Scegli immagine"
+
+msgid "Completed"
+msgstr "Completato"
+
+msgid "Concurrency Policy"
+msgstr "Politica di concorrenza"
+
+msgid "Configure available tools"
+msgstr "Configura i tool disponibili"
+
+msgid "Connect"
+msgstr "Connetti"
+
+msgid "Connect services to access tools."
+msgstr "Connetti i servizi per accedere ai tool."
+
+msgid "Connected"
+msgstr "Connesso"
+
+msgid "Connect account"
+msgstr "Connetti account"
+
+msgid "Connections"
+msgstr "Connessioni"
+
+msgid "Conversations"
+msgstr "Conversazioni"
+
+msgid "Conversations are saved automatically"
+msgstr "Le conversazioni vengono salvate automaticamente"
+
+msgid "Create AI agent"
+msgstr "Crea agente AI"
+
+msgid "Create Service"
+msgstr "Crea servizio"
+
+msgid "Create Workflow"
+msgstr "Crea workflow"
+
+msgid "Create a workflow to automate multi-step tasks"
+msgstr "Crea un workflow per automatizzare attività multi-step"
+
+msgid "Credential Vault"
+msgstr "Archivio credenziali"
+
+msgid "Credentials"
+msgstr "Credenziali"
+
+msgid "Dashboard"
+msgstr "Dashboard"
+
+msgid "Data"
+msgstr "Dati"
+
+msgid "Data Preview"
+msgstr "Anteprima dati"
+
+msgid "Definition"
+msgstr "Definizione"
+
+msgid "Delete"
+msgstr "Elimina"
+
+msgid "Delete service"
+msgstr "Elimina servizio"
+
+msgid "Delete this conversation?"
+msgstr "Eliminare questa conversazione?"
+
+msgid "Delete this workflow permanently?"
+msgstr "Eliminare definitivamente questo workflow?"
+
+msgid "Delete workflow"
+msgstr "Elimina workflow"
+
+msgid "Description"
+msgstr "Descrizione"
+
+msgid "Disable"
+msgstr "Disabilita"
+
+msgid "Disable voice reading"
+msgstr "Disattiva lettura vocale"
+
+msgid "Disabled"
+msgstr "Disabilitato"
+
+msgid "discovered"
+msgstr "scoperti"
+
+msgid "Disconnect"
+msgstr "Disconnetti"
+
+msgid "Disconnected"
+msgstr "Disconnesso"
+
+msgid "Display Name"
+msgstr "Nome visualizzato"
+
+msgid "Display name"
+msgstr "Nome visualizzato"
+
+msgid "Down"
+msgstr "Non disponibile"
+
+msgid "Drop files here"
+msgstr "Trascina i file qui"
+
+msgid "Duration"
+msgstr "Durata"
+
+msgid "Edit"
+msgstr "Modifica"
+
+msgid "Editor"
+msgstr "Editor"
+
+msgid "Email"
+msgstr "Email"
+
+msgid "Enable"
+msgstr "Abilita"
+
+msgid "Enable or disable MCP tools. Disabled tools will not be available in chats and MCP connections."
+msgstr "Abilita o disabilita i tool MCP. I tool disabilitati non saranno disponibili nelle chat e connessioni MCP."
+
+msgid "Enable voice reading"
+msgstr "Attiva lettura vocale"
+
+msgid "Enabled"
+msgstr "Abilitato"
+
+msgid "Enter the key..."
+msgstr "Inserisci la chiave..."
+
+msgid "Error"
+msgstr "Errore"
+
+msgid "Error:"
+msgstr "Errore:"
+
+msgid "Execution"
+msgstr "Esecuzione"
+
+msgid "Execution History"
+msgstr "Cronologia esecuzioni"
+
+msgid "Expired"
+msgstr "Scaduto"
+
+msgid "Expired token"
+msgstr "Token scaduto"
+
+msgid "Failed"
+msgstr "Fallito"
+
+msgid "Gmail Accounts"
+msgstr "Account Gmail"
+
+msgid "Gmail Linked"
+msgstr "Gmail collegato"
+
+msgid "Gmail OAuth"
+msgstr "Gmail OAuth"
+
+msgid "Hello,"
+msgstr "Ciao,"
+
+msgid "Healthy"
+msgstr "Operativo"
+
+msgid "Hidden from agent"
+msgstr "Nascosto all'agente"
+
+msgid "ID"
+msgstr "ID"
+
+msgid "Identifier"
+msgstr "Identificativo"
+
+msgid "Initiated By"
+msgstr "Avviato da"
+
+msgid "Integrations"
+msgstr "Integrazioni"
+
+msgid "Input"
+msgstr "Input"
+
+msgid "JPG, PNG or WebP. Max 2 MB."
+msgstr "JPG, PNG o WebP. Max 2 MB."
+
+msgid "Key"
+msgstr "Chiave"
+
+msgid "Language"
+msgstr "Lingua"
+
+msgid "Languages"
+msgstr "Lingue"
+
+msgid "Last Updated"
+msgstr "Ultimo aggiornamento"
+
+msgid "Live"
+msgstr "In corso"
+
+msgid "Loading messages..."
+msgstr "Caricamento messaggi..."
+
+msgid "loaded"
+msgstr "caricati"
+
+msgid "Loading..."
+msgstr "Caricamento..."
+
+msgid "Log"
+msgstr "Log"
+
+msgid "Logout"
+msgstr "Esci"
+
+msgid "Lowercase letters, numbers, hyphens, underscores. Cannot start with hyphen/underscore."
+msgstr "Lettere minuscole, numeri, trattini, underscore. Non può iniziare con trattino/underscore."
+
+msgid "Lowercase letters, numbers, hyphens, underscores. Used as unique identifier."
+msgstr "Lettere minuscole, numeri, trattini, underscore. Usato come identificativo univoco."
+
+msgid "MCP Tools"
+msgstr "MCP Tools"
+
+msgid "Manage"
+msgstr "Gestisci"
+
+msgid "Manage Agents"
+msgstr "Gestione agenti"
+
+msgid "MCP Gateway"
+msgstr "MCP Gateway"
+
+msgid "MCP Providers"
+msgstr "Provider MCP"
+
+msgid "MCP Servers"
+msgstr "Server MCP"
+
+msgid "MCP tool invocations"
+msgstr "Invocazioni tool MCP"
+
+msgid "Manage your services"
+msgstr "Gestisci i tuoi servizi"
+
+msgid "Memories"
+msgstr "Memorie"
+
+msgid "Memory Groups"
+msgstr "Gruppi di memoria"
+
+msgid "Metadata"
+msgstr "Metadati"
+
+msgid "Microphone access denied"
+msgstr "Accesso al microfono negato"
+
+msgid "My Connections"
+msgstr "Le mie connessioni"
+
+msgid "My MCP Tools"
+msgstr "I miei MCP Tools"
+
+msgid "Name"
+msgstr "Nome"
+
+msgid "Name (slug)"
+msgstr "Nome (slug)"
+
+msgid "Network error"
+msgstr "Errore di rete"
+
+msgid "New Agent"
+msgstr "Nuovo agente"
+
+msgid "New"
+msgstr "Nuovo"
+
+msgid "New Workflow"
+msgstr "Nuovo workflow"
+
+msgid "New conversation"
+msgstr "Nuova conversazione"
+
+msgid "No authentication required"
+msgstr "Nessuna autenticazione richiesta"
+
+msgid "No agents configured"
+msgstr "Nessun agente configurato"
+
+msgid "No authorized users configured"
+msgstr "Nessun utente autorizzato configurato"
+
+msgid "No channels enabled"
+msgstr "Nessun canale abilitato"
+
+msgid "No conversations"
+msgstr "Nessuna conversazione"
+
+msgid "No credential vault services configured"
+msgstr "Nessun servizio archivio credenziali configurato"
+
+msgid "No credentials added. Click \"Add Field\" to start."
+msgstr "Nessuna credenziale aggiunta. Clicca \"Aggiungi campo\" per iniziare."
+
+msgid "No MCP servers enabled"
+msgstr "Nessun server MCP abilitato"
+
+msgid "No executions yet"
+msgstr "Nessuna esecuzione"
+
+msgid "No services available for connection."
+msgstr "Nessun servizio disponibile per la connessione."
+
+msgid "No step executions recorded"
+msgstr "Nessuna esecuzione di step registrata"
+
+msgid "No tools available."
+msgstr "Nessun tool disponibile."
+
+msgid "No warnings or errors in the last 7 days"
+msgstr "Nessun avviso o errore negli ultimi 7 giorni"
+
+msgid "No workflows yet"
+msgstr "Nessun workflow"
+
+msgid "Not connected"
+msgstr "Non connesso"
+
+msgid "Notes"
+msgstr "Note"
+
+msgid "OAuth2 / MCP Gateway"
+msgstr "OAuth2 / MCP Gateway"
+
+msgid "Open Visual Editor"
+msgstr "Apri editor visuale"
+
+msgid "Optional notes for the agent (e.g. form layout hints)"
+msgstr "Note opzionali per l'agente (es. suggerimenti layout form)"
+
+msgid "ORM Models"
+msgstr "Modelli ORM"
+
+msgid "Output"
+msgstr "Output"
+
+msgid "Overview of your AI agent ecosystem"
+msgstr "Panoramica del tuo ecosistema di agenti AI"
+
+msgid "Password"
+msgstr "Password"
+
+msgid "Paused"
+msgstr "In pausa"
+
+msgid "Pending"
+msgstr "In attesa"
+
+msgid "Permissions"
+msgstr "Permessi"
+
+msgid "Platform"
+msgstr "Piattaforma"
+
+msgid "Plugin Ecosystem"
+msgstr "Ecosistema plugin"
+
+msgid "Plugins"
+msgstr "Plugin"
+
+msgid "Profile"
+msgstr "Profilo"
+
+msgid "Profile picture"
+msgstr "Immagine profilo"
+
+msgid "Profile updated."
+msgstr "Profilo aggiornato."
+
+msgid "Queue (run after current finishes)"
+msgstr "Accoda (esegui dopo il corrente)"
+
+msgid "Reject"
+msgstr "Rifiuta"
+
+msgid "Quick Actions"
+msgstr "Azioni rapide"
+
+msgid "REST API"
+msgstr "REST API"
+
+msgid "Rename"
+msgstr "Rinomina"
+
+msgid "Rename conversation:"
+msgstr "Rinomina conversazione:"
+
+msgid "Renew connection"
+msgstr "Rinnova connessione"
+
+msgid "Run"
+msgstr "Esegui"
+
+msgid "Run this workflow to see execution history"
+msgstr "Esegui questo workflow per vedere la cronologia"
+
+msgid "Restart service"
+msgstr "Riavvia servizio"
+
+msgid "Run after plugin configuration changes"
+msgstr "Eseguire dopo modifiche alla configurazione dei plugin"
+
+msgid "Runners"
+msgstr "Runner"
+
+msgid "Runner"
+msgstr "Runner"
+
+msgid "Running"
+msgstr "In esecuzione"
+
+msgid "Save"
+msgstr "Salva"
+
+msgid "Save Changes"
+msgstr "Salva modifiche"
+
+msgid "Save Metadata"
+msgstr "Salva metadati"
+
+msgid "Security"
+msgstr "Sicurezza"
+
+msgid "Security settings and 2FA"
+msgstr "Impostazioni di sicurezza e 2FA"
+
+msgid "Select or create a conversation"
+msgstr "Seleziona o crea una conversazione"
+
+msgid "Sending..."
+msgstr "Invio..."
+
+msgid "Service"
+msgstr "Servizio"
+
+msgid "Settings"
+msgstr "Impostazioni"
+
+msgid "Service Details"
+msgstr "Dettagli servizio"
+
+msgid "Service ID"
+msgstr "ID servizio"
+
+msgid "Services"
+msgstr "Servizi"
+
+msgid "Skip (ignore if already running)"
+msgstr "Salta (ignora se già in esecuzione)"
+
+msgid "Since last restart"
+msgstr "Dall'ultimo riavvio"
+
+msgid "Start dictation"
+msgstr "Avvia dettatura"
+
+msgid "Started"
+msgstr "Avviato"
+
+msgid "Status"
+msgstr "Stato"
+
+msgid "Steps"
+msgstr "Step"
+
+msgid "System"
+msgstr "Sistema"
+
+msgid "System overview and activity"
+msgstr "Panoramica e attività del sistema"
+
+msgid "Stop dictation"
+msgstr "Ferma dettatura"
+
+msgid "Talk to agents"
+msgstr "Parla con gli agenti"
+
+msgid "Themes"
+msgstr "Temi"
+
+msgid "Tool call"
+msgstr "Chiamata tool"
+
+msgid "Tool Calls 24h"
+msgstr "Chiamate tool 24h"
+
+msgid "Tool disabled"
+msgstr "Tool disabilitato"
+
+msgid "Tool enabled"
+msgstr "Tool abilitato"
+
+msgid "Tool preferences"
+msgstr "Preferenze tool"
+
+msgid "Tools"
+msgstr "Strumenti"
+
+msgid "Trigger"
+msgstr "Trigger"
+
+msgid "Type a message or paste an image..."
+msgstr "Scrivi un messaggio o incolla un'immagine..."
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Uptime"
+msgstr "Uptime"
+
+msgid "Upload failed"
+msgstr "Caricamento fallito"
+
+msgid "User Portal"
+msgstr "Portale utente"
+
+msgid "Username"
+msgstr "Nome utente"
+
+msgid "Username cannot be modified."
+msgstr "Il nome utente non può essere modificato."
+
+msgid "Unified Identities"
+msgstr "Identità unificate"
+
+msgid "Users"
+msgstr "Utenti"
+
+msgid "Validation Errors"
+msgstr "Errori di validazione"
+
+msgid "Value"
+msgstr "Valore"
+
+msgid "Vault Service"
+msgstr "Servizio archivio"
+
+msgid "Version"
+msgstr "Versione"
+
+msgid "View"
+msgstr "Visualizza"
+
+msgid "View All"
+msgstr "Vedi tutto"
+
+msgid "View details"
+msgstr "Vedi dettagli"
+
+msgid "Visible to agent"
+msgstr "Visibile all'agente"
+
+msgid "Visual Editor"
+msgstr "Editor visuale"
+
+msgid "Voice recognition startup error"
+msgstr "Errore avvio riconoscimento vocale"
+
+msgid "Waiting for first step..."
+msgstr "In attesa del primo step..."
+
+msgid "Warnings & Errors"
+msgstr "Avvisi ed errori"
+
+msgid "Welcome to your GridBear portal."
+msgstr "Benvenuto nel tuo portale GridBear."
+
+msgid "What does this workflow do?"
+msgstr "Cosa fa questo workflow?"
+
+msgid "Workflow"
+msgstr "Workflow"
+
+msgid "Workflow Details"
+msgstr "Dettagli workflow"
+
+msgid "Workflows"
+msgstr "Workflow"
+
+msgid "Your name"
+msgstr "Il tuo nome"
+
+msgid "account"
+msgstr "account"
+
+msgid "agent available"
+msgstr "agente disponibile"
+
+msgid "agents available"
+msgstr "agenti disponibili"
+
+msgid "available"
+msgstr "disponibili"
+
+msgid "channel"
+msgstr "canale"
+
+msgid "code block"
+msgstr "blocco codice"
+
+msgid "configured"
+msgstr "configurati"
+
+msgid "connected out of"
+msgstr "connessi su"
+
+msgid "e.g. Daily Report Generator"
+msgstr "es. Generatore report giornaliero"
+
+msgid "e.g. daily-report"
+msgstr "es. report-giornaliero"
+
+msgid "integration"
+msgstr "integrazione"
+
+msgid "tool"
+msgstr "tool"
+
+msgid "tools"
+msgstr "tool"
+
+msgid "unified"
+msgstr "unificato"
+
+msgid "unknown"
+msgstr "sconosciuto"

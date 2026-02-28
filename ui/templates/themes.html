@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Themes - GridBear{% endblock %}
+{% block page_title %}Themes{% endblock %}
+{% block breadcrumb_active %}Themes{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage UI themes — discover and activate visual styles</p>{% endblock %}
+
+{% block content %}
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Theme activated successfully. Page reloaded with new theme.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>Could not activate theme. Check configuration.</span>
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+
+    <!-- Default (no theme) card -->
+    <div class="group relative rounded-2xl bg-white dark:bg-void-900/50 border overflow-hidden transition-all
+        {{ 'border-nordic-500/40 ring-2 ring-nordic-500/20' if not active_theme else 'border-void-200 dark:border-void-800 hover:border-void-300 dark:hover:border-void-700' }}">
+        <!-- Accent bar -->
+        <div class="h-1.5 w-full bg-gradient-to-r from-void-300 to-void-400 dark:from-void-600 dark:to-void-700"></div>
+
+        <div class="p-5">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-void-100 dark:bg-void-800 flex items-center justify-center">
+                        <i class="fas fa-circle-half-stroke text-void-500 text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-sm text-void-900 dark:text-white">Default</h3>
+                        <p class="text-[10px] text-void-400">GridBear</p>
+                    </div>
+                </div>
+                {% if not active_theme %}
+                <span class="flex items-center gap-1.5 text-[10px] font-semibold text-nordic-600 dark:text-nordic-400 bg-nordic-500/10 px-2.5 py-1 rounded-full">
+                    <span class="w-1.5 h-1.5 rounded-full bg-nordic-500 animate-pulse"></span>
+                    Attivo
+                </span>
+                {% endif %}
+            </div>
+
+            <p class="text-xs text-void-500 dark:text-void-400 mb-4 leading-relaxed">
+                Built-in GridBear base theme with no plugin overrides.
+            </p>
+
+            {% if active_theme %}
+            <form method="POST" action="/themes/activate">
+                {% include "partials/csrf_field.html" %}
+                <input type="hidden" name="theme" value="">
+                <button type="submit" class="w-full px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-xs font-medium transition-colors">
+                    <i class="fas fa-palette mr-1.5"></i>{{ _("Activate") }}
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Theme cards -->
+    {% for t in themes %}
+    <div class="group relative rounded-2xl bg-white dark:bg-void-900/50 border overflow-hidden transition-all
+        {{ 'border-nordic-500/40 ring-2 ring-nordic-500/20' if active_theme == t.name else 'border-void-200 dark:border-void-800 hover:border-void-300 dark:hover:border-void-700' }}">
+        <!-- Accent bar -->
+        {% if t.accent_color %}
+        <div class="h-1.5 w-full" style="background: linear-gradient(90deg, {{ t.accent_color }}, {{ t.accent_color }}88)"></div>
+        {% else %}
+        <div class="h-1.5 w-full bg-gradient-to-r from-void-300 to-void-400 dark:from-void-600 dark:to-void-700"></div>
+        {% endif %}
+
+        <!-- Preview image -->
+        {% if t.preview_image %}
+        <div class="relative h-32 bg-void-100 dark:bg-void-800 overflow-hidden">
+            <img src="{{ t.preview_image }}" alt="{{ t.display_name }} preview"
+                 class="w-full h-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
+                 onerror="this.parentElement.style.display='none'">
+        </div>
+        {% endif %}
+
+        <div class="p-5">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    {% if t.accent_color %}
+                    <div class="w-11 h-11 rounded-xl flex items-center justify-center" style="background: {{ t.accent_color }}18">
+                        <div class="w-6 h-6 rounded-lg" style="background: {{ t.accent_color }}"></div>
+                    </div>
+                    {% else %}
+                    <div class="w-11 h-11 rounded-xl bg-void-100 dark:bg-void-800 flex items-center justify-center">
+                        <i class="fas fa-palette text-void-500 text-lg"></i>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <h3 class="font-semibold text-sm text-void-900 dark:text-white">{{ t.display_name }}</h3>
+                        {% if t.author %}
+                        <p class="text-[10px] text-void-400">{{ t.author }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if active_theme == t.name %}
+                <span class="flex items-center gap-1.5 text-[10px] font-semibold text-nordic-600 dark:text-nordic-400 bg-nordic-500/10 px-2.5 py-1 rounded-full">
+                    <span class="w-1.5 h-1.5 rounded-full bg-nordic-500 animate-pulse"></span>
+                    Attivo
+                </span>
+                {% endif %}
+            </div>
+
+            {% if t.description %}
+            <p class="text-xs text-void-500 dark:text-void-400 mb-4 leading-relaxed">
+                {{ t.description }}
+            </p>
+            {% endif %}
+
+            {% if active_theme != t.name %}
+            <form method="POST" action="/themes/activate">
+                {% include "partials/csrf_field.html" %}
+                <input type="hidden" name="theme" value="{{ t.name }}">
+                <button type="submit" class="w-full px-4 py-2.5 rounded-xl text-xs font-medium transition-all
+                    {% if t.accent_color %}text-white hover:opacity-90 shadow-lg{% else %}bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200{% endif %}"
+                    {% if t.accent_color %}style="background: {{ t.accent_color }}; box-shadow: 0 4px 12px {{ t.accent_color }}33"{% endif %}>
+                    <i class="fas fa-palette mr-1.5"></i>{{ _("Activate") }}
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+</div>
+{% endblock %}

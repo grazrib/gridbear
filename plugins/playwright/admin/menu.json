@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Playwright",
+      "url": "/plugin/playwright",
+      "icon": "fas fa-globe",
+      "section": "integrations",
+      "priority": 10
+    }
+  ]
+}

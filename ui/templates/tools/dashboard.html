@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Tools - GridBear{% endblock %}
+{% block page_title %}Tools{% endblock %}
+{% block breadcrumb_active %}Tools{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">MCP tool usage statistics and management</p>{% endblock %}
+
+{% block content %}
+<!-- Hero Stats -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <div class="p-5 rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800">
+        <div class="flex items-start justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+                <i class="fas fa-chart-line text-nordic-500"></i>
+            </div>
+            <span class="text-xs text-void-400 dark:text-void-500">7 days</span>
+        </div>
+        <div class="text-3xl font-bold text-void-900 dark:text-white">{{ total_calls }}</div>
+        <div class="text-sm text-void-500 dark:text-void-400">Total Calls</div>
+    </div>
+    <div class="p-5 rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800">
+        <div class="flex items-start justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+                <i class="fas fa-check-circle text-nordic-500"></i>
+            </div>
+            <span class="text-xs text-void-400 dark:text-void-500">7 days</span>
+        </div>
+        <div class="text-3xl font-bold text-void-900 dark:text-white">{{ success_rate }}%</div>
+        <div class="text-sm text-void-500 dark:text-void-400">Success Rate</div>
+    </div>
+    <div class="p-5 rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800">
+        <div class="flex items-start justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+                <i class="fas fa-clock text-nordic-500"></i>
+            </div>
+            <span class="text-xs text-void-400 dark:text-void-500">7 days</span>
+        </div>
+        <div class="text-3xl font-bold text-void-900 dark:text-white">{{ avg_duration }} ms</div>
+        <div class="text-sm text-void-500 dark:text-void-400">Avg Duration</div>
+    </div>
+</div>
+
+<!-- MCP Servers -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-8">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-server text-nordic-500"></i>
+            MCP Servers
+        </h3>
+    </div>
+    {% if mcp_servers %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-void-100 dark:border-void-800">
+                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Server</th>
+                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Category</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Tools</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Transport</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-50 dark:divide-void-800/50">
+                {% for srv in mcp_servers %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/30 transition-colors">
+                    <td class="px-5 py-3 font-mono text-void-700 dark:text-void-200">{{ srv.name }}</td>
+                    <td class="px-5 py-3 text-void-500 dark:text-void-400">
+                        <span class="px-2 py-0.5 rounded-lg bg-void-100 dark:bg-void-800 text-xs">{{ srv.category }}</span>
+                    </td>
+                    <td class="px-5 py-3 text-center text-void-700 dark:text-void-200">{{ srv.tools }}</td>
+                    <td class="px-5 py-3 text-center">
+                        <span class="text-xs font-mono text-void-400">{{ srv.transport }}</span>
+                    </td>
+                    <td class="px-5 py-3 text-center">
+                        {% if srv.status == 'connected' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs text-nordic-600 dark:text-nordic-400">
+                            <span class="w-2 h-2 rounded-full bg-nordic-500"></span> Connected
+                        </span>
+                        {% elif srv.status == 'failed' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+                            <span class="w-2 h-2 rounded-full bg-red-500"></span> Failed
+                        </span>
+                        {% elif srv.status == 'pending' %}
+                        <span class="inline-flex items-center gap-1.5 text-xs text-ember-600 dark:text-ember-400">
+                            <span class="w-2 h-2 rounded-full bg-ember-500"></span> Pending
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center gap-1.5 text-xs text-void-400">
+                            <span class="w-2 h-2 rounded-full bg-void-400"></span> Disconnected
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="p-8 text-center text-void-500 dark:text-void-400">
+        <i class="fas fa-server text-2xl mb-2 opacity-40"></i>
+        <p class="text-sm">No MCP servers configured.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Per-Agent Stats -->
+{% if agent_stats %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-8">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-robot text-frost-500"></i>
+            Per-Agent Usage (7 days)
+        </h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-void-100 dark:border-void-800">
+                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Agent</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Calls</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Unique Tools</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Avg Duration</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Budget</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Loading</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-50 dark:divide-void-800/50">
+                {% for stat in agent_stats %}
+                {% set acfg = agent_map.get(stat.agent, {}) %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/30 transition-colors">
+                    <td class="px-5 py-3 font-medium text-void-700 dark:text-void-200">{{ stat.agent }}</td>
+                    <td class="px-5 py-3 text-center text-void-700 dark:text-void-200">{{ stat.calls }}</td>
+                    <td class="px-5 py-3 text-center text-void-500 dark:text-void-400">{{ stat.unique_tools }}</td>
+                    <td class="px-5 py-3 text-center text-void-500 dark:text-void-400">{{ stat.avg_ms }} ms</td>
+                    <td class="px-5 py-3 text-center">
+                        {% if acfg.get('max_tools') %}
+                        <span class="text-xs font-mono px-2 py-0.5 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400">{{ acfg.max_tools }}</span>
+                        {% else %}
+                        <span class="text-xs text-void-400">&infin;</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-3 text-center">
+                        <span class="text-xs font-mono px-2 py-0.5 rounded-lg bg-void-100 dark:bg-void-800 text-void-500">{{ acfg.get('tool_loading', 'full') }}</span>
+                    </td>
+                    <td class="px-5 py-3 text-center">
+                        <a href="/tools/{{ stat.agent }}/tools"
+                           class="text-xs text-nordic-500 hover:text-nordic-600 font-medium">
+                            Manage tools
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Top 20 Tools -->
+{% if top_tools %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-8">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-ember-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-ranking-star text-ember-500"></i>
+            Top 20 Tools (7 days)
+        </h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-void-100 dark:border-void-800">
+                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Tool</th>
+                    <th class="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Server</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Calls</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Success %</th>
+                    <th class="text-center px-5 py-3 text-xs font-semibold uppercase tracking-wider text-void-500 dark:text-void-400">Avg ms</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-50 dark:divide-void-800/50">
+                {% for t in top_tools %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/30 transition-colors">
+                    <td class="px-5 py-3 font-mono text-xs text-void-700 dark:text-void-200 max-w-xs truncate">{{ t.name }}</td>
+                    <td class="px-5 py-3 text-void-500 dark:text-void-400">
+                        <span class="px-2 py-0.5 rounded-lg bg-void-100 dark:bg-void-800 text-xs">{{ t.server }}</span>
+                    </td>
+                    <td class="px-5 py-3 text-center font-medium text-void-700 dark:text-void-200">{{ t.calls }}</td>
+                    <td class="px-5 py-3 text-center">
+                        {% if t.success_rate >= 95 %}
+                        <span class="text-nordic-600 dark:text-nordic-400">{{ t.success_rate }}%</span>
+                        {% elif t.success_rate >= 80 %}
+                        <span class="text-ember-600 dark:text-ember-400">{{ t.success_rate }}%</span>
+                        {% else %}
+                        <span class="text-red-600 dark:text-red-400">{{ t.success_rate }}%</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-3 text-center text-void-500 dark:text-void-400">{{ t.avg_ms }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Unused Tools -->
+{% if unused_tools %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden"
+     x-data="{ open: false }">
+    <button @click="open = !open"
+            class="w-full flex items-center justify-between p-5 hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+        <div class="flex items-center gap-2">
+            <i class="fas fa-ghost text-void-400"></i>
+            <h3 class="font-semibold text-void-900 dark:text-white">Unused Tools (30 days)</h3>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-void-100 dark:bg-void-800 text-void-500">{{ unused_tools|length }}</span>
+        </div>
+        <i class="fas fa-chevron-down text-xs text-void-400 transition-transform duration-200"
+           :class="open ? '' : '-rotate-90'"></i>
+    </button>
+    <div x-show="open" x-collapse class="border-t border-void-100 dark:border-void-800 px-5 py-4">
+        <div class="flex flex-wrap gap-2">
+            {% for t in unused_tools %}
+            <span class="px-2.5 py-1 rounded-lg bg-void-50 dark:bg-void-800 text-xs font-mono text-void-500 dark:text-void-400">{{ t }}</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

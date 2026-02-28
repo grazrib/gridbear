@@ -1,0 +1,29 @@
+{
+  "name": "transcription-openai",
+  "version": "0.0.1",
+  "type": "service",
+  "provides": "transcription",
+  "display_name": "OpenAI Whisper",
+  "description": "Audio transcription using OpenAI Whisper API",
+  "entry_point": "service.py",
+  "class_name": "TranscriptionOpenAIService",
+  "config_schema": {
+    "api_key": {
+      "type": "secret",
+      "env": "OPENAI_API_KEY",
+      "description": "OpenAI API key for Whisper",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "default": "whisper-1",
+      "description": "Whisper model"
+    },
+    "language": {
+      "type": "string",
+      "default": "it",
+      "description": "Default transcription language"
+    }
+  },
+  "dependencies": []
+}

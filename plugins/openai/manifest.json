@@ -1,0 +1,50 @@
+{
+  "name": "openai",
+  "version": "0.0.1",
+  "type": "runner",
+  "description": "OpenAI runner with Codex CLI and Chat Completions API backends",
+  "entry_point": "runner.py",
+  "class_name": "OpenAIRunner",
+  "config_schema": {
+    "openai_api_key": {
+      "type": "secret",
+      "env": "OPENAI_API_KEY",
+      "required": false
+    },
+    "backend": {
+      "type": "string",
+      "enum": ["cli", "api"],
+      "default": "api",
+      "description": "Backend: 'cli' (Codex CLI) or 'api' (Chat Completions)"
+    },
+    "model": {
+      "type": "string",
+      "enum": [
+        "gpt-5", "gpt-5-mini",
+        "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+        "gpt-4o", "gpt-4o-mini",
+        "o3", "o3-mini", "o4-mini"
+      ],
+      "default": "gpt-4.1",
+      "description": "Default model"
+    },
+    "timeout": { "type": "integer", "default": 120 },
+    "max_retries": { "type": "integer", "default": 2 },
+    "max_output_tokens": { "type": "integer", "default": 8192 },
+    "max_tool_iterations": { "type": "integer", "default": 20 },
+    "max_tools": { "type": "integer", "default": 0 },
+    "notify_tool_use": { "type": "boolean", "default": true }
+  },
+  "dependencies": [],
+  "cli_meta": {
+    "cli_name": "Codex CLI",
+    "auth_actions": [
+      {"type": "login", "label": "Device Auth"},
+      {"type": "token", "label": "API Key"}
+    ],
+    "token_endpoint": "api-key",
+    "token_hint": "",
+    "token_placeholder": "sk-..."
+  },
+  "models_refreshable": true
+}

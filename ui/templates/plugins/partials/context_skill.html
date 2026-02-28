@@ -1,0 +1,21 @@
+<!-- Context Instructions Card — shown when plugin has a context skill in DB -->
+{% set ctx_skill = request.state.context_skill | default(none) %}
+{% if ctx_skill %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-ember-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-book-open text-ember-500"></i>
+            Context Instructions
+        </h3>
+    </div>
+    <div class="p-5 space-y-4">
+        <p class="text-sm text-void-600 dark:text-void-400">{{ ctx_skill.title }}</p>
+        <p class="text-xs text-void-500 dark:text-void-500 font-mono bg-void-50 dark:bg-void-800/50 rounded-lg p-3 line-clamp-3">{{ ctx_skill.preview }}</p>
+        <a href="/plugin/skills/{{ ctx_skill.id }}"
+           class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-ember-500/30 text-ember-500 hover:bg-ember-500/10 transition-all font-medium">
+            <i class="fas fa-pen-to-square"></i>
+            Edit Instructions
+        </a>
+    </div>
+</div>
+{% endif %}

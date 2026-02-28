@@ -1,0 +1,76 @@
+{
+  "name": "ms365",
+  "version": "0.0.1",
+  "description": "Microsoft 365 integration - SharePoint, Planner, OneDrive, Teams",
+  "type": "mcp",
+  "entry_point": "provider.py",
+  "class_name": "MS365Provider",
+  "author": "GridBear Team",
+  "mcp_category": "communication",
+  "mcp_naming": "per_tenant",
+  "mcp_name_template": "ms365-{tenant}",
+
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Azure AD App Client ID"
+      },
+      "client_secret_env": {
+        "type": "string",
+        "default": "MS365_CLIENT_SECRET",
+        "description": "Environment variable for client secret"
+      },
+      "redirect_uri": {
+        "type": "string",
+        "default": "http://localhost:8080/auth/ms365/callback",
+        "description": "OAuth redirect URI"
+      },
+      "database_path": {
+        "type": "string",
+        "default": "data/ms365_tokens.db",
+        "description": "SQLite database for token storage"
+      },
+      "encryption_key_env": {
+        "type": "string",
+        "default": "MS365_ENCRYPTION_KEY",
+        "description": "Environment variable for Fernet encryption key"
+      },
+      "health_check_interval": {
+        "type": "integer",
+        "default": 300,
+        "description": "Health check interval in seconds"
+      },
+      "tenants": {
+        "type": "array",
+        "description": "Configured tenant mappings",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Tenant ID or 'common' for multi-tenant"
+            },
+            "name": {
+              "type": "string",
+              "description": "Friendly name for the tenant"
+            },
+            "role": {
+              "type": "string",
+              "enum": ["owner", "guest"],
+              "description": "User role in this tenant"
+            }
+          }
+        }
+      }
+    },
+    "required": ["client_id"]
+  },
+  "dependencies": [
+    "msal",
+    "httpx",
+    "cryptography"
+  ],
+  "private_only": true
+}

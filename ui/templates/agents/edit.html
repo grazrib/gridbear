@@ -1,0 +1,620 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_new %}New Agent{% else %}Edit {{ agent.name }}{% endif %} - GridBear{% endblock %}
+{% block page_title %}{% if is_new %}Create New Agent{% else %}{{ agent.name }}{% endif %}{% endblock %}
+{% block breadcrumb_active %}{% if is_new %}New{% else %}{{ agent.name }}{% endif %}{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">{% if is_new %}Configure a new AI agent{% else %}Agent configuration and settings{% endif %}</p>{% endblock %}
+
+{% block content %}
+<form method="POST" action="/agents/{{ agent.id if agent else 'new' }}" enctype="multipart/form-data" class="space-y-6">
+    {% include "partials/csrf_field.html" %}
+
+    <!-- Basic Info -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-id-card text-nordic-500"></i>
+                Basic Information
+            </h3>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Agent ID</label>
+                    <input type="text" name="agent_id"
+                           value="{{ agent.id if agent else '' }}"
+                           placeholder="e.g., peggy"
+                           pattern="[a-z0-9_-]+"
+                           {% if not is_new %}readonly{% endif %}
+                           required
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all {% if not is_new %}opacity-60{% endif %}">
+                    <p class="text-xs text-void-500 dark:text-void-400">Lowercase letters, numbers, hyphens only</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Display Name</label>
+                    <input type="text" name="name"
+                           value="{{ agent.name if agent else '' }}"
+                           placeholder="e.g., Peggy"
+                           required
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                </div>
+
+                <div class="md:col-span-2 space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Description</label>
+                    <input type="text" name="description"
+                           value="{{ agent.description if agent else '' }}"
+                           placeholder="e.g., General-purpose virtual assistant"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                </div>
+
+                <div class="md:col-span-2 space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Avatar</label>
+                    <div class="flex items-center gap-4">
+                        {% if agent and agent.avatar %}
+                        <img src="/static/avatars/{{ agent.avatar }}" alt="Avatar" class="w-14 h-14 rounded-xl object-cover border border-void-200 dark:border-void-700">
+                        {% else %}
+                        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-nordic-500 to-frost-500 flex items-center justify-center">
+                            <span class="text-white text-xl font-bold">{{ agent.name[0]|upper if agent and agent.name else '?' }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="flex-1 space-y-2">
+                            <input type="file" name="avatar" accept="image/png,image/jpeg,image/webp,image/gif"
+                                   class="w-full text-sm text-void-500 dark:text-void-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-nordic-500/10 file:text-nordic-600 dark:file:text-nordic-400 hover:file:bg-nordic-500/20 file:cursor-pointer file:transition-colors">
+                            {% if agent and agent.avatar %}
+                            <label class="flex items-center gap-2 cursor-pointer text-sm text-void-500 dark:text-void-400">
+                                <input type="checkbox" name="remove_avatar" value="on"
+                                       class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-red-500 focus:ring-red-500/20">
+                                Remove avatar
+                            </label>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <p class="text-xs text-void-500 dark:text-void-400">PNG, JPG, WebP or GIF. Max 2MB.</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Locale</label>
+                    <select name="locale"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="en" {% if agent and agent.locale == 'en' %}selected{% endif %}>English (en)</option>
+                        <option value="it" {% if agent and agent.locale == 'it' %}selected{% endif %}>Italian (it)</option>
+                        <option value="es" {% if agent and agent.locale == 'es' %}selected{% endif %}>Spanish (es)</option>
+                        <option value="fr" {% if agent and agent.locale == 'fr' %}selected{% endif %}>French (fr)</option>
+                        <option value="de" {% if agent and agent.locale == 'de' %}selected{% endif %}>German (de)</option>
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Timezone</label>
+                    <select name="timezone"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="Europe/Rome" {% if not agent or agent.get('timezone', 'Europe/Rome') == 'Europe/Rome' %}selected{% endif %}>Europe/Rome</option>
+                        <option value="Europe/London" {% if agent and agent.get('timezone') == 'Europe/London' %}selected{% endif %}>Europe/London</option>
+                        <option value="Europe/Paris" {% if agent and agent.get('timezone') == 'Europe/Paris' %}selected{% endif %}>Europe/Paris</option>
+                        <option value="Europe/Berlin" {% if agent and agent.get('timezone') == 'Europe/Berlin' %}selected{% endif %}>Europe/Berlin</option>
+                        <option value="America/New_York" {% if agent and agent.get('timezone') == 'America/New_York' %}selected{% endif %}>America/New_York</option>
+                        <option value="America/Los_Angeles" {% if agent and agent.get('timezone') == 'America/Los_Angeles' %}selected{% endif %}>America/Los_Angeles</option>
+                        <option value="Asia/Tokyo" {% if agent and agent.get('timezone') == 'Asia/Tokyo' %}selected{% endif %}>Asia/Tokyo</option>
+                        <option value="UTC" {% if agent and agent.get('timezone') == 'UTC' %}selected{% endif %}>UTC</option>
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Runner</label>
+                    {% set agent_runner = agent.get('runner', '') if agent else '' %}
+                    <select name="runner" id="runner-select"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="" {% if not agent_runner %}selected{% endif %}>Default (first available)</option>
+                        {% for runner_name in runner_models.keys() %}
+                        <option value="{{ runner_name }}" {% if agent_runner == runner_name %}selected{% endif %}>{{ runner_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-void-500 dark:text-void-400">AI backend to use for this agent</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Model</label>
+                    {% set agent_model = agent.get('model', '') if agent else '' %}
+                    {% set agent_model = agent_model.get('default', '') if agent_model is mapping else agent_model %}
+                    <select name="model" id="model-select"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="" {% if not agent_model %}selected{% endif %}>Default (runner)</option>
+                        {% for runner_name, models in runner_models.items() %}
+                        {% for value, label in models %}
+                        <option value="{{ value }}" data-runner="{{ runner_name }}" {% if agent_model == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-void-500 dark:text-void-400">Override the runner's default model for this agent</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Fallback Runner</label>
+                    {% set agent_fallback = agent.get('fallback_runner', '') if agent else '' %}
+                    <select name="fallback_runner"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="" {% if not agent_fallback %}selected{% endif %}>None</option>
+                        {% for runner_name in runner_models.keys() %}
+                        <option value="{{ runner_name }}" {% if agent_fallback == runner_name %}selected{% endif %}>{{ runner_name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-void-500 dark:text-void-400">If the primary runner fails, retry with this runner</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Personality -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-purple-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-brain text-purple-500"></i>
+                Personality (System Prompt)
+            </h3>
+        </div>
+        <div class="p-5 space-y-2">
+            <textarea name="personality"
+                      rows="12"
+                      placeholder="Define the agent's personality, behavior, and capabilities..."
+                      class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-3 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all font-mono text-sm">{{ agent.personality if agent else '' }}</textarea>
+            <p class="text-xs text-void-500 dark:text-void-400">Use sections like [Identity], [Formatting], [Image Generation], etc.</p>
+        </div>
+    </div>
+
+    <!-- Channel Configurations (dynamic) -->
+    {% for ch in channels %}
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800"
+             style="background: linear-gradient(to right, {{ ch.color }}08, transparent)">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="{{ ch.icon }}" style="color: {{ ch.color }}"></i>
+                {{ ch.display_name }} Channel
+            </h3>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Token Secret Name</label>
+                    {% set ch_config = agent.channels[ch.name] if agent and agent.channels and agent.channels.get(ch.name) else {} %}
+                    <input type="text" name="{{ ch.name }}_token_secret"
+                           value="{{ ch_config.token_secret if ch_config else '' }}"
+                           placeholder="e.g., {{ ch.name|upper }}_TOKEN"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                    <p class="text-xs text-void-500 dark:text-void-400">Name of the secret containing the bot token (leave empty to disable)</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Allowed Users</label>
+                    {% set current_ch_users = ch_config.allowed_users if ch_config and ch_config.allowed_users else [] %}
+                    {% if known_users and known_users.get(ch.name) %}
+                    <div class="flex flex-wrap gap-2 p-3 bg-void-50 dark:bg-void-800/30 rounded-xl border border-void-200 dark:border-void-700">
+                        {% for user in known_users[ch.name] %}
+                        <label class="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg hover:bg-void-100 dark:hover:bg-void-700/50 transition-colors">
+                            <input type="checkbox" name="{{ ch.name }}_allowed_users" value="{{ user }}"
+                                   {% if user in current_ch_users %}checked{% endif %}
+                                   class="w-4 h-4 rounded border-void-300 dark:border-void-600"
+                                   style="color: {{ ch.color }}">
+                            <span class="text-sm text-void-700 dark:text-void-200">{{ user }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-void-500 dark:text-void-400 p-3 bg-void-50 dark:bg-void-800/30 rounded-xl border border-void-200 dark:border-void-700">No known users. Add identities in Settings &rarr; Users.</p>
+                    {% endif %}
+                    <p class="text-xs text-void-500 dark:text-void-400">Select users who can interact with this agent (none = all allowed)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Voice -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-microphone text-nordic-500"></i>
+                Voice (TTS)
+            </h3>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Provider</label>
+                    <select name="voice_provider"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="">None</option>
+                        <option value="tts-openai" {% if agent and agent.voice and agent.voice.provider == 'tts-openai' %}selected{% endif %}>OpenAI TTS</option>
+                        <option value="tts-elevenlabs" {% if agent and agent.voice and agent.voice.provider == 'tts-elevenlabs' %}selected{% endif %}>ElevenLabs</option>
+                        <option value="tts-edge" {% if agent and agent.voice and agent.voice.provider == 'tts-edge' %}selected{% endif %}>Edge TTS</option>
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Voice</label>
+                    <select name="voice_id" id="voice_id_select"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="">Select a voice...</option>
+                        {% if agent and agent.voice and agent.voice.voice_id %}
+                        <option value="{{ agent.voice.voice_id }}" selected>{{ agent.voice.voice_id }}</option>
+                        {% endif %}
+                    </select>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Language</label>
+                    <input type="text" name="voice_language"
+                           value="{{ agent.voice.language if agent and agent.voice else '' }}"
+                           placeholder="e.g., it-IT, en-US"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Generation -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-pink-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-image text-pink-500"></i>
+                Image Generation
+            </h3>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Provider</label>
+                    {% set agent_image_provider = agent.image.provider if agent and agent.image else '' %}
+                    <select name="image_provider"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="">None (disabled)</option>
+                        <option value="image-openai" {% if agent_image_provider == 'image-openai' %}selected{% endif %}>OpenAI DALL-E</option>
+                        <option value="image-pollinations" {% if agent_image_provider == 'image-pollinations' %}selected{% endif %}>Pollinations (Free)</option>
+                    </select>
+                    <p class="text-xs text-void-500 dark:text-void-400">AI backend for image generation via the image__generate tool</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Monitoring -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-red-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-envelope text-red-500"></i>
+                Email Monitoring
+            </h3>
+        </div>
+        <div class="p-5 space-y-5">
+            <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" name="email_enabled"
+                       {% if agent and agent.email and agent.email.enabled %}checked{% endif %}
+                       class="sr-only peer">
+                <div class="relative w-11 h-6 bg-void-200 dark:bg-void-700 rounded-full peer peer-checked:bg-nordic-500 transition-colors">
+                    <div class="absolute left-[2px] top-[2px] w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                </div>
+                <span class="text-sm font-medium text-void-700 dark:text-void-200">Enable email monitoring</span>
+            </label>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Gmail Account</label>
+                    <input type="email" name="email_account"
+                           value="{{ agent.email.account if agent and agent.email else '' }}"
+                           placeholder="e.g., user@example.com"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                    <p class="text-xs text-void-500 dark:text-void-400">Gmail account to monitor (must have OAuth configured)</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Check Interval (minutes)</label>
+                    <input type="number" name="email_interval"
+                           value="{{ agent.email.check_interval_minutes if agent and agent.email else 5 }}"
+                           min="1" max="60"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Gmail Label</label>
+                    <input type="text" name="email_label"
+                           value="{{ agent.email.label if agent and agent.email else 'INBOX' }}"
+                           placeholder="INBOX"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                    <p class="text-xs text-void-500 dark:text-void-400">Use "INBOX" or a label name (e.g., "GridBear")</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Sender Name</label>
+                    <input type="text" name="email_sender_name"
+                           value="{{ agent.email.sender_name if agent and agent.email else '' }}"
+                           placeholder="e.g., Peggy"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                </div>
+
+                <div class="md:col-span-2 space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Auto-reply Allowed Senders</label>
+                    <textarea name="email_auto_reply_allowed"
+                              rows="2"
+                              placeholder="*@yourcompany.com&#10;support@example.com"
+                              class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">{{ agent.email.auto_reply_allowed if agent and agent.email else '' }}</textarea>
+                    <p class="text-xs text-void-500 dark:text-void-400">One pattern per line. Examples: <code class="font-mono bg-void-100 dark:bg-void-800 px-1 rounded">*@*</code> (everyone), <code class="font-mono bg-void-100 dark:bg-void-800 px-1 rounded">*@yourcompany.com</code> (domain)</p>
+                </div>
+
+                <div class="md:col-span-2 space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Email Instructions</label>
+                    <textarea name="email_instructions"
+                              rows="3"
+                              placeholder="Instructions for handling emails..."
+                              class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">{{ agent.email.instructions if agent and agent.email else '' }}</textarea>
+                </div>
+
+                <div class="md:col-span-2 space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Email Signature</label>
+                    <textarea name="email_signature"
+                              rows="3"
+                              placeholder="---&#10;Your signature here"
+                              class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">{{ agent.email.signature if agent and agent.email else '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="border-t border-void-200 dark:border-void-800 pt-5 mt-5">
+                <h4 class="text-sm font-medium text-void-700 dark:text-void-200 mb-4">Notifications</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Notify User (Telegram)</label>
+                        <div class="flex">
+                            <span class="inline-flex items-center px-4 rounded-l-xl border border-r-0 border-void-200 dark:border-void-700 bg-void-100 dark:bg-void-800 text-void-500 dark:text-void-400">@</span>
+                            <input type="text" name="email_notification_username"
+                                   value="{{ agent.email.notification_username if agent and agent.email else '' }}"
+                                   placeholder="username"
+                                   class="flex-1 bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-r-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Notify Chat ID</label>
+                        <input type="text" name="email_notification_chat_id"
+                               value="{{ agent.email.notification_chat_id if agent and agent.email else '' }}"
+                               placeholder="123456789"
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MCP Permissions -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-ember-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-plug text-ember-500"></i>
+                MCP Permissions
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">Select which MCP servers this agent can access</p>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {% for mcp in available_mcp %}
+                <label class="flex items-center gap-2 p-3 rounded-xl hover:bg-void-50 dark:hover:bg-void-800/50 cursor-pointer transition-colors border border-transparent hover:border-void-200 dark:hover:border-void-700">
+                    <input type="checkbox" name="mcp_permissions" value="{{ mcp }}"
+                           {% if agent and mcp in agent.get('mcp_permissions', []) %}checked{% endif %}
+                           class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-ember-500 focus:ring-ember-500/20">
+                    <span class="text-sm text-void-700 dark:text-void-200">{{ mcp }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Tool Management -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-ember-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-wrench text-ember-500"></i>
+                Tool Management
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">Control how MCP tools are loaded for this agent</p>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Max Tools (Budget)</label>
+                    <input type="number" name="max_tools"
+                           value="{{ agent.max_tools if agent and agent.max_tools else '' }}"
+                           placeholder="No limit"
+                           min="1"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                    <p class="text-xs text-void-500 dark:text-void-400">Maximum number of MCP tools sent to the runner. Leave empty for no limit.</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Tool Loading Mode</label>
+                    <div class="space-y-2 mt-1">
+                        <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-void-50 dark:hover:bg-void-800/50 cursor-pointer transition-colors border border-transparent hover:border-void-200 dark:hover:border-void-700">
+                            <input type="radio" name="tool_loading" value="full"
+                                   {% if not agent or not agent.tool_loading or agent.tool_loading == 'full' %}checked{% endif %}
+                                   class="w-4 h-4 text-ember-500 focus:ring-ember-500/20">
+                            <div>
+                                <span class="text-sm font-medium text-void-700 dark:text-void-200">Full</span>
+                                <p class="text-xs text-void-500 dark:text-void-400">All permitted MCP tools loaded at startup</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-void-50 dark:hover:bg-void-800/50 cursor-pointer transition-colors border border-transparent hover:border-void-200 dark:hover:border-void-700">
+                            <input type="radio" name="tool_loading" value="search"
+                                   {% if agent and agent.tool_loading == 'search' %}checked{% endif %}
+                                   class="w-4 h-4 text-ember-500 focus:ring-ember-500/20">
+                            <div>
+                                <span class="text-sm font-medium text-void-700 dark:text-void-200">Search</span>
+                                <p class="text-xs text-void-500 dark:text-void-400">No MCP tools at startup; agent discovers via search_tools</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            {% if not is_new %}
+            <div class="mt-4 pt-4 border-t border-void-100 dark:border-void-800">
+                <a href="/tools/{{ agent.id }}/tools"
+                   class="text-sm text-nordic-500 hover:text-nordic-600 font-medium">
+                    <i class="fas fa-toggle-on mr-1"></i> Manage individual tool toggles
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Plugins -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-puzzle-piece text-frost-500"></i>
+                Enabled Plugins
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">Select which plugins should be enabled for this agent</p>
+        </div>
+        <div class="p-5">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {% set common_plugins = ['memory', 'sessions', 'skills', 'memo', 'voice', 'tts-openai', 'tts-elevenlabs', 'image', 'image-openai', 'image-pollinations', 'attachments'] %}
+                {% for plugin in common_plugins %}
+                <label class="flex items-center gap-2 p-3 rounded-xl hover:bg-void-50 dark:hover:bg-void-800/50 cursor-pointer transition-colors border border-transparent hover:border-void-200 dark:hover:border-void-700">
+                    <input type="checkbox" name="plugins_enabled" value="{{ plugin }}"
+                           {% if agent and plugin in agent.get('plugins', {}).get('enabled', []) %}checked{% endif %}
+                           class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-frost-500 focus:ring-frost-500/20">
+                    <span class="text-sm text-void-700 dark:text-void-200">{{ plugin }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex justify-between items-center pt-4">
+        <a href="/agents/"
+           class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 font-medium transition-colors">
+            <i class="fas fa-arrow-left"></i>
+            Cancel
+        </a>
+        <div class="flex gap-3">
+            {% if not is_new %}
+            <button type="button"
+                    onclick="if(confirm('Delete this agent?')) document.getElementById('delete-form').submit()"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-red-500/30 hover:bg-red-500/10 text-red-500 font-medium transition-colors">
+                <i class="fas fa-trash"></i>
+                Delete
+            </button>
+            {% endif %}
+            <button type="submit"
+                    class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all shadow-lg shadow-nordic-500/20">
+                <i class="fas fa-save"></i>
+                Save Agent
+            </button>
+        </div>
+    </div>
+</form>
+
+{% if not is_new %}
+<form id="delete-form" method="POST" action="/agents/{{ agent.id }}/delete" style="display: none;">
+    {% include "partials/csrf_field.html" %}
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const runnerSelect = document.getElementById('runner-select');
+    const modelSelect = document.getElementById('model-select');
+    if (!runnerSelect || !modelSelect) return;
+
+    // Store all model options (excluding the default "")
+    const allOptions = Array.from(modelSelect.options).filter(o => o.value);
+    const defaultOption = modelSelect.options[0]; // "Default (runner)"
+    const currentModel = modelSelect.value;
+
+    function filterModels() {
+        const runner = runnerSelect.value;
+        // Remove all non-default options
+        while (modelSelect.options.length > 1) {
+            modelSelect.remove(1);
+        }
+        // Add back options matching the selected runner (or all if no runner selected)
+        allOptions.forEach(opt => {
+            if (!runner || opt.dataset.runner === runner) {
+                modelSelect.add(opt.cloneNode(true));
+            }
+        });
+        // Restore selection if still available, otherwise reset to default
+        const restored = Array.from(modelSelect.options).find(o => o.value === currentModel);
+        if (restored) {
+            restored.selected = true;
+        } else {
+            defaultOption.selected = true;
+        }
+    }
+
+    runnerSelect.addEventListener('change', filterModels);
+    filterModels(); // Apply on page load
+})();
+
+// Voice ID dynamic loading
+(function() {
+    const providerSelect = document.querySelector('select[name="voice_provider"]');
+    const voiceSelect = document.getElementById('voice_id_select');
+    const langInput = document.querySelector('input[name="voice_language"]');
+    if (!providerSelect || !voiceSelect) return;
+
+    const currentVoice = voiceSelect.value;
+    let loading = false;
+
+    function clearOptions(select, placeholderText) {
+        while (select.options.length > 0) select.remove(0);
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = placeholderText;
+        select.appendChild(opt);
+    }
+
+    async function loadVoices() {
+        const provider = providerSelect.value;
+        if (!provider) {
+            clearOptions(voiceSelect, 'Select a provider first');
+            return;
+        }
+        if (loading) return;
+        loading = true;
+        clearOptions(voiceSelect, 'Loading voices...');
+        voiceSelect.disabled = true;
+
+        try {
+            const locale = langInput ? langInput.value.split('-')[0] : '';
+            const params = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+            const resp = await fetch(`/agents/api/voices/${encodeURIComponent(provider)}${params}`);
+            if (!resp.ok) throw new Error(resp.statusText);
+            const voices = await resp.json();
+
+            clearOptions(voiceSelect, 'Select a voice...');
+            voices.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v.name;
+                const label = v.gender && v.gender !== 'unknown'
+                    ? v.name + ' (' + v.gender + (v.locale !== 'multilingual' ? ', ' + v.locale : '') + ')'
+                    : v.name;
+                opt.textContent = label;
+                if (v.name === currentVoice) opt.selected = true;
+                voiceSelect.appendChild(opt);
+            });
+        } catch (e) {
+            clearOptions(voiceSelect, 'Failed to load voices');
+        } finally {
+            voiceSelect.disabled = false;
+            loading = false;
+        }
+    }
+
+    providerSelect.addEventListener('change', loadVoices);
+    if (langInput) {
+        langInput.addEventListener('change', loadVoices);
+    }
+    if (providerSelect.value) loadVoices();
+})();
+</script>
+{% endblock %}

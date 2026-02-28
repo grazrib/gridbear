@@ -1,0 +1,124 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+.env
+.env.local
+.env.*.local
+.venv
+env/
+venv/
+ENV/
+
+*.db
+.coverage
+coverage.xml
+htmlcov/
+data/
+
+credentials/
+*.pem
+*.key
+
+# Sensitive config files
+config/admin_config.json
+config/admin_config.json.migrated
+config/rest_api.json.migrated
+config/claude_settings.json
+config/claude_settings.json.migrated
+config/mcp_servers.json
+config/.admin_config.lock
+config/plugins.json
+config/rest_api.json
+config/dev_projects.json
+config/executor.json
+
+# Agent configs (contain tokens and authorized users)
+config/agents/*.yaml
+config/agents/*.yml
+!config/agents/*.example
+
+# Gmail MCP credentials and tokens
+mcp-gmail-server/credentials.json
+mcp-gmail-server/token.json
+mcp-gmail-server/node_modules/
+
+*.log
+logs/
+
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+.DS_Store
+
+# Claude Code container config (contains personal info)
+.claude.container.json
+
+# Local docker-compose overrides
+docker-compose.override.yml
+
+# Ignore notes/docs but keep important files
+*.md
+!README.md
+!ATTRIBUTIONS.md
+!CONTRIBUTING.md
+!SECURITY.md
+!CODE_OF_CONDUCT.md
+!LICENSE
+!plugins/*/skills/*.md
+*.txt
+!executor/requirements.txt
+
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# Generated PWA icons
+admin/static/icons/
+
+# Uploaded avatars
+admin/static/avatars/
+
+# Serena IDE config
+.serena/
+
+# Screenshots (temporary)
+*.png
+!ui/static/favicon.png
+!ui/static/logo.png
+!ui/static/icons/*.png
+
+# Local development scripts and docs
+docs/
+scripts/migrate_chroma_to_pg.py
+scripts/migrate_encrypt_data.py
+claude-debate.sh
+debate-logs/
+.worktrees/
+
+# Build artifacts
+node_modules/
+package-lock.json
+ui/static/css/output.css

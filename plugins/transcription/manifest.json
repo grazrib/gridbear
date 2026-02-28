@@ -1,0 +1,18 @@
+{
+  "name": "transcription",
+  "version": "0.1.0",
+  "type": "service",
+  "description": "Audio transcription — delegates to configured provider (transcription-openai, transcription-assemblyai, etc.)",
+  "entry_point": "service.py",
+  "class_name": "TranscriptionBaseService",
+  "virtual_tools": "virtual_tools.py",
+  "admin_routes": "admin/routes.py",
+  "config_schema": {
+    "default_provider": {
+      "type": "string",
+      "default": "",
+      "description": "Default transcription provider (overridden per-agent in YAML)"
+    }
+  },
+  "dependencies": []
+}

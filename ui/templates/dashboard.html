@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - GridBear{% endblock %}
+{% block page_title %}{{ _("Dashboard") }}{% endblock %}
+{% block breadcrumb_active %}{{ _("Dashboard") }}{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">{{ _("Overview of your AI agent ecosystem") }}</p>{% endblock %}
+
+{% block content %}
+<!-- Hero Stats Card -->
+<div class="relative overflow-hidden rounded-2xl gradient-border p-6 mb-8">
+    <div class="relative z-10">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div class="flex items-center gap-6">
+                <div class="relative">
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-nordic-500 to-frost-500 flex items-center justify-center shadow-lg shadow-nordic-500/20">
+                        <i class="fas fa-robot text-white text-3xl"></i>
+                    </div>
+                    <div class="absolute -bottom-1 -right-1 w-6 h-6 bg-nordic-400 rounded-full border-4 border-void-900 dark:border-void-950 status-online"></div>
+                </div>
+                <div>
+                    <div class="flex items-baseline gap-3">
+                        <span class="text-5xl font-bold text-void-900 dark:text-white">{{ agents_count }}</span>
+                        <span class="text-xl text-void-500 dark:text-void-400">{% if agents_count != 1 %}{{ _("Agents") }}{% else %}{{ _("Agent") }}{% endif %}</span>
+                    </div>
+                    <p class="text-void-500 dark:text-void-400 mt-1">{{ _("Active in multi-agent orchestration") }}</p>
+                </div>
+            </div>
+            <a href="/agents/" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-void-900 dark:bg-white text-white dark:text-void-900 font-medium hover:bg-void-800 dark:hover:bg-void-100 transition-colors">
+                {{ _("Manage Agents") }}
+                <i class="fas fa-arrow-right text-sm"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Platform Stats Grid -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Dynamic Channel Cards -->
+    {% for ch in channels %}
+    <div class="group p-5 rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 transition-all card-hover"
+         style="--hover-color: {{ ch.color }}30"
+         onmouseenter="this.style.borderColor='{{ ch.color }}30'" onmouseleave="this.style.borderColor=''">
+        <div class="flex items-start justify-between mb-4">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"
+                 style="background: {{ ch.color }}15">
+                <i class="{{ ch.icon }} text-xl" style="color: {{ ch.color }}"></i>
+            </div>
+            <span class="text-xs font-mono text-void-400 dark:text-void-500 bg-void-100 dark:bg-void-800 px-2 py-1 rounded-lg">{{ _("channel") }}</span>
+        </div>
+        <div class="text-3xl font-bold text-void-900 dark:text-white mb-1">{{ ch.user_count }}</div>
+        <div class="text-sm text-void-500 dark:text-void-400">{{ ch.display_name }} {{ _("Users") }}</div>
+    </div>
+    {% endfor %}
+
+    <!-- Gmail -->
+    <div class="group p-5 rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 hover:border-[#EA4335]/30 dark:hover:border-[#EA4335]/30 transition-all card-hover">
+        <div class="flex items-start justify-between mb-4">
+            <div class="w-12 h-12 rounded-xl bg-[#EA4335]/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-envelope text-[#EA4335] text-xl"></i>
+            </div>
+            <span class="text-xs font-mono text-void-400 dark:text-void-500 bg-void-100 dark:bg-void-800 px-2 py-1 rounded-lg">{{ _("integration") }}</span>
+        </div>
+        <div class="text-3xl font-bold text-void-900 dark:text-white mb-1">{{ gmail_accounts|length }}</div>
+        <div class="text-sm text-void-500 dark:text-void-400">{{ _("Gmail Accounts") }}</div>
+    </div>
+
+    <!-- Identities -->
+    <div class="group p-5 rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 hover:border-nordic-500/30 dark:hover:border-nordic-500/30 transition-all card-hover">
+        <div class="flex items-start justify-between mb-4">
+            <div class="w-12 h-12 rounded-xl bg-nordic-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-fingerprint text-nordic-500 text-xl"></i>
+            </div>
+            <span class="text-xs font-mono text-void-400 dark:text-void-500 bg-void-100 dark:bg-void-800 px-2 py-1 rounded-lg">{{ _("unified") }}</span>
+        </div>
+        <div class="text-3xl font-bold text-void-900 dark:text-white mb-1">{{ user_identities|length }}</div>
+        <div class="text-sm text-void-500 dark:text-void-400">{{ _("Unified Identities") }}</div>
+    </div>
+</div>
+
+<!-- Plugin Categories -->
+<h2 class="text-lg font-semibold text-void-900 dark:text-white mb-4 flex items-center gap-2">
+    <i class="fas fa-puzzle-piece text-void-400 dark:text-void-500"></i>
+    {{ _("Plugin Ecosystem") }}
+</h2>
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Channels -->
+    <div class="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-frost-500 to-frost-600 text-white card-hover">
+        <div class="relative z-10">
+            <div class="text-4xl font-bold mb-1">{{ plugins_summary.channels }}</div>
+            <div class="text-frost-100 text-sm">{{ _("Channels") }}</div>
+            <a href="/plugins/" class="inline-flex items-center gap-1 mt-3 text-xs text-white/80 hover:text-white transition-colors">
+                {{ _("Manage") }} <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        <i class="fas fa-comments absolute -bottom-2 -right-2 text-7xl text-white/10"></i>
+    </div>
+
+    <!-- Services -->
+    <div class="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-nordic-500 to-nordic-600 text-white card-hover">
+        <div class="relative z-10">
+            <div class="text-4xl font-bold mb-1">{{ plugins_summary.services }}</div>
+            <div class="text-nordic-100 text-sm">{{ _("Services") }}</div>
+            <a href="/plugins/" class="inline-flex items-center gap-1 mt-3 text-xs text-white/80 hover:text-white transition-colors">
+                {{ _("Manage") }} <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        <i class="fas fa-cubes absolute -bottom-2 -right-2 text-7xl text-white/10"></i>
+    </div>
+
+    <!-- MCP -->
+    <div class="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-ember-500 to-ember-600 text-white card-hover">
+        <div class="relative z-10">
+            <div class="text-4xl font-bold mb-1">{{ plugins_summary.mcp }}</div>
+            <div class="text-orange-100 text-sm">{{ _("MCP Providers") }}</div>
+            <a href="/plugins/" class="inline-flex items-center gap-1 mt-3 text-xs text-white/80 hover:text-white transition-colors">
+                {{ _("Manage") }} <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        <i class="fas fa-plug absolute -bottom-2 -right-2 text-7xl text-white/10"></i>
+    </div>
+
+    <!-- Runners -->
+    <div class="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 text-white card-hover">
+        <div class="relative z-10">
+            <div class="text-4xl font-bold mb-1">{{ plugins_summary.runners }}</div>
+            <div class="text-purple-100 text-sm">{{ _("AI Runners") }}</div>
+            <a href="/plugins/" class="inline-flex items-center gap-1 mt-3 text-xs text-white/80 hover:text-white transition-colors">
+                {{ _("Manage") }} <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+        <i class="fas fa-microchip absolute -bottom-2 -right-2 text-7xl text-white/10"></i>
+    </div>
+</div>
+
+<!-- Bottom Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- User Summary -->
+    <div class="lg:col-span-2 rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-users text-void-400 dark:text-void-500"></i>
+                {{ _("Authorized Users") }}
+            </h3>
+            <a href="/users" class="text-sm text-nordic-600 dark:text-nordic-400 hover:text-nordic-700 dark:hover:text-nordic-300 transition-colors flex items-center gap-1">
+                {{ _("Manage") }} <i class="fas fa-arrow-right text-xs"></i>
+            </a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider">
+                        <th class="px-5 py-3">{{ _("Platform") }}</th>
+                        <th class="px-5 py-3">{{ _("Identifier") }}</th>
+                        <th class="px-5 py-3">{{ _("Gmail Linked") }}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                    {% set ns = namespace(has_users=false) %}
+                    {% for ch in channels %}
+                    {% for uid in ch.users.ids %}
+                    {% set ns.has_users = true %}
+                    <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                        <td class="px-5 py-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium"
+                                  style="background: {{ ch.color }}15; color: {{ ch.color }}">
+                                <i class="{{ ch.icon }}"></i> {{ ch.display_name }}
+                            </span>
+                        </td>
+                        <td class="px-5 py-3 font-mono text-sm text-void-700 dark:text-void-300">{{ uid }}</td>
+                        <td class="px-5 py-3 text-sm text-void-500 dark:text-void-400">{{ gmail_accounts.get(uid|string, '-') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% for uname in ch.users.usernames %}
+                    {% set ns.has_users = true %}
+                    <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                        <td class="px-5 py-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium"
+                                  style="background: {{ ch.color }}15; color: {{ ch.color }}">
+                                <i class="{{ ch.icon }}"></i> {{ ch.display_name }}
+                            </span>
+                        </td>
+                        <td class="px-5 py-3 font-mono text-sm text-void-700 dark:text-void-300">@{{ uname }}</td>
+                        <td class="px-5 py-3 text-sm text-void-500 dark:text-void-400">{{ gmail_accounts.get(uname, ['-'])|join(', ') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                    {% if not ns.has_users %}
+                    <tr>
+                        <td colspan="3" class="px-5 py-12 text-center">
+                            <i class="fas fa-users-slash text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+                            <p class="text-void-500 dark:text-void-400">{{ _("No authorized users configured") }}</p>
+                            <p class="text-xs text-void-400 dark:text-void-500 mt-1">{{ _("All users have access") }}</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="space-y-4">
+        <!-- Actions Card -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 p-5">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2 mb-4">
+                <i class="fas fa-bolt text-ember-500"></i>
+                {{ _("Quick Actions") }}
+            </h3>
+            <div class="space-y-2">
+                <a href="/agents/new" class="flex items-center gap-3 p-3 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-nordic-500/10 flex items-center justify-center group-hover:bg-nordic-500/20 transition-colors">
+                        <i class="fas fa-robot text-nordic-500"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-void-900 dark:text-white">{{ _("New Agent") }}</div>
+                        <div class="text-xs text-void-500 dark:text-void-400">{{ _("Create AI agent") }}</div>
+                    </div>
+                </a>
+                <a href="/users" class="flex items-center gap-3 p-3 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-frost-500/10 flex items-center justify-center group-hover:bg-frost-500/20 transition-colors">
+                        <i class="fas fa-user-plus text-frost-500"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-void-900 dark:text-white">{{ _("Add User") }}</div>
+                        <div class="text-xs text-void-500 dark:text-void-400">{{ _("Authorize user") }}</div>
+                    </div>
+                </a>
+                <a href="/oauth/gmail" class="flex items-center gap-3 p-3 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 transition-colors group">
+                    <div class="w-10 h-10 rounded-lg bg-[#EA4335]/10 flex items-center justify-center group-hover:bg-[#EA4335]/20 transition-colors">
+                        <i class="fab fa-google text-[#EA4335]"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-void-900 dark:text-white">{{ _("Gmail OAuth") }}</div>
+                        <div class="text-xs text-void-500 dark:text-void-400">{{ _("Connect account") }}</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- System Info -->
+        <div class="rounded-2xl bg-void-900 dark:bg-void-800/50 border border-void-800 p-5 text-white">
+            <h3 class="font-semibold flex items-center gap-2 mb-4">
+                <i class="fas fa-terminal text-nordic-400"></i>
+                {{ _("System") }}
+            </h3>
+            <div class="bg-void-950 rounded-xl p-4 font-mono text-sm">
+                <div class="text-void-500 mb-2"># {{ _("Restart service") }}</div>
+                <div class="text-nordic-400">docker compose restart gridbear</div>
+            </div>
+            <p class="text-xs text-void-400 mt-3">
+                {{ _("Run after plugin configuration changes") }}
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

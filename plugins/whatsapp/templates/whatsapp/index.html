@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block title %}WhatsApp - GridBear Admin{% endblock %}
+{% block page_title %}WhatsApp{% endblock %}
+{% block breadcrumb_active %}WhatsApp{% endblock %}
+
+{% block content_alerts %}
+{% if not api_key_configured %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-exclamation-triangle"></i>
+    <span>Evolution API key not configured. Set <code>EVOLUTION_API_KEY</code> in your .env file.</span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Instances -->
+<div x-data="whatsappManager()" class="space-y-6">
+    <!-- System (YAML) Instances -->
+    {% set yaml_instances = instances | rejectattr("user_instance") | list %}
+    {% for instance in yaml_instances %}
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r {% if instance.connected %}from-nordic-500/5{% else %}from-ember-500/5{% endif %} to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fab fa-whatsapp {% if instance.connected %}text-nordic-500{% else %}text-ember-500{% endif %}"></i>
+                {{ instance.agent_name }}
+                <span class="text-sm font-normal text-void-500">({{ instance.instance_name }})</span>
+                {% if instance.connected %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+                    <span class="w-1.5 h-1.5 rounded-full bg-nordic-500 mr-1.5 animate-pulse"></span>
+                    Connected
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">
+                    <span class="w-1.5 h-1.5 rounded-full bg-ember-500 mr-1.5"></span>
+                    {{ instance.state | title }}
+                </span>
+                {% endif %}
+            </h3>
+        </div>
+        <div class="p-5">
+            <div class="flex items-center gap-3 flex-wrap">
+                {% if not instance.connected %}
+                <button @click="connectInstance('{{ instance.instance_name }}')"
+                        :disabled="connecting"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 disabled:opacity-50 text-white font-medium transition-all">
+                    <i class="fab fa-whatsapp"></i>
+                    <span x-text="connecting && currentInstance === '{{ instance.instance_name }}' ? 'Connecting...' : 'Connect'"></span>
+                </button>
+                {% else %}
+                <form method="POST" action="/plugins/whatsapp/disconnect"
+                      onsubmit="return confirm('Disconnect WhatsApp session?');">
+                    {% include "partials/csrf_field.html" %}
+                    <input type="hidden" name="instance_name" value="{{ instance.instance_name }}">
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-red-500/30 text-red-500 hover:bg-red-500/10 font-medium transition-all">
+                        <i class="fas fa-sign-out-alt"></i> Disconnect
+                    </button>
+                </form>
+                {% endif %}
+
+                {% if instance.connected %}
+                <div class="flex items-center gap-2" x-data="{ testPhone: '', sending: false, sent: false }">
+                    <input type="text" x-model="testPhone"
+                           placeholder="Phone (e.g., 393331234567)"
+                           class="bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 transition-all w-52">
+                    <button @click="sendTest('{{ instance.instance_name }}', testPhone); sending=true"
+                            :disabled="!testPhone || sending"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 disabled:opacity-50 text-void-700 dark:text-void-300 text-sm font-medium transition-all">
+                        <i class="fas fa-paper-plane"></i>
+                        <span x-text="sent ? 'Sent!' : 'Test'"></span>
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+
+            <div x-show="currentInstance === '{{ instance.instance_name }}' && qrCode"
+                 x-transition
+                 class="mt-5 flex flex-col items-center">
+                <p class="text-sm text-void-500 dark:text-void-400 mb-3">Scan this QR code with WhatsApp:</p>
+                <div class="p-4 bg-white rounded-2xl shadow-lg">
+                    <img :src="'data:image/png;base64,' + qrCode" alt="QR Code" class="w-64 h-64">
+                </div>
+                <p class="mt-3 text-xs text-void-400" x-show="polling">
+                    <i class="fas fa-spinner fa-spin mr-1"></i> Waiting for scan...
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- User Instances -->
+    {% set user_instances = instances | selectattr("user_instance") | list %}
+    {% if user_instances %}
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-users text-frost-500"></i>
+                User Instances
+                <span class="text-xs font-normal text-void-500">({{ user_instances | length }})</span>
+            </h3>
+        </div>
+        <div class="p-5">
+            <div class="space-y-3">
+                {% for inst in user_instances %}
+                <div class="flex items-center justify-between p-3 rounded-xl border border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-frost-500/10 flex items-center justify-center">
+                            <i class="fas fa-user text-frost-500 text-xs"></i>
+                        </div>
+                        <div>
+                            <span class="font-medium text-sm">{{ inst.instance_name }}</span>
+                            <span class="text-xs text-void-400 ml-1">({{ inst.agent_name }})</span>
+                            <div class="text-xs text-void-400">Owner: {{ inst.owner_id | default('?') }}</div>
+                        </div>
+                    </div>
+                    <span class="flex items-center gap-1.5 text-xs font-medium
+                        {% if inst.connected %}text-nordic-600 dark:text-nordic-400{% else %}text-void-400{% endif %}">
+                        <span class="w-2 h-2 rounded-full {% if inst.connected %}bg-nordic-500 animate-pulse{% else %}bg-void-300 dark:bg-void-600{% endif %}"></span>
+                        {{ 'Connected' if inst.connected else inst.state | title }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not instances and api_key_configured %}
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-8 text-center">
+            <i class="fab fa-whatsapp text-4xl text-void-300 dark:text-void-600 mb-4"></i>
+            <h3 class="text-lg font-semibold text-void-700 dark:text-void-300 mb-2">No WhatsApp Channels</h3>
+            <p class="text-sm text-void-500 dark:text-void-400">
+                Add a <code>whatsapp</code> channel to an agent YAML configuration to get started.
+            </p>
+            <div class="mt-4 bg-void-50 dark:bg-void-800 rounded-xl p-4 text-left text-sm font-mono text-void-600 dark:text-void-400 max-w-md mx-auto">
+                channels:<br>
+                &nbsp;&nbsp;whatsapp:<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;token_secret: EVOLUTION_API_KEY<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;instance_name: my-agent<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;allowed_users:<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- "393331234567"
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content_sidebar %}
+<!-- Info Card -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-info-circle text-frost-500"></i>
+            About WhatsApp
+        </h3>
+    </div>
+    <div class="p-5">
+        <p class="text-sm text-void-600 dark:text-void-400 mb-3">
+            WhatsApp channel via Evolution API (self-hosted).
+        </p>
+        <ul class="text-sm text-void-600 dark:text-void-400 space-y-1.5">
+            <li><i class="fas fa-check text-nordic-500 mr-2"></i>Text messages</li>
+            <li><i class="fas fa-check text-nordic-500 mr-2"></i>Voice notes & TTS</li>
+            <li><i class="fas fa-check text-nordic-500 mr-2"></i>Image & document sharing</li>
+            <li><i class="fas fa-check text-nordic-500 mr-2"></i>Inter-agent communication</li>
+            <li><i class="fas fa-check text-nordic-500 mr-2"></i>Memos & reminders</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Commands Card -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-terminal text-void-400"></i>
+            Commands
+        </h3>
+    </div>
+    <div class="p-5 text-sm text-void-600 dark:text-void-400 space-y-1">
+        <p><code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded">!help</code> - Show commands</p>
+        <p><code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded">!reset</code> - New session</p>
+        <p><code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded">!stop</code> - Cancel request</p>
+        <p><code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded">!memo</code> - List memos</p>
+        <p><code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded">!memory</code> - Memory mgmt</p>
+    </div>
+</div>
+
+<!-- Setup Guide -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-book text-void-400"></i>
+            Setup
+        </h3>
+    </div>
+    <div class="p-5 text-sm text-void-600 dark:text-void-400 space-y-2">
+        <p>1. Set <code>EVOLUTION_API_KEY</code> in .env</p>
+        <p>2. Add <code>whatsapp</code> channel to agent YAML</p>
+        <p>3. Start containers with <code>docker-compose up</code></p>
+        <p>4. Click "Connect" and scan QR code</p>
+        <p>5. Send a message to test</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function whatsappManager() {
+    return {
+        connecting: false,
+        currentInstance: null,
+        qrCode: null,
+        polling: false,
+        pollInterval: null,
+
+        async connectInstance(instanceName) {
+            this.connecting = true;
+            this.currentInstance = instanceName;
+            this.qrCode = null;
+
+            try {
+                const formData = new FormData();
+                formData.append('instance_name', instanceName);
+                formData.append('csrf_token', document.querySelector('[name=csrf_token]')?.value || '');
+
+                const resp = await fetch('/plugins/whatsapp/connect', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+
+                if (data.base64) {
+                    this.qrCode = data.base64;
+                    this.startPolling(instanceName);
+                } else if (data.error) {
+                    alert('Error: ' + JSON.stringify(data.error));
+                }
+            } catch (e) {
+                alert('Connection failed: ' + e.message);
+            } finally {
+                this.connecting = false;
+            }
+        },
+
+        startPolling(instanceName) {
+            this.polling = true;
+            if (this.pollInterval) clearInterval(this.pollInterval);
+
+            this.pollInterval = setInterval(async () => {
+                try {
+                    const resp = await fetch(`/plugins/whatsapp/status/${instanceName}`);
+                    const data = await resp.json();
+                    if (data.connected) {
+                        this.stopPolling();
+                        window.location.reload();
+                    }
+                } catch (e) {
+                    // Ignore polling errors
+                }
+            }, 2000);
+
+            // Stop after 2 minutes
+            setTimeout(() => {
+                if (this.polling) {
+                    this.stopPolling();
+                    this.qrCode = null;
+                }
+            }, 120000);
+        },
+
+        stopPolling() {
+            this.polling = false;
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
+        },
+
+        async sendTest(instanceName, phone) {
+            try {
+                const formData = new FormData();
+                formData.append('instance_name', instanceName);
+                formData.append('phone', phone);
+                formData.append('csrf_token', document.querySelector('[name=csrf_token]')?.value || '');
+
+                const resp = await fetch('/plugins/whatsapp/test', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+                if (data.status === 'sent') {
+                    // Visual feedback handled by Alpine
+                } else {
+                    alert('Failed: ' + JSON.stringify(data.error || data));
+                }
+            } catch (e) {
+                alert('Test failed: ' + e.message);
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

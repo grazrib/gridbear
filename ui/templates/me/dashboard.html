@@ -1,0 +1,63 @@
+{% extends "me/base.html" %}
+
+{% block title %}GridBear - Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Welcome -->
+    <div class="bg-gradient-to-r from-nordic-500/10 to-frost-500/10 dark:from-nordic-500/5 dark:to-frost-500/5 rounded-2xl border border-nordic-500/20 p-6">
+        <h2 class="text-xl font-semibold mb-1">{{ _("Hello,") }} {{ user.display_name or user.username }}</h2>
+        <p class="text-sm text-void-500 dark:text-void-400">{{ _("Welcome to your GridBear portal.") }}</p>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Chat -->
+        <a href="/me/chat" class="card-hover block bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-5">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-frost-500/10 flex items-center justify-center">
+                    <i class="fas fa-comments text-frost-500 text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-sm">{{ _("Chat") }}</h3>
+                    <p class="text-xs text-void-500 dark:text-void-400">{{ _("Talk to agents") }}</p>
+                </div>
+            </div>
+            {% if agents_count > 0 %}
+            <p class="mt-3 text-xs text-void-400">{{ agents_count }} {{ _("agents available") if agents_count != 1 else _("agent available") }}</p>
+            {% endif %}
+        </a>
+
+        <!-- Connections -->
+        <a href="/me/connections" class="card-hover block bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-5">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+                    <i class="fas fa-plug text-nordic-500 text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-sm">{{ _("Connections") }}</h3>
+                    <p class="text-xs text-void-500 dark:text-void-400">{{ _("Manage your services") }}</p>
+                </div>
+            </div>
+            <p class="mt-3 text-xs text-void-400">
+                {{ connected_count }} {{ _("connected out of") }} {{ total_connections }} {{ _("available") }}
+            </p>
+        </a>
+
+        <!-- Tools -->
+        <a href="/me/tools" class="card-hover block bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-5">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-ember-500/10 flex items-center justify-center">
+                    <i class="fas fa-wrench text-ember-500 text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-sm">{{ _("MCP Tools") }}</h3>
+                    <p class="text-xs text-void-500 dark:text-void-400">{{ _("Tool preferences") }}</p>
+                </div>
+            </div>
+            <p class="mt-3 text-xs text-void-400">{{ _("Configure available tools") }}</p>
+        </a>
+    </div>
+</div>
+{% endblock %}

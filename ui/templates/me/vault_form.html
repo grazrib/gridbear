@@ -1,0 +1,157 @@
+{% extends "me/base.html" %}
+
+{% block title %}{{ _("Edit") if edit_mode else _("Add") }} {{ _("Service") }} - {{ _("Credential Vault") }} - GridBear{% endblock %}
+{% block page_title %}{{ _("Edit") if edit_mode else _("Add") }} {{ _("Vault Service") }}{% endblock %}
+
+{% block content %}
+<div x-data="vaultForm()" class="max-w-3xl">
+    <form method="POST" action="{{ '/me/vault/' ~ entry.service_id ~ '/edit' if edit_mode else '/me/vault/add' }}">
+        {% include "partials/csrf_field.html" %}
+
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+            <div class="p-5 border-b border-void-200 dark:border-void-800">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-info-circle text-nordic-500"></i>
+                    {{ _("Service Details") }}
+                </h3>
+            </div>
+            <div class="p-5 space-y-4">
+                <!-- Service ID -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Service ID") }}</label>
+                    {% if edit_mode %}
+                    <input type="text" value="{{ entry.service_id }}" disabled
+                           class="w-full px-4 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-500 dark:text-void-400 font-mono text-sm">
+                    <input type="hidden" name="service_id" value="{{ entry.service_id }}">
+                    {% else %}
+                    <input type="text" name="service_id" required pattern="[a-z0-9][a-z0-9_\-]{0,62}"
+                           placeholder="e.g. portale-fornitori"
+                           class="w-full px-4 py-2.5 rounded-xl bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20 font-mono">
+                    <p class="text-xs text-void-400 mt-1">{{ _("Lowercase letters, numbers, hyphens, underscores. Cannot start with hyphen/underscore.") }}</p>
+                    {% endif %}
+                </div>
+                <!-- Name -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Name") }}</label>
+                    <input type="text" name="name" required
+                           value="{{ entry.name if edit_mode else '' }}"
+                           placeholder="e.g. Portale Fornitori"
+                           class="w-full px-4 py-2.5 rounded-xl bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20">
+                </div>
+                <!-- URL -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("URL") }}</label>
+                    <input type="url" name="url"
+                           value="{{ entry.url if edit_mode else '' }}"
+                           placeholder="https://example.com/login"
+                           class="w-full px-4 py-2.5 rounded-xl bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20">
+                </div>
+                <!-- Notes -->
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-300 mb-1">{{ _("Notes") }}</label>
+                    <textarea name="notes" rows="3"
+                              placeholder="{{ _('Optional notes for the agent (e.g. form layout hints)') }}"
+                              class="w-full px-4 py-2.5 rounded-xl bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 focus:ring-2 focus:ring-nordic-500/20 resize-y">{{ entry.notes if edit_mode else '' }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Credentials -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+            <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-key text-nordic-500"></i>
+                    {{ _("Credentials") }}
+                </h3>
+                <button type="button" @click="addField()"
+                        class="px-3 py-1.5 rounded-lg bg-nordic-500/10 hover:bg-nordic-500/20 text-nordic-600 dark:text-nordic-400 text-sm font-medium transition-colors">
+                    <i class="fas fa-plus mr-1"></i> {{ _("Add Field") }}
+                </button>
+            </div>
+            <div class="p-5 space-y-3">
+                <template x-for="(cred, idx) in credentials" :key="idx">
+                    <div class="flex items-start gap-3 p-3 rounded-xl bg-void-50 dark:bg-void-800/50 border border-void-100 dark:border-void-700">
+                        <!-- Key -->
+                        <div class="flex-1 min-w-0">
+                            <label class="block text-xs font-medium text-void-500 mb-1">{{ _("Key") }}</label>
+                            <input type="text" :name="'cred_key_' + idx" x-model="cred.key" required
+                                   placeholder="e.g. username"
+                                   class="w-full px-3 py-2 rounded-lg bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50 font-mono">
+                        </div>
+                        <!-- Value -->
+                        <div class="flex-1 min-w-0">
+                            <label class="block text-xs font-medium text-void-500 mb-1">{{ _("Value") }}</label>
+                            <div class="relative">
+                                <input :type="cred.showValue ? 'text' : 'password'"
+                                       :name="'cred_value_' + idx" x-model="cred.value"
+                                       :placeholder="cred.hasExisting ? {{ _('(keep existing)') | tojson }} : 'value'"
+                                       class="w-full px-3 py-2 pr-9 rounded-lg bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 text-void-900 dark:text-white text-sm focus:outline-none focus:border-nordic-500/50">
+                                <button type="button" @click="cred.showValue = !cred.showValue"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-void-400 hover:text-void-600 dark:hover:text-void-300">
+                                    <i class="fas text-sm" :class="cred.showValue ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Secret toggle -->
+                        <div class="pt-6 relative group/secret">
+                            <button type="button" @click="cred.secret = !cred.secret"
+                                    class="p-1.5 rounded-lg transition-colors"
+                                    :class="cred.secret ? 'text-nordic-500 hover:bg-nordic-500/10' : 'text-void-300 dark:text-void-600 hover:bg-void-100 dark:hover:bg-void-700'">
+                                <i class="fas" :class="cred.secret ? 'fa-shield-halved' : 'fa-eye'"></i>
+                            </button>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-lg bg-void-900 dark:bg-void-700 text-white text-xs whitespace-nowrap opacity-0 pointer-events-none group-hover/secret:opacity-100 transition-opacity"
+                                 x-text="cred.secret ? {{ _('Hidden from agent') | tojson }} : {{ _('Visible to agent') | tojson }}"></div>
+                            <input type="hidden" :name="'cred_secret_' + idx" :value="cred.secret ? 'on' : ''">
+                        </div>
+                        <!-- Remove -->
+                        <div class="pt-5">
+                            <button type="button" @click="removeField(idx)"
+                                    class="p-1.5 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-colors">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="credentials.length === 0" class="text-center py-6 text-void-400 dark:text-void-500 text-sm">
+                    {{ _('No credentials added. Click "Add Field" to start.') }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3">
+            <a href="/me/vault"
+               class="px-5 py-2.5 rounded-xl border border-void-200 dark:border-void-700 text-void-600 dark:text-void-300 hover:bg-void-50 dark:hover:bg-void-800 text-sm font-medium transition-colors">
+                {{ _("Cancel") }}
+            </a>
+            <button type="submit"
+                    class="px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                <i class="fas fa-save mr-1"></i> {{ _("Save Changes") if edit_mode else _("Create Service") }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function vaultForm() {
+    const existing = {{ credentials_json | tojson }};
+    return {
+        credentials: existing.map(c => ({
+            key: c.key,
+            value: '',
+            secret: c.secret,
+            showValue: false,
+            hasExisting: true,
+        })).concat(existing.length === 0 ? [{ key: '', value: '', secret: true, showValue: false, hasExisting: false }] : []),
+        addField() {
+            this.credentials.push({ key: '', value: '', secret: true, showValue: false, hasExisting: false });
+        },
+        removeField(idx) {
+            this.credentials.splice(idx, 1);
+        },
+    };
+}
+</script>
+{% endblock %}

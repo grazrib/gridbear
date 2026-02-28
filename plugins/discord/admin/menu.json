@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Discord",
+      "url": "/plugins/discord",
+      "icon": "fab fa-discord",
+      "section": "channels",
+      "priority": 20
+    }
+  ]
+}

@@ -1,0 +1,230 @@
+<!-- Provider Group — shared partial for base plugin pages (image, tts).
+     Expects: providers (list of provider dicts), base_plugin_name (str),
+              encryption_available (bool)  -->
+
+{% if providers %}
+{% for provider in providers %}
+<div x-data="{ open: true }" class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <!-- Provider Header (collapsible) -->
+    <button @click="open = !open" type="button"
+            class="w-full p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent flex items-center justify-between cursor-pointer hover:bg-void-50 dark:hover:bg-void-800/30 transition-colors">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-puzzle-piece text-frost-500"></i>
+            <div class="text-left">
+                <h3 class="font-semibold text-void-900 dark:text-white">{{ provider.display_name }}</h3>
+                <p class="text-sm text-void-500 dark:text-void-400 mt-0.5">{{ provider.description }}</p>
+            </div>
+        </div>
+        <i class="fas fa-chevron-down text-void-400 transition-transform" :class="{ 'rotate-180': open }"></i>
+    </button>
+
+    <div x-show="open" x-collapse>
+        {# ── Secrets ── #}
+        {% set secret_fields = [] %}
+        {% set _sp = provider.config_schema.get('properties', provider.config_schema) if provider.config_schema else {} %}
+        {% for key, schema in _sp.items() %}
+            {% if schema is mapping and schema.get('type') == 'secret' %}
+                {% set _ = secret_fields.append({'key': key, 'schema': schema}) %}
+            {% endif %}
+        {% endfor %}
+
+        {% if secret_fields %}
+        <div class="p-5 border-b border-void-200 dark:border-void-800">
+            <h4 class="text-sm font-semibold text-void-700 dark:text-void-200 flex items-center gap-2 mb-4">
+                <i class="fas fa-key text-ember-500 text-xs"></i>
+                Secrets
+            </h4>
+            <div class="space-y-4">
+                {% for item in secret_fields %}
+                {% set key = item.key %}
+                {% set schema = item.schema %}
+                {% set env_key = schema.get('env', key.upper()) %}
+                {% set secret_status = provider.secrets_status.get(env_key, 'missing') %}
+
+                <div class="space-y-2" id="secret-group-{{ provider.name }}-{{ key }}">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">
+                        {{ schema.get('description', key) }}
+                    </label>
+
+                    {% if secret_status == 'encrypted' or secret_status == 'env' %}
+                    <div class="flex items-center gap-2" id="locked-{{ provider.name }}-{{ key }}">
+                        <input type="text" readonly
+                               value="{% if secret_status == 'encrypted' %}••••••••••••{% else %}(from ENV){% endif %}"
+                               class="flex-1 bg-void-100 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-500 dark:text-void-400">
+                        <span class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium
+                            {% if secret_status == 'encrypted' %}bg-nordic-500/10 text-nordic-600 dark:text-nordic-400{% else %}bg-ember-500/10 text-ember-600 dark:text-ember-400{% endif %}">
+                            <i class="fas fa-{% if secret_status == 'encrypted' %}lock{% else %}terminal{% endif %}"></i>
+                            {% if secret_status == 'encrypted' %}Encrypted{% else %}ENV{% endif %}
+                        </span>
+                        {% if encryption_available %}
+                        <button type="button" onclick="unlockSecret('{{ provider.name }}-{{ key }}')"
+                                class="px-3 py-2 rounded-lg bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-xs font-medium transition-colors">
+                            <i class="fas fa-edit mr-1"></i> Change
+                        </button>
+                        {% endif %}
+                        {% if secret_status == 'encrypted' %}
+                        <form method="POST" action="/plugins/{{ base_plugin_name }}/admin/{{ provider.name }}/secret/{{ env_key }}/delete" class="inline">
+                            {% include "partials/csrf_field.html" %}
+                            <button type="submit" onclick="return confirm('Delete this secret?')"
+                                    class="px-2 py-2 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 transition-colors">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+
+                    <div class="hidden items-center gap-2" id="unlocked-{{ provider.name }}-{{ key }}" style="display: none;">
+                        <form method="POST" action="/plugins/{{ base_plugin_name }}/admin/{{ provider.name }}/secret/{{ env_key }}" class="flex-1 flex items-center gap-2">
+                            {% include "partials/csrf_field.html" %}
+                            <input type="password" name="secret_{{ key }}" placeholder="Enter new value"
+                                   class="flex-1 bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                            <button type="submit"
+                                    class="px-3 py-2 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-xs font-medium transition-colors">
+                                <i class="fas fa-save mr-1"></i> Save
+                            </button>
+                        </form>
+                        <button type="button" onclick="lockSecret('{{ provider.name }}-{{ key }}')"
+                                class="px-2 py-2 rounded-lg hover:bg-void-100 dark:hover:bg-void-800 text-void-500 transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    {% else %}
+                    <div class="p-2 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-red-600 dark:text-red-400 text-xs mb-2">
+                        <i class="fas fa-times-circle"></i>
+                        <span class="font-medium">Not configured</span>
+                    </div>
+                    <form method="POST" action="/plugins/{{ base_plugin_name }}/admin/{{ provider.name }}/secret/{{ env_key }}" class="flex items-center gap-2">
+                        {% include "partials/csrf_field.html" %}
+                        <input type="password" name="secret_{{ key }}" placeholder="Enter secret value"
+                               {% if not encryption_available %}disabled{% endif %}
+                               class="flex-1 bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all disabled:opacity-50">
+                        <button type="submit" {% if not encryption_available %}disabled{% endif %}
+                                class="px-3 py-2 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-save mr-1"></i> Save
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    <p class="text-xs text-void-500 dark:text-void-400">
+                        ENV: <code class="font-mono bg-void-100 dark:bg-void-800 px-1 py-0.5 rounded text-xs">{{ env_key }}</code>
+                    </p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── Config Fields ── #}
+        {% set config_fields = [] %}
+        {% for key, schema in _sp.items() %}
+            {% if schema is mapping and key not in ('type', 'properties', 'definitions', 'required', '$schema') and schema.get('type') != 'secret' %}
+                {% set _ = config_fields.append({'key': key, 'schema': schema}) %}
+            {% endif %}
+        {% endfor %}
+
+        {% if config_fields %}
+        <form method="POST" action="/plugins/{{ base_plugin_name }}/admin/{{ provider.name }}">
+            {% include "partials/csrf_field.html" %}
+            <div class="p-5 space-y-4">
+                <h4 class="text-sm font-semibold text-void-700 dark:text-void-200 flex items-center gap-2">
+                    <i class="fas fa-sliders text-nordic-500 text-xs"></i>
+                    Configuration
+                </h4>
+                {% for item in config_fields %}
+                {% set key = item.key %}
+                {% set schema = item.schema %}
+                {% set current_value = provider.current_config.get(key, schema.get('default', '')) %}
+                {% set field_type = schema.get('type', 'string') %}
+
+                <div class="space-y-1.5">
+                    <label for="{{ provider.name }}-{{ key }}" class="block text-sm font-medium text-void-700 dark:text-void-200">
+                        {{ schema.get('description', key) }}
+                    </label>
+
+                    {% if key == 'default_voice' and base_plugin_name == 'tts' and not schema.get('enum') %}
+                    {# Dynamic voice dropdown — populated via JS from /agents/api/voices/{provider} #}
+                    <select id="{{ provider.name }}-{{ key }}" name="{{ key }}"
+                            data-voices-provider="{{ provider.name }}"
+                            data-current-voice="{{ current_value }}"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="{{ current_value }}" selected>{{ current_value }} (loading...)</option>
+                    </select>
+
+                    {% elif key == 'voices' and base_plugin_name == 'tts' and field_type == 'object' %}
+                    {# Per-locale voice mapping with dynamic dropdowns #}
+                    <input type="hidden" id="{{ provider.name }}-{{ key }}" name="{{ key }}" value="{{ current_value|tojson }}">
+                    <div class="space-y-2" data-voice-map="{{ provider.name }}" data-voice-map-field="{{ provider.name }}-{{ key }}">
+                        {% for locale, voice in (current_value.items() if current_value is mapping else {}.items()) %}
+                        <div class="flex items-center gap-2 voice-map-row">
+                            <span class="inline-flex items-center justify-center w-10 px-2 py-1.5 rounded-lg bg-void-100 dark:bg-void-800 text-xs font-mono font-semibold text-void-600 dark:text-void-300">{{ locale }}</span>
+                            <select data-voice-locale="{{ locale }}" data-voices-provider="{{ provider.name }}" data-current-voice="{{ voice }}"
+                                    class="flex-1 bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                                <option value="{{ voice }}" selected>{{ voice }} (loading...)</option>
+                            </select>
+                            <button type="button" onclick="removeVoiceRow(this)" class="px-2 py-2 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-colors">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        {% endfor %}
+                        <button type="button" onclick="addVoiceRow(this.parentElement, '{{ provider.name }}')"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-nordic-600 dark:text-nordic-400 hover:bg-nordic-500/10 transition-colors">
+                            <i class="fas fa-plus"></i> Add locale
+                        </button>
+                    </div>
+
+                    {% elif schema.get('enum') %}
+                    <select id="{{ provider.name }}-{{ key }}" name="{{ key }}"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        {% for option in schema.enum %}
+                        <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+
+                    {% elif field_type == 'boolean' %}
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="{{ provider.name }}-{{ key }}" name="{{ key }}" {% if current_value %}checked{% endif %} class="sr-only peer">
+                        <div class="w-11 h-6 bg-void-200 dark:bg-void-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-nordic-500"></div>
+                    </label>
+
+                    {% elif field_type == 'integer' %}
+                    <input type="number" id="{{ provider.name }}-{{ key }}" name="{{ key }}"
+                           value="{{ current_value }}" placeholder="{{ schema.get('default', '') }}"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+
+                    {% elif field_type == 'object' or field_type == 'array' %}
+                    <textarea id="{{ provider.name }}-{{ key }}" name="{{ key }}" rows="3"
+                              placeholder="JSON format"
+                              class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all font-mono">{{ current_value|tojson(indent=2) if current_value else '' }}</textarea>
+                    <p class="text-xs text-void-500 dark:text-void-400">Enter valid JSON</p>
+
+                    {% else %}
+                    <input type="text" id="{{ provider.name }}-{{ key }}" name="{{ key }}"
+                           value="{{ current_value }}" placeholder="{{ schema.get('default', '') }}"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                    {% endif %}
+
+                    {% if schema.get('default') is not none %}
+                    <p class="text-xs text-void-500 dark:text-void-400">Default: <code class="font-mono bg-void-100 dark:bg-void-800 px-1 py-0.5 rounded text-xs">{{ schema.get('default') }}</code></p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <div class="px-5 pb-5">
+                <button type="submit"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-all shadow-md shadow-nordic-500/20">
+                    <i class="fas fa-save"></i>
+                    Save {{ provider.display_name }}
+                </button>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 p-8 text-center">
+    <i class="fas fa-puzzle-piece text-3xl text-void-300 dark:text-void-600 mb-3"></i>
+    <p class="text-void-500 dark:text-void-400">No providers enabled. Enable a provider plugin to configure it here.</p>
+</div>
+{% endif %}

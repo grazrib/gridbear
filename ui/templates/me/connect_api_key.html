@@ -1,0 +1,46 @@
+{% extends "me/base.html" %}
+
+{% block title %}GridBear - {{ _("Connect") }} {{ service.name }}{% endblock %}
+{% block page_title %}{{ _("Connect") }} {{ service.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    <a href="/me/connections" class="inline-flex items-center gap-2 text-sm text-void-500 hover:text-nordic-500 mb-4">
+        <i class="fas fa-arrow-left text-xs"></i> {{ _("Back to connections") }}
+    </a>
+
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <div class="flex items-center gap-3 mb-5">
+            <div class="w-10 h-10 rounded-xl bg-{{ service.color or 'gray' }}-500/10 flex items-center justify-center">
+                <i class="{{ service.icon or 'fas fa-cube' }} text-{{ service.color or 'gray' }}-500 text-lg"></i>
+            </div>
+            <div>
+                <h3 class="font-semibold">{{ service.name }}</h3>
+                <p class="text-xs text-void-400">{{ service.description }}</p>
+            </div>
+        </div>
+
+        {% if error %}
+        <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4 text-sm text-red-600 dark:text-red-400">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/me/connections/{{ plugin_name }}/{{ service.id }}/connect" class="space-y-4">
+            {% include "partials/csrf_field.html" %}
+
+            <div>
+                <label for="api_key" class="block text-sm font-medium mb-1.5">{{ _("API Key / Token") }}</label>
+                <input type="password" id="api_key" name="api_key" required
+                       class="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all font-mono"
+                       placeholder="{{ _('Enter the key...') }}">
+            </div>
+
+            <button type="submit"
+                    class="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-nordic-500 to-nordic-600 text-white text-sm font-medium hover:from-nordic-600 hover:to-nordic-700 transition-all shadow-lg shadow-nordic-500/20">
+                <i class="fas fa-link mr-1.5"></i>{{ _("Connect") }}
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

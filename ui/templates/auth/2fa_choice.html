@@ -1,0 +1,53 @@
+{% extends "auth/auth_base.html" %}
+
+{% block title %}Choose Authentication - GridBear{% endblock %}
+{% block card_width %}max-w-lg{% endblock %}
+
+{% block extra_css %}
+.method-card {
+    transition: all 0.2s;
+}
+.method-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(45, 212, 191, 0.15);
+}
+{% endblock %}
+
+{% block header %}
+<div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-nordic-500/10 flex items-center justify-center">
+    <i class="fas fa-shield-halved text-nordic-400 text-2xl"></i>
+</div>
+<h1 class="text-2xl font-semibold text-white mb-2">Two-Factor Authentication</h1>
+<p class="text-slate-400 text-sm">Choose your verification method</p>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+    {% if has_totp %}
+    <a href="/auth/2fa" class="method-card block p-6 rounded-2xl bg-void-800/50 border border-white/10 hover:border-nordic-500/30 text-center cursor-pointer">
+        <div class="w-14 h-14 mx-auto mb-3 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+            <i class="fas fa-mobile-screen text-nordic-400 text-xl"></i>
+        </div>
+        <h3 class="text-white font-medium mb-1">Authenticator App</h3>
+        <p class="text-slate-500 text-xs">Enter a code from your app</p>
+    </a>
+    {% endif %}
+
+    {% if has_webauthn %}
+    <a href="/auth/2fa-passkey" class="method-card block p-6 rounded-2xl bg-void-800/50 border border-white/10 hover:border-frost-500/30 text-center cursor-pointer">
+        <div class="w-14 h-14 mx-auto mb-3 rounded-xl bg-frost-500/10 flex items-center justify-center">
+            <i class="fas fa-fingerprint text-frost-400 text-xl"></i>
+        </div>
+        <h3 class="text-white font-medium mb-1">Passkey</h3>
+        <p class="text-slate-500 text-xs">Use fingerprint, Face ID or security key</p>
+    </a>
+    {% endif %}
+</div>
+
+<div class="text-center">
+    <a href="/auth/login" class="text-sm text-slate-500 hover:text-nordic-400 transition-colors flex items-center justify-center gap-2">
+        <i class="fas fa-arrow-left"></i>
+        Back to login
+    </a>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{
+  "name": "image-pollinations",
+  "version": "0.0.1",
+  "type": "service",
+  "provides": "image",
+  "instantiation": "per-agent",
+  "display_name": "Pollinations (Free)",
+  "description": "Image generation using Pollinations.ai API (free, no API key required)",
+  "entry_point": "service.py",
+  "class_name": "PollinationsImageService",
+  "config_schema": {
+    "model": {
+      "type": "string",
+      "default": "nanobanana-pro",
+      "description": "Image generation model"
+    },
+    "width": {
+      "type": "integer",
+      "default": 1024,
+      "description": "Default image width"
+    },
+    "height": {
+      "type": "integer",
+      "default": 1024,
+      "description": "Default image height"
+    }
+  },
+  "dependencies": []
+}

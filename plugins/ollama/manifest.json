@@ -1,0 +1,46 @@
+{
+  "name": "ollama",
+  "version": "0.0.1",
+  "type": "runner",
+  "description": "Local LLM runner via Ollama (free, on-premise, CPU/GPU)",
+  "entry_point": "runner.py",
+  "class_name": "OllamaRunner",
+  "config_schema": {
+    "host": {
+      "type": "string",
+      "default": "http://localhost:11434",
+      "description": "Ollama API endpoint (override with OLLAMA_URL env)"
+    },
+    "model": {
+      "type": "string",
+      "enum": [
+        "qwen3:8b", "qwen3:0.6b", "qwen2.5:7b",
+        "llama3.1:8b", "llama3.2:3b",
+        "mistral:7b", "phi4-mini:3.8b"
+      ],
+      "default": "qwen3:8b",
+      "description": "Default model (must be pulled on Ollama)"
+    },
+    "timeout": {
+      "type": "integer",
+      "default": 300,
+      "description": "Request timeout in seconds (higher for CPU inference)"
+    },
+    "max_output_tokens": { "type": "integer", "default": 4096 },
+    "max_tool_iterations": { "type": "integer", "default": 10 },
+    "max_tools": { "type": "integer", "default": 0 },
+    "notify_tool_use": { "type": "boolean", "default": true },
+    "context_length": {
+      "type": "integer",
+      "default": 8192,
+      "description": "Context window size passed as num_ctx to Ollama"
+    },
+    "auto_pull": {
+      "type": "boolean",
+      "default": true,
+      "description": "Automatically pull model if not available on Ollama"
+    }
+  },
+  "dependencies": [],
+  "models_refreshable": true
+}

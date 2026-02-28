@@ -1,0 +1,20 @@
+{% extends "plugins/plugin_base.html" %}
+
+{% block plugin_secrets %}{% endblock %}
+{% block plugin_config_fields %}{% endblock %}
+
+{% block plugin_content_after %}
+<div class="space-y-6">
+    {% include "plugins/partials/default_provider.html" %}
+    <div class="flex items-center gap-3">
+        <i class="fas fa-microphone text-frost-500 text-lg"></i>
+        <div>
+            <h2 class="text-lg font-semibold text-void-900 dark:text-white">Transcription Providers</h2>
+            <p class="text-sm text-void-500 dark:text-void-400">Configure the audio transcription providers available to your agents</p>
+        </div>
+    </div>
+    {% include "plugins/partials/provider_group.html" %}
+</div>
+{% endblock %}
+
+{# unlockSecret/lockSecret inherited from plugin_base.html #}

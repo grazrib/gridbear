@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "LiveKit",
+      "url": "/plugin/livekit-agent",
+      "icon": "fas fa-video",
+      "section": "services",
+      "priority": 15
+    }
+  ]
+}

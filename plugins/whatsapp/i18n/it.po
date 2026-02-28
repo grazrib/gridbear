@@ -1,0 +1,122 @@
+# Italian translations for GridBear WhatsApp adapter
+# Copyright (C) 2024 GridBear
+# This file is distributed under the same license as GridBear.
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: it\n"
+
+msgid "Not authorized."
+msgstr "Non sei autorizzato."
+
+msgid "Hello! I'm your GridBear assistant.\nWrite anything and I'll respond.\nUse !reset to start a new conversation."
+msgstr "Ciao! Sono il tuo assistente GridBear.\nScrivimi qualsiasi cosa e ti rispondo.\nUsa !reset per iniziare una nuova conversazione."
+
+msgid "Session reset. Start a new chat!"
+msgstr "Sessione resettata. Inizia una nuova chat!"
+
+msgid "*GridBear Commands*\n\n*Chat:*\n!start - Welcome message\n!reset - Reset session\n!help - Show this message\n!stop - Stop current request\n\n*Memory:*\n!memory - Memory management\n\n*Memos/Reminders:*\n!memo - List memos\n!delmemo <id> - Delete memo\n!delmemo all - Delete all\n\n*Creating memos:*\n\"gridbear remind me every Monday at 9 to X\"\n\"gridbear in 30 minutes tell me Y\"\n\nYou can also send voice notes and attachments."
+msgstr "*Comandi GridBear*\n\n*Chat:*\n!start - Messaggio di benvenuto\n!reset - Resetta la sessione\n!help - Mostra questo messaggio\n!stop - Ferma la richiesta in corso\n\n*Memoria:*\n!memory - Gestione memoria\n\n*Memo/Promemoria:*\n!memo - Lista memo\n!delmemo <id> - Elimina memo\n!delmemo all - Elimina tutti\n\n*Creare memo:*\n\"gridbear memo ogni lunedi alle 9 ricordami X\"\n\"gridbear tra 30 minuti dimmi Y\"\n\nPuoi anche inviare note vocali e allegati."
+
+msgid "Unknown command. Use !help for a list."
+msgstr "Comando sconosciuto. Usa !help per la lista."
+
+msgid "Memo service not available."
+msgstr "Servizio memo non disponibile."
+
+msgid "No memos."
+msgstr "Nessun memo."
+
+msgid "*Your memos:*\n"
+msgstr "*I tuoi memo:*\n"
+
+msgid "Last run:"
+msgstr "Ultima esecuzione:"
+
+msgid "Usage: !delmemo <id> or !delmemo all"
+msgstr "Uso: !delmemo <id> oppure !delmemo all"
+
+msgid "Deleted {count} memo(s)."
+msgstr "Eliminati {count} memo."
+
+msgid "Memo {memo_id} deleted."
+msgstr "Memo {memo_id} eliminato."
+
+msgid "Memo not found."
+msgstr "Memo non trovato."
+
+msgid "Invalid ID."
+msgstr "ID non valido."
+
+msgid "You don't have permission for this command."
+msgstr "Non hai i permessi per questo comando."
+
+msgid "Memory service not available."
+msgstr "Servizio memoria non disponibile."
+
+msgid "*Memory Management*\n\n!memory stats - Statistics\n!memory list [n] - Recent memories\n!memory search <query> - Search\n!memory delete <id> - Delete one\n!memory clear <type> - Clear by type"
+msgstr "*Gestione Memoria*\n\n!memory stats - Statistiche\n!memory list [n] - Ultime n memorie\n!memory search <query> - Ricerca\n!memory delete <id> - Elimina una\n!memory clear <tipo> - Pulisci per tipo"
+
+msgid "Memory deleted."
+msgstr "Memoria eliminata."
+
+msgid "No results."
+msgstr "Nessun risultato."
+
+msgid "Error: {error}"
+msgstr "Errore: {error}"
+
+msgid "Generating image..."
+msgstr "Genero l'immagine..."
+
+msgid "Voice service not available."
+msgstr "Servizio voce non disponibile."
+
+msgid "Could not download voice message."
+msgstr "Non riesco a scaricare il messaggio vocale."
+
+msgid "Transcribing..."
+msgstr "Trascrivo..."
+
+msgid "Could not transcribe voice message."
+msgstr "Non sono riuscita a trascrivere il messaggio vocale."
+
+msgid "Could not download attachment."
+msgstr "Non riesco a scaricare l'allegato."
+
+msgid "Services not available."
+msgstr "Servizi non disponibili."
+
+msgid "[Attachment: {filename}]"
+msgstr "[Allegato: {filename}]"
+
+msgid "A request is already running. Use !stop to cancel it."
+msgstr "Una richiesta è già in corso. Usa !stop per annullarla."
+
+msgid "Request cancelled."
+msgstr "Richiesta annullata."
+
+msgid "No active request to stop."
+msgstr "Nessuna richiesta attiva da fermare."
+
+msgid "Stopping..."
+msgstr "Fermo..."
+
+msgid "Cleared {count} memories."
+msgstr "Rimosse {count} memorie."
+
+msgid "Usage: !memory search <query>"
+msgstr "Uso: !memory search <query>"
+
+msgid "Usage: !memory delete <id>"
+msgstr "Uso: !memory delete <id>"
+
+msgid "Usage: !memory clear <type>\n\nTypes: all, episodic, facts"
+msgstr "Uso: !memory clear <tipo>\n\nTipi: all, episodic, facts"
+
+msgid "Invalid type. Use: all, episodic, facts"
+msgstr "Tipo non valido. Usa: all, episodic, facts"
+
+msgid "Memories cleared (type: {mode})."
+msgstr "Memorie cancellate (tipo: {mode})."

@@ -1,0 +1,21 @@
+{
+  "name": "sessions",
+  "version": "0.1.1",
+  "type": "service",
+  "description": "Session management with PostgreSQL storage and chat history search",
+  "entry_point": "service.py",
+  "class_name": "SessionService",
+  "config_schema": {
+    "ttl_hours": {
+      "type": "integer",
+      "default": 4,
+      "description": "Session TTL in hours"
+    }
+  },
+  "context_skills": [{
+    "name": "sessions-instructions",
+    "title": "Chat History Search Instructions",
+    "file": "skills/instructions.md"
+  }],
+  "dependencies": []
+}

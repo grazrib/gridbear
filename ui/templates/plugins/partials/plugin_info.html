@@ -1,0 +1,63 @@
+<!-- Plugin Info Card -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-info-circle text-frost-500"></i>
+            Plugin Info
+        </h3>
+    </div>
+    <div class="p-5 space-y-4">
+        <div>
+            <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Name</p>
+            <p class="font-medium text-void-900 dark:text-white">{{ plugin.display_name }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Version</p>
+            <p class="font-mono text-void-600 dark:text-void-300">v{{ plugin.version }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Type</p>
+            {% if plugin.type == 'runner' %}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-medium">
+                <i class="fas fa-microchip"></i> Runner
+            </span>
+            {% elif plugin.type == 'channel' %}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-frost-500/10 text-frost-600 dark:text-frost-400 text-xs font-medium">
+                <i class="fas fa-tower-broadcast"></i> Channel
+            </span>
+            {% elif plugin.type == 'service' %}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+                <i class="fas fa-cube"></i> Service
+            </span>
+            {% elif plugin.type == 'mcp' %}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">
+                <i class="fas fa-plug"></i> MCP Provider
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-void-200 dark:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium">
+                {{ plugin.type }}
+            </span>
+            {% endif %}
+        </div>
+        {% if plugin.provides %}
+        <div>
+            <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Provides</p>
+            <code class="text-sm font-mono bg-void-100 dark:bg-void-800 px-2 py-1 rounded-lg text-void-600 dark:text-void-300">{{ plugin.provides }}</code>
+        </div>
+        {% endif %}
+        {% if plugin.model %}
+        <div>
+            <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Model</p>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-aurora-purple-500/10 text-aurora-purple-600 dark:text-aurora-purple-400 text-xs font-medium">
+                <i class="fas fa-brain"></i> {{ plugin.model }}
+            </span>
+        </div>
+        {% endif %}
+        {% if plugin.description %}
+        <div>
+            <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Description</p>
+            <p class="text-sm text-void-600 dark:text-void-300">{{ plugin.description }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>

@@ -1,0 +1,215 @@
+{# Extra sections for runner plugins: CLI auth + model management #}
+{% if plugin.type == "runner" %}
+<input type="hidden" id="csrf-token" value="{{ csrf_token(request) }}">
+
+<!-- Model Management -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-microchip text-frost-500"></i>
+            Models
+        </h3>
+    </div>
+    <div class="p-5">
+        <div class="border border-void-200 dark:border-void-700 rounded-xl p-4" x-data="{ expanded: false }">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <button @click="expanded = !expanded"
+                            class="text-void-500 hover:text-void-900 dark:hover:text-white transition-colors">
+                        <i class="fas fa-chevron-right text-xs transition-transform" :class="expanded ? 'rotate-90' : ''"></i>
+                    </button>
+                    <div>
+                        <span class="font-medium text-void-900 dark:text-white">{{ runner_model_info.models | length }} models</span>
+                        {% if runner_model_info.last_updated %}
+                        <span class="text-xs text-void-400 ml-2" title="{{ runner_model_info.last_updated }}">
+                            &middot; {{ runner_model_info.source or 'unknown' }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if runner_model_info.has_refresh %}
+                    <button onclick="refreshModels()"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-nordic-500/10 hover:bg-nordic-500/20 text-nordic-600 dark:text-nordic-400 text-xs font-medium transition-colors">
+                        <i class="fas fa-sync-alt" id="refresh-icon"></i>
+                        Refresh
+                    </button>
+                    {% endif %}
+                    <button onclick="editModels()"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium transition-colors">
+                        <i class="fas fa-pen"></i>
+                        Edit
+                    </button>
+                </div>
+            </div>
+            <div x-show="expanded" x-collapse class="mt-3 space-y-1">
+                {% for model in runner_model_info.models %}
+                <div class="flex items-center justify-between py-1.5 px-3 rounded-lg bg-void-50 dark:bg-void-800/30 text-sm">
+                    <span class="text-void-900 dark:text-white font-mono">{{ model.id }}</span>
+                    <span class="text-void-500 dark:text-void-400 text-xs">{{ model.name }}{% if model.api_id and model.api_id != model.id %} &middot; {{ model.api_id }}{% endif %}</span>
+                </div>
+                {% endfor %}
+                {% if not runner_model_info.models %}
+                <p class="text-sm text-void-400 italic py-2">No models loaded yet. Start GridBear or click Refresh.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Models Modal -->
+<dialog id="models_modal" class="rounded-2xl bg-white dark:bg-void-900 border border-void-200 dark:border-void-800 p-0 backdrop:bg-black/50 max-w-lg w-full">
+    <div class="p-6">
+        <h3 class="text-lg font-semibold text-void-900 dark:text-white flex items-center gap-2 mb-4">
+            <i class="fas fa-microchip text-frost-500"></i>
+            Edit Models
+        </h3>
+        <div class="mb-4">
+            <p class="text-xs text-void-500 dark:text-void-400 mb-2">
+                One model per line: <code class="px-1 py-0.5 rounded bg-void-100 dark:bg-void-800">id | Display Name | api_id</code> (api_id optional)
+            </p>
+            <textarea id="models-editor" rows="10"
+                      class="w-full rounded-xl border border-void-200 dark:border-void-700 bg-void-50 dark:bg-void-800 text-void-900 dark:text-white px-4 py-3 font-mono text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500"
+                      placeholder="sonnet | Sonnet | claude-sonnet-4-5-20250929"></textarea>
+        </div>
+        <div id="modal-error" class="hidden mb-3 p-3 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-sm"></div>
+        <div class="flex justify-end gap-2">
+            <button type="button" onclick="models_modal.close()"
+                    class="px-4 py-2 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 font-medium transition-colors">
+                Cancel
+            </button>
+            <button type="button" onclick="saveModels()"
+                    class="px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-colors">
+                <i class="fas fa-save mr-2"></i>Save
+            </button>
+        </div>
+    </div>
+</dialog>
+
+<!-- CLI Authentication -->
+{% if runner_has_cli %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-terminal text-nordic-500"></i>
+            CLI Authentication
+        </h3>
+    </div>
+    <div class="p-5">
+        <div class="border border-void-200 dark:border-void-700 rounded-xl p-4" x-data="cliAuth()">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-frost-500/10 flex items-center justify-center">
+                        <i class="fas fa-terminal text-frost-500"></i>
+                    </div>
+                    <div>
+                        <span class="font-medium text-void-900 dark:text-white">{{ runner_cli_name }}</span>
+                        <template x-if="status.email">
+                            <span class="text-xs text-void-400 ml-2" x-text="status.email"></span>
+                        </template>
+                        <template x-if="status.detail">
+                            <span class="text-xs text-void-400 ml-2" x-text="status.detail"></span>
+                        </template>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span x-show="loading" class="text-xs text-void-400"><i class="fas fa-spinner fa-spin"></i></span>
+                    <span x-show="!loading && status.loggedIn && !status.token_expired"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+                        <i class="fas fa-check-circle"></i> Authenticated
+                    </span>
+                    <span x-show="!loading && status.token_expired"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
+                        <i class="fas fa-exclamation-triangle"></i> Token expired
+                    </span>
+                    <span x-show="!loading && !status.loggedIn && !status.token_expired && !status.error"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">
+                        <i class="fas fa-times-circle"></i> Not logged in
+                    </span>
+                    <span x-show="!loading && status.error && !status.token_expired"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-void-200 dark:bg-void-700 text-void-500 text-xs font-medium"
+                          x-text="status.error">
+                    </span>
+                </div>
+            </div>
+            <!-- Auth actions -->
+            <div class="flex flex-wrap gap-2">
+                {% for action in runner_auth_actions %}
+                {% if action.type == "login" %}
+                <button @click="startLogin()" :disabled="loading" x-show="!status.loggedIn || status.token_expired"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-nordic-500/10 hover:bg-nordic-500/20 text-nordic-600 dark:text-nordic-400 text-xs font-medium transition-colors disabled:opacity-50">
+                    <i class="fas fa-sign-in-alt"></i> {{ action.label }}
+                </button>
+                {% elif action.type == "token" %}
+                <button @click="showTokenInput = !showTokenInput" :disabled="loading" x-show="!status.loggedIn || status.token_expired"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium transition-colors disabled:opacity-50">
+                    <i class="fas fa-key"></i> {{ action.label }}
+                </button>
+                {% endif %}
+                {% endfor %}
+                <button @click="doLogout()" :disabled="loading" x-show="status.loggedIn"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-ember-500/10 hover:bg-ember-500/20 text-ember-600 dark:text-ember-400 text-xs font-medium transition-colors disabled:opacity-50">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+            <!-- Token/API key input -->
+            <div x-show="showTokenInput" x-collapse class="mt-3">
+                {% if runner_token_hint %}
+                <p class="text-xs text-void-500 dark:text-void-400 mb-2">{{ runner_token_hint }}</p>
+                {% endif %}
+                <div class="flex gap-2">
+                    <input type="password" x-model="tokenValue"
+                           placeholder="{{ runner_token_placeholder or 'Paste here...' }}"
+                           class="flex-1 rounded-lg border border-void-200 dark:border-void-700 bg-void-50 dark:bg-void-800 text-void-900 dark:text-white px-3 py-1.5 text-sm font-mono focus:ring-2 focus:ring-nordic-500/40">
+                    <button @click="submitToken()" :disabled="!tokenValue || loading"
+                            class="px-3 py-1.5 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-xs font-medium transition-colors disabled:opacity-50">
+                        Save
+                    </button>
+                </div>
+            </div>
+            <!-- Login URL display -->
+            <div x-show="loginUrl" x-collapse class="mt-3">
+                <p class="text-xs text-void-500 dark:text-void-400 mb-2">Open this URL to complete authentication:</p>
+                <a :href="loginUrl" x-text="loginUrl" target="_blank" rel="noopener"
+                   class="text-sm text-nordic-500 hover:underline break-all font-mono"></a>
+                <template x-if="deviceCode">
+                    <div class="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-void-100 dark:bg-void-800">
+                        <span class="font-mono text-lg font-bold text-void-900 dark:text-white" x-text="deviceCode"></span>
+                        <button @click="navigator.clipboard.writeText(deviceCode)" class="text-void-400 hover:text-void-600">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </template>
+                <button @click="checkStatus()" class="ml-3 text-xs text-void-400 hover:text-void-600 dark:hover:text-void-200">
+                    <i class="fas fa-sync-alt"></i> Check
+                </button>
+            </div>
+            <!-- Authorization code input -->
+            <div x-show="showCodeInput" x-collapse class="mt-3">
+                <p class="text-xs text-void-500 dark:text-void-400 mb-2">Paste the authorization code shown after you approve access:</p>
+                <div class="flex gap-2">
+                    <input type="text" x-model="codeValue"
+                           placeholder="Paste authorization code here..."
+                           class="flex-1 rounded-lg border border-void-200 dark:border-void-700 bg-void-50 dark:bg-void-800 text-void-900 dark:text-white px-3 py-1.5 text-sm font-mono focus:ring-2 focus:ring-nordic-500/40">
+                    <button @click="submitCode()" :disabled="!codeValue || loading"
+                            class="px-3 py-1.5 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-xs font-medium transition-colors disabled:opacity-50">
+                        <i class="fas fa-check mr-1"></i> Submit
+                    </button>
+                </div>
+            </div>
+            <!-- Message -->
+            <template x-if="message">
+                <div class="mt-3 p-2 rounded-lg text-xs"
+                     :class="messageType === 'error' ? 'bg-ember-500/10 text-ember-600 dark:text-ember-400' : 'bg-nordic-500/10 text-nordic-600 dark:text-nordic-400'"
+                     x-text="message"></div>
+            </template>
+            <!-- Runtime token expiry warning -->
+            <template x-if="status.token_expired && status.token_error_message">
+                <div class="mt-3 p-2 rounded-lg text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                     x-text="status.token_error_message"></div>
+            </template>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endif %}

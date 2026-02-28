@@ -1,0 +1,29 @@
+{
+  "name": "homeassistant",
+  "version": "0.0.2",
+  "type": "mcp",
+  "description": "Home Assistant MCP server provider (includes camera snapshots)",
+  "mcp_category": "automation",
+  "entry_point": "provider.py",
+  "class_name": "HomeAssistantProvider",
+  "virtual_tools": "virtual_tools.py",
+  "config_schema": {
+    "url": {
+      "type": "string",
+      "default": "http://homeassistant.local:8123/mcp_server/sse",
+      "description": "Home Assistant MCP server URL"
+    },
+    "ha_url": {
+      "type": "string",
+      "default": "http://homeassistant.local:8123",
+      "description": "Home Assistant base URL (for camera API)"
+    },
+    "access_token": {
+      "type": "secret",
+      "env": "HA_TOKEN",
+      "description": "Home Assistant long-lived access token",
+      "required": true
+    }
+  },
+  "dependencies": []
+}

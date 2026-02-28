@@ -1,0 +1,175 @@
+{# Default plugin config page - extends the standard plugin_base shell #}
+{% extends "plugins/plugin_base.html" %}
+
+{% block plugin_content_after %}
+{% include "plugins/partials/runner_extras.html" %}
+{% endblock %}
+
+{% block plugin_extra_js %}
+{% if plugin.type == "runner" %}
+<script>
+const _runnerName = '{{ plugin.name }}';
+const _csrfToken = document.getElementById('csrf-token') ? document.getElementById('csrf-token').value : '';
+const _tokenEndpoint = '{{ runner_token_endpoint or "token" }}';
+
+// ── Model Management ──────────────────────────────────────────────
+async function refreshModels() {
+    const icon = document.getElementById('refresh-icon');
+    if (icon) icon.classList.add('fa-spin');
+    try {
+        const resp = await fetch('/settings/api/models/' + _runnerName + '/refresh', {method: 'POST', headers: {'X-CSRF-Token': _csrfToken}});
+        const data = await resp.json();
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert('Refresh failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch(e) {
+        alert('Request failed: ' + e.message);
+    } finally {
+        if (icon) icon.classList.remove('fa-spin');
+    }
+}
+
+function editModels() {
+    document.getElementById('modal-error').classList.add('hidden');
+    fetch('/settings/api/models/' + _runnerName)
+        .then(r => r.json())
+        .then(data => {
+            const models = (data.data && data.data.models) || [];
+            const lines = models.map(m => {
+                let line = m.id + ' | ' + m.name;
+                if (m.api_id && m.api_id !== m.id) line += ' | ' + m.api_id;
+                return line;
+            });
+            document.getElementById('models-editor').value = lines.join('\n');
+            document.getElementById('models_modal').showModal();
+        });
+}
+
+async function saveModels() {
+    const text = document.getElementById('models-editor').value.trim();
+    const errEl = document.getElementById('modal-error');
+    errEl.classList.add('hidden');
+    const models = [];
+    for (const line of text.split('\n')) {
+        if (!line.trim()) continue;
+        const parts = line.split('|').map(s => s.trim());
+        if (parts.length < 2) { errEl.textContent = 'Invalid line: ' + line; errEl.classList.remove('hidden'); return; }
+        const entry = {id: parts[0], name: parts[1]};
+        if (parts[2]) entry.api_id = parts[2];
+        models.push(entry);
+    }
+    try {
+        const resp = await fetch('/settings/api/models/' + _runnerName, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
+            body: JSON.stringify({models})
+        });
+        const data = await resp.json();
+        if (data.ok) { document.getElementById('models_modal').close(); location.reload(); }
+        else { errEl.textContent = data.error || 'Save failed'; errEl.classList.remove('hidden'); }
+    } catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
+}
+
+// ── CLI Auth ──────────────────────────────────────────────────────
+function cliAuth() {
+    return {
+        status: {},
+        loading: true,
+        showTokenInput: false,
+        tokenValue: '',
+        loginUrl: '',
+        deviceCode: '',
+        codeValue: '',
+        showCodeInput: false,
+        message: '',
+        messageType: '',
+
+        async init() { await this.checkStatus(); },
+
+        async checkStatus() {
+            this.loading = true;
+            try {
+                const resp = await fetch('/settings/api/auth/' + _runnerName + '/status');
+                const data = await resp.json();
+                this.status = data.data || {};
+                if (this.status.loggedIn) {
+                    this.loginUrl = ''; this.showCodeInput = false; this.codeValue = '';
+                }
+            } catch(e) { this.status = {error: 'Connection failed'}; }
+            this.loading = false;
+        },
+
+        async doLogout() {
+            if (!confirm('Logout from CLI?')) return;
+            this.loading = true; this.message = '';
+            try {
+                const resp = await fetch('/settings/api/auth/' + _runnerName + '/logout', {
+                    method: 'POST', headers: {'X-CSRF-Token': _csrfToken}
+                });
+                const data = await resp.json();
+                if (data.ok) { this.message = 'Logged out'; this.messageType = 'success'; await this.checkStatus(); }
+                else { this.message = data.error || 'Logout failed'; this.messageType = 'error'; }
+            } catch(e) { this.message = e.message; this.messageType = 'error'; }
+            this.loading = false;
+        },
+
+        async startLogin() {
+            this.loading = true; this.message = ''; this.loginUrl = ''; this.deviceCode = '';
+            this.showCodeInput = false; this.codeValue = '';
+            try {
+                const resp = await fetch('/settings/api/auth/' + _runnerName + '/login', {
+                    method: 'POST', headers: {'X-CSRF-Token': _csrfToken}
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    const inner = data.data || {};
+                    this.loginUrl = inner.url || '';
+                    this.deviceCode = inner.code || '';
+                    this.showCodeInput = !!inner.needs_code;
+                    if (inner.url) window.open(inner.url, '_blank');
+                } else { this.message = data.error || 'Login failed'; this.messageType = 'error'; }
+            } catch(e) { this.message = e.message; this.messageType = 'error'; }
+            this.loading = false;
+        },
+
+        async submitCode() {
+            this.loading = true; this.message = '';
+            try {
+                const resp = await fetch('/settings/api/auth/' + _runnerName + '/code', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
+                    body: JSON.stringify({code: this.codeValue})
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    this.message = 'Authenticated successfully'; this.messageType = 'success';
+                    this.codeValue = ''; this.showCodeInput = false; this.loginUrl = '';
+                    await this.checkStatus();
+                } else { this.message = data.error || 'Code submission failed'; this.messageType = 'error'; }
+            } catch(e) { this.message = e.message; this.messageType = 'error'; }
+            this.loading = false;
+        },
+
+        async submitToken() {
+            this.loading = true; this.message = '';
+            try {
+                const resp = await fetch('/settings/api/auth/' + _runnerName + '/' + _tokenEndpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': _csrfToken},
+                    body: JSON.stringify(_tokenEndpoint === 'api-key' ? {api_key: this.tokenValue} : {token: this.tokenValue})
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    this.message = 'Saved successfully'; this.messageType = 'success';
+                    this.tokenValue = ''; this.showTokenInput = false; await this.checkStatus();
+                } else { this.message = data.error || 'Failed'; this.messageType = 'error'; }
+            } catch(e) { this.message = e.message; this.messageType = 'error'; }
+            this.loading = false;
+        }
+    };
+}
+</script>
+{% endif %}
+{% endblock %}

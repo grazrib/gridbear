@@ -1,0 +1,295 @@
+{% extends "me/base.html" %}
+
+{% block title %}GridBear - Connetti WhatsApp{% endblock %}
+{% block page_title %}Connetti WhatsApp{% endblock %}
+
+{% block content %}
+<div x-data="whatsappConnect()" class="space-y-6">
+    <!-- Hidden CSRF token for JS fetch requests -->
+    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+
+    <!-- Section 1: Your Personal Instances -->
+    {% if user_instances %}
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <h2 class="font-semibold text-lg mb-4 flex items-center gap-2">
+            <i class="fab fa-whatsapp text-green-500"></i>
+            Le tue connessioni
+        </h2>
+        <div class="space-y-4">
+            {% for inst in user_instances %}
+            <div class="p-4 rounded-xl border border-void-200 dark:border-void-800
+                {% if inst.connected %}bg-nordic-500/5{% else %}bg-void-50 dark:bg-void-800/30{% endif %}">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium">{{ inst.agent_name }}</span>
+                        <span class="text-xs text-void-400">({{ inst.instance_name }})</span>
+                    </div>
+                    <span class="flex items-center gap-1.5 text-xs font-medium
+                        {% if inst.connected %}text-nordic-600 dark:text-nordic-400{% else %}text-void-400{% endif %}">
+                        <span class="w-2 h-2 rounded-full {% if inst.connected %}bg-nordic-500 animate-pulse{% else %}bg-void-300 dark:bg-void-600{% endif %}"></span>
+                        {{ 'Connesso' if inst.connected else inst.state|title }}
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-2 flex-wrap">
+                    {% if inst.connected %}
+                    <form method="POST" action="/me/connections/whatsapp/disconnect-instance"
+                          onsubmit="return confirm('Disconnettere WhatsApp?');">
+                        {% include "partials/csrf_field.html" %}
+                        <input type="hidden" name="instance_name" value="{{ inst.instance_name }}">
+                        <button type="submit"
+                                class="px-4 py-2 rounded-xl border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-medium hover:bg-red-500/10 transition-all">
+                            <i class="fas fa-unlink mr-1.5"></i>Disconnetti
+                        </button>
+                    </form>
+                    {% else %}
+                    <button @click="connectInstance('{{ inst.instance_name }}')"
+                            :disabled="connecting"
+                            class="px-5 py-2.5 rounded-xl bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium transition-all">
+                        <i class="fab fa-whatsapp mr-1.5"></i>
+                        <span x-text="connecting && currentInstance === '{{ inst.instance_name }}' ? 'Connessione...' : 'Connetti con QR Code'"></span>
+                    </button>
+                    {% endif %}
+
+                    <a href="/me/connections/whatsapp/{{ inst.instance_name }}/authorized"
+                       class="px-4 py-2 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-300 text-xs font-medium transition-all">
+                        <i class="fas fa-user-shield mr-1.5"></i>Numeri autorizzati
+                    </a>
+
+                    <button @click="deleteInstance('{{ inst.instance_name }}')"
+                            class="px-4 py-2 rounded-xl border border-red-500/20 text-red-500 text-xs font-medium hover:bg-red-500/10 transition-all">
+                        <i class="fas fa-trash mr-1.5"></i>Elimina
+                    </button>
+                </div>
+
+                <!-- QR Code Area -->
+                <div x-show="currentInstance === '{{ inst.instance_name }}' && qrCode"
+                     x-transition
+                     class="mt-5 flex flex-col items-center">
+                    <p class="text-sm text-void-500 dark:text-void-400 mb-3">
+                        Apri WhatsApp sul telefono e scansiona il QR code:
+                    </p>
+                    <div class="p-4 bg-white rounded-2xl shadow-lg border border-void-200">
+                        <img :src="qrCode.startsWith('data:') ? qrCode : 'data:image/png;base64,' + qrCode" alt="QR Code" class="w-64 h-64">
+                    </div>
+                    <p class="mt-3 text-xs text-void-400 flex items-center gap-1.5" x-show="polling">
+                        <i class="fas fa-spinner fa-spin"></i> In attesa della scansione...
+                    </p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Section 2: Connect a New Agent -->
+    {% if connectable_agents %}
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <h2 class="font-semibold text-lg mb-4 flex items-center gap-2">
+            <i class="fas fa-plus-circle text-nordic-500"></i>
+            Connetti un nuovo agente
+        </h2>
+        <p class="text-sm text-void-500 dark:text-void-400 mb-4">
+            Seleziona un agente per collegare il tuo numero WhatsApp personale. Potrai gestire i numeri autorizzati a contattare l'agente.
+        </p>
+        <div class="space-y-3">
+            {% for agent in connectable_agents %}
+            <div class="flex items-center justify-between p-4 rounded-xl border border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-nordic-500/10 flex items-center justify-center">
+                        <i class="fas fa-robot text-nordic-500"></i>
+                    </div>
+                    <span class="font-medium">{{ agent.name }}</span>
+                </div>
+                <button @click="createInstance('{{ agent.id }}')"
+                        :disabled="creating"
+                        class="px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 disabled:opacity-50 text-white text-sm font-medium transition-all">
+                    <i class="fab fa-whatsapp mr-1.5"></i>
+                    <span x-text="creating && creatingAgent === '{{ agent.id }}' ? 'Creazione...' : 'Connetti'"></span>
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- QR Code for newly created instance (not yet in user_instances loop) -->
+    <div x-show="qrCode && !isExistingInstance(currentInstance)"
+         x-transition
+         class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <div class="flex flex-col items-center">
+            <h2 class="font-semibold text-lg mb-2 flex items-center gap-2">
+                <i class="fab fa-whatsapp text-green-500"></i>
+                <span x-text="currentInstance"></span>
+            </h2>
+            <p class="text-sm text-void-500 dark:text-void-400 mb-4">
+                Apri WhatsApp sul telefono e scansiona il QR code:
+            </p>
+            <div class="p-4 bg-white rounded-2xl shadow-lg border border-void-200">
+                <img :src="qrCode.startsWith('data:') ? qrCode : 'data:image/png;base64,' + qrCode" alt="QR Code" class="w-64 h-64">
+            </div>
+            <p class="mt-3 text-xs text-void-400 flex items-center gap-1.5" x-show="polling">
+                <i class="fas fa-spinner fa-spin"></i> In attesa della scansione...
+            </p>
+        </div>
+    </div>
+
+    {% if not user_instances and not connectable_agents %}
+    <div class="bg-white dark:bg-void-900/60 rounded-2xl border border-void-200 dark:border-void-800 p-6">
+        <div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>Nessun canale WhatsApp configurato. Chiedi all'amministratore di aggiungere un canale WhatsApp alla configurazione dell'agente.</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="mt-6">
+        <a href="/me/connections" class="text-sm text-nordic-500 hover:underline">
+            <i class="fas fa-arrow-left mr-1"></i> Torna alle connessioni
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function whatsappConnect() {
+    return {
+        connecting: false,
+        creating: false,
+        creatingAgent: null,
+        currentInstance: null,
+        qrCode: null,
+        polling: false,
+        pollInterval: null,
+
+        existingInstances: [{% for inst in user_instances %}'{{ inst.instance_name }}',{% endfor %}],
+
+        getCsrf() {
+            return document.querySelector('[name=csrf_token]')?.value || '';
+        },
+
+        isExistingInstance(name) {
+            return this.existingInstances.includes(name);
+        },
+
+        async createInstance(agentName) {
+            this.creating = true;
+            this.creatingAgent = agentName;
+
+            try {
+                const formData = new FormData();
+                formData.append('agent_name', agentName);
+                formData.append('csrf_token', this.getCsrf());
+
+                const resp = await fetch('/me/connections/whatsapp/create-instance', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+
+                if (resp.ok && data.instance_name) {
+                    this.currentInstance = data.instance_name;
+                    if (data.qr && data.qr.base64) {
+                        this.qrCode = data.qr.base64;
+                        this.startPolling(data.instance_name);
+                    } else {
+                        // Instance created, reload to show it
+                        window.location.reload();
+                    }
+                } else {
+                    alert('Errore: ' + (data.error || 'Creazione fallita'));
+                }
+            } catch (e) {
+                alert('Errore: ' + e.message);
+            } finally {
+                this.creating = false;
+                this.creatingAgent = null;
+            }
+        },
+
+        async connectInstance(instanceName) {
+            this.connecting = true;
+            this.currentInstance = instanceName;
+            this.qrCode = null;
+
+            try {
+                const formData = new FormData();
+                formData.append('instance_name', instanceName);
+                formData.append('csrf_token', this.getCsrf());
+
+                const resp = await fetch('/me/connections/whatsapp/connect-instance', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+
+                if (data.base64) {
+                    this.qrCode = data.base64;
+                    this.startPolling(instanceName);
+                } else if (data.error) {
+                    alert('Errore: ' + JSON.stringify(data.error));
+                }
+            } catch (e) {
+                alert('Connessione fallita: ' + e.message);
+            } finally {
+                this.connecting = false;
+            }
+        },
+
+        async deleteInstance(instanceName) {
+            if (!confirm('Eliminare questa istanza WhatsApp? Verranno rimossi anche tutti i numeri autorizzati.')) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('csrf_token', this.getCsrf());
+
+                const resp = await fetch(`/me/connections/whatsapp/${instanceName}/delete`, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Errore: ' + (data.error || 'Eliminazione fallita'));
+                }
+            } catch (e) {
+                alert('Errore: ' + e.message);
+            }
+        },
+
+        startPolling(instanceName) {
+            this.polling = true;
+            if (this.pollInterval) clearInterval(this.pollInterval);
+
+            this.pollInterval = setInterval(async () => {
+                try {
+                    const resp = await fetch(`/me/connections/whatsapp/status/${instanceName}`);
+                    const data = await resp.json();
+                    if (data.connected) {
+                        this.stopPolling();
+                        window.location.reload();
+                    }
+                } catch (e) { /* ignore */ }
+            }, 2000);
+
+            setTimeout(() => {
+                if (this.polling) {
+                    this.stopPolling();
+                    this.qrCode = null;
+                }
+            }, 120000);
+        },
+
+        stopPolling() {
+            this.polling = false;
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

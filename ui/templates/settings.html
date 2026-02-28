@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - GridBear{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block breadcrumb_active %}Settings{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">System configuration and controls</p>{% endblock %}
+
+{% block content %}
+<!-- Alert Messages -->
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Settings saved successfully.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('imported') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-download"></i>
+    <span>Imported {{ request.query_params.get('imported') }} secrets.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('key_generated') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-key"></i>
+    <span>Encryption key generated successfully!</span>
+</div>
+{% endif %}
+{% if request.query_params.get('restart') == 'requested' %}
+<div class="mb-6 p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 flex items-center gap-3 text-frost-600 dark:text-frost-400">
+    <i class="fas fa-power-off animate-pulse"></i>
+    <span>Restart requested. GridBear is restarting... This page will be unavailable for a few seconds.</span>
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Left Column -->
+    <div class="space-y-6">
+        <!-- System Control -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-ember-500/5 to-transparent">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-power-off text-ember-500"></i>
+                    System Control
+                </h3>
+            </div>
+            <div class="p-5">
+                <p class="text-sm text-void-600 dark:text-void-300 mb-4">
+                    Restart GridBear to apply configuration changes including plugins.json and newly added plugins.
+                </p>
+                <form method="POST" action="/agents/restart"
+                      onsubmit="return confirm('Restart GridBear?\n\nThis will reload all configurations.\n\nWarning: If there is a configuration error, the service may not restart automatically.');">
+                    {% include "partials/csrf_field.html" %}
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-ember-500 to-ember-600 hover:from-ember-400 hover:to-ember-500 text-white font-medium transition-all shadow-lg shadow-ember-500/20">
+                        <i class="fas fa-power-off"></i>
+                        Restart GridBear
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Agent Configuration Link -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-robot text-nordic-500"></i>
+                    Agent Configuration
+                </h3>
+            </div>
+            <div class="p-5">
+                <p class="text-sm text-void-600 dark:text-void-300 mb-4">
+                    Agent-specific settings including email monitoring, voice, personality, and channels are configured per-agent.
+                </p>
+                <a href="/agents/" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all shadow-lg shadow-nordic-500/20">
+                    <i class="fas fa-users-cog"></i>
+                    Manage Agents
+                </a>
+            </div>
+        </div>
+
+        <!-- WebChat TTS -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-volume-high text-frost-500"></i>
+                    WebChat TTS
+                </h3>
+            </div>
+            <div class="p-5">
+                <p class="text-sm text-void-600 dark:text-void-300 mb-4">
+                    Text-to-Speech engine for the /me/chat voice readout.
+                </p>
+                <form method="POST" action="/settings/tts">
+                    {% include "partials/csrf_field.html" %}
+                    <div class="space-y-2 mb-4">
+                        {% for p in tts_providers %}
+                        <label class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all hover:bg-void-50 dark:hover:bg-void-800/30 {{ 'bg-nordic-500/5 border border-nordic-500/20' if current_tts_provider == p.id else 'border border-transparent' }}">
+                            <input type="radio" name="tts_provider" value="{{ p.id }}"
+                                   {{ 'checked' if current_tts_provider == p.id else '' }}
+                                   class="text-nordic-500 focus:ring-nordic-500/40">
+                            <div class="flex-1">
+                                <span class="text-sm font-medium text-void-900 dark:text-white">{{ p.name }}</span>
+                                {% if p.requires_key %}
+                                <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-ember-500/10 text-ember-500">API Key</span>
+                                {% endif %}
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all shadow-lg shadow-nordic-500/20">
+                        <i class="fas fa-save"></i>
+                        Save
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Encryption Status -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 {{ 'bg-gradient-to-r from-nordic-500/5 to-transparent' if encryption_available else 'bg-gradient-to-r from-ember-500/5 to-transparent' }}">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-lock {{ 'text-nordic-500' if encryption_available else 'text-ember-500' }}"></i>
+                    Encryption
+                </h3>
+            </div>
+            <div class="p-5">
+                {% if encryption_available %}
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-nordic-500/10 flex items-center justify-center">
+                        <i class="fas fa-shield-halved text-nordic-500 text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-void-900 dark:text-white">Encryption Enabled</p>
+                        <p class="text-sm text-void-500 dark:text-void-400 font-mono">{{ key_source }}</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <a href="/secrets/export" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
+                        <i class="fas fa-download"></i> Export
+                    </a>
+                    <button type="button" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors" onclick="import_modal.showModal()">
+                        <i class="fas fa-upload"></i> Import
+                    </button>
+                </div>
+                {% else %}
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-ember-500/10 flex items-center justify-center">
+                        <i class="fas fa-triangle-exclamation text-ember-500 text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-void-900 dark:text-white">Encryption Not Available</p>
+                        <p class="text-sm text-void-500 dark:text-void-400">Generate a key to enable secret encryption</p>
+                    </div>
+                </div>
+                <form action="/secrets/generate-key" method="POST">
+                    {% include "partials/csrf_field.html" %}
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all">
+                        <i class="fas fa-key"></i> Generate Key
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right Column -->
+    <div class="space-y-6">
+        <!-- System Info -->
+        <div class="rounded-2xl bg-void-900 dark:bg-void-800/50 border border-void-800 overflow-hidden text-white">
+            <div class="p-5 border-b border-void-800">
+                <h3 class="font-semibold flex items-center gap-2">
+                    <i class="fas fa-info-circle text-frost-400"></i>
+                    System Information
+                </h3>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="flex items-center justify-between py-2 border-b border-void-700/50">
+                    <span class="text-void-400">Version</span>
+                    <span class="font-mono text-nordic-400">v{{ version }}</span>
+                </div>
+                <div class="flex items-center justify-between py-2 border-b border-void-700/50">
+                    <span class="text-void-400">Encryption</span>
+                    <span class="font-mono {{ 'text-nordic-400' if encryption_available else 'text-ember-400' }}">
+                        {{ 'AES-256-GCM' if encryption_available else 'Disabled' }}
+                    </span>
+                </div>
+                <div class="flex items-center justify-between py-2 border-b border-void-700/50">
+                    <span class="text-void-400">Plugin Config</span>
+                    <span class="font-mono text-void-300 text-sm">config/plugins.json</span>
+                </div>
+                <div class="flex items-center justify-between py-2">
+                    <span class="text-void-400">Agent Config</span>
+                    <span class="font-mono text-void-300 text-sm">config/agents/*.yaml</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Commands -->
+        <div class="rounded-2xl bg-void-900 dark:bg-void-800/50 border border-void-800 overflow-hidden text-white">
+            <div class="p-5 border-b border-void-800">
+                <h3 class="font-semibold flex items-center gap-2">
+                    <i class="fas fa-terminal text-nordic-400"></i>
+                    Quick Commands
+                </h3>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <p class="text-xs text-void-500 mb-2 uppercase tracking-wider">Restart Service</p>
+                    <div class="bg-void-950 rounded-xl p-3 font-mono text-sm">
+                        <span class="text-nordic-400">docker compose restart gridbear</span>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-xs text-void-500 mb-2 uppercase tracking-wider">View Logs</p>
+                    <div class="bg-void-950 rounded-xl p-3 font-mono text-sm">
+                        <span class="text-nordic-400">docker compose logs -f gridbear</span>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-xs text-void-500 mb-2 uppercase tracking-wider">Rebuild</p>
+                    <div class="bg-void-950 rounded-xl p-3 font-mono text-sm">
+                        <span class="text-nordic-400">docker compose build gridbear</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<dialog id="import_modal" class="rounded-2xl bg-white dark:bg-void-900 border border-void-200 dark:border-void-800 p-0 backdrop:bg-black/50 max-w-md w-full">
+    <div class="p-6">
+        <form action="/secrets/import" method="POST" enctype="multipart/form-data">
+            {% include "partials/csrf_field.html" %}
+            <h3 class="text-lg font-semibold text-void-900 dark:text-white flex items-center gap-2 mb-4">
+                <i class="fas fa-upload text-nordic-500"></i>
+                Import Secrets
+            </h3>
+            <div class="mb-4">
+                <input type="file"
+                       name="file"
+                       accept=".json"
+                       required
+                       class="w-full text-sm text-void-600 dark:text-void-300 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-nordic-500 file:text-white hover:file:bg-nordic-600 file:cursor-pointer">
+                <p class="text-xs text-void-500 dark:text-void-400 mt-2">Existing secrets will be overwritten</p>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" class="px-4 py-2 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 font-medium transition-colors" onclick="import_modal.close()">
+                    Cancel
+                </button>
+                <button type="submit" class="px-4 py-2 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-colors">
+                    <i class="fas fa-upload mr-2"></i>Import
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
+{% endblock %}

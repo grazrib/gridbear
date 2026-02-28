@@ -1,0 +1,9 @@
+{
+  "name": "google-sa",
+  "version": "0.1.0",
+  "type": "service",
+  "description": "Centralized Google Service Account credential management for all Google MCP plugins",
+  "entry_point": "service.py",
+  "class_name": "GoogleSAService",
+  "dependencies": []
+}

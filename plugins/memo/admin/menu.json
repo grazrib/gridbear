@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Memos",
+      "url": "/plugin/memo",
+      "icon": "fas fa-bell",
+      "section": "services",
+      "priority": 5
+    }
+  ]
+}

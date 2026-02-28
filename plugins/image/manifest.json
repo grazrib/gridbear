@@ -1,0 +1,17 @@
+{
+  "name": "image",
+  "version": "0.1.0",
+  "type": "service",
+  "description": "Image generation — delegates to configured provider (image-pollinations, image-openai, etc.)",
+  "entry_point": "service.py",
+  "class_name": "ImageService",
+  "virtual_tools": "virtual_tools.py",
+  "config_schema": {
+    "default_provider": {
+      "type": "string",
+      "default": "",
+      "description": "Default image provider (overridden per-agent in YAML)"
+    }
+  },
+  "dependencies": []
+}

@@ -1,0 +1,55 @@
+{
+  "name": "gemini",
+  "version": "0.0.1",
+  "type": "runner",
+  "description": "Google Gemini AI backend via genai SDK",
+  "entry_point": "runner.py",
+  "class_name": "GeminiRunner",
+  "config_schema": {
+    "google_ai_api_key": {
+      "type": "secret",
+      "env": "GOOGLE_AI_API_KEY",
+      "description": "Google AI API Key (from aistudio.google.com/apikey)",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "default": "gemini-2.0-flash",
+      "description": "Gemini model to use",
+      "enum": [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro"
+      ]
+    },
+    "timeout": {
+      "type": "integer",
+      "default": 120,
+      "description": "Timeout in seconds for API calls"
+    },
+    "temperature": {
+      "type": "number",
+      "default": 0.7,
+      "description": "Sampling temperature (0.0 - 2.0)"
+    },
+    "max_output_tokens": {
+      "type": "integer",
+      "default": 8192,
+      "description": "Maximum output tokens per response"
+    },
+    "max_tool_iterations": {
+      "type": "integer",
+      "default": 20,
+      "description": "Maximum tool-use loop iterations"
+    },
+    "max_tools": {
+      "type": "integer",
+      "default": 0,
+      "description": "Maximum number of MCP tools to pass to the model (0 = unlimited)"
+    }
+  },
+  "required_secrets": ["GOOGLE_AI_API_KEY"],
+  "dependencies": [],
+  "models_refreshable": true
+}

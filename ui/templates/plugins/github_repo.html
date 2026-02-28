@@ -1,0 +1,120 @@
+{% extends "plugins/plugin_subpage.html" %}
+
+{% block title %}{% if is_new %}Add{% else %}Edit{% endif %} Repository - GitHub{% endblock %}
+{% block page_title %}{% if is_new %}Add Repository{% else %}Edit Repository{% endif %}{% endblock %}
+{% block breadcrumb_active %}{% if is_new %}Add{% else %}{{ repo.id }}{% endif %}{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Configure repository access and protection settings</p>{% endblock %}
+
+{% block subpage_content %}
+    <!-- Form Card -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fab fa-github text-frost-500"></i>
+                Repository Configuration
+            </h3>
+        </div>
+        <div class="p-5">
+            <form method="POST" action="/plugins/github/repo" class="space-y-5">
+                {% include "partials/csrf_field.html" %}
+                <input type="hidden" name="is_new" value="{{ 'true' if is_new else 'false' }}">
+                {% if not is_new %}
+                <input type="hidden" name="repo_id" value="{{ repo.id }}">
+                {% endif %}
+
+                <!-- Repository URL -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">
+                        Repository URL
+                        <span class="text-ember-500">*</span>
+                    </label>
+                    <input type="text" name="repo_url"
+                           value="{% if repo %}{{ repo.pattern }}{% endif %}"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-3 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all font-mono"
+                           placeholder="git@github.com:owner/repo.git"
+                           required>
+                    <p class="text-sm text-void-500">
+                        Accepts: <code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded">git@github.com:owner/repo.git</code>
+                        <code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded ml-1">https://github.com/owner/repo</code>
+                        <code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded ml-1">owner/repo</code>
+                        <code class="bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded ml-1">owner/*</code>
+                    </p>
+                </div>
+
+                {% if is_new %}
+                <!-- Repository ID (optional) -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">
+                        Repository ID
+                        <span class="text-void-400">(optional)</span>
+                    </label>
+                    <input type="text" name="repo_id"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all"
+                           placeholder="auto-generated from repo name">
+                    <p class="text-sm text-void-500">Leave empty to auto-generate from repository name</p>
+                </div>
+                {% endif %}
+
+                <!-- Protected Branches -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Protected Branches</label>
+                    <input type="text" name="protected_branches"
+                           value="{{ repo.protected_branches | join(',') if repo else 'main,master' }}"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all"
+                           placeholder="main,master,develop">
+                    <p class="text-sm text-void-500">Comma-separated list of branches that require PR</p>
+                </div>
+
+                <!-- Allow Direct Push -->
+                <div class="flex items-start gap-3 p-4 rounded-xl bg-ember-500/5 border border-ember-500/20">
+                    <input type="checkbox" name="allow_direct_push" id="allow_direct_push"
+                           class="mt-1 w-5 h-5 rounded border-void-300 text-ember-500 focus:ring-ember-500"
+                           {% if repo and repo.allow_direct_push %}checked{% endif %}>
+                    <label for="allow_direct_push" class="cursor-pointer">
+                        <span class="font-medium text-void-900 dark:text-white">Allow Direct Push to Protected Branches</span>
+                        <p class="text-sm text-ember-500 dark:text-ember-400 flex items-center gap-1 mt-1">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Not recommended - bypasses PR protection
+                        </p>
+                    </label>
+                </div>
+
+                <!-- Allowed Agents -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200">Allowed Agents</label>
+                    <input type="text" name="allowed_agents"
+                           value="{{ repo.allowed_agents | join(',') if repo else '*' }}"
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all"
+                           placeholder="* or agent1,agent2">
+                    <p class="text-sm text-void-500">* for all agents, or comma-separated list of agent IDs</p>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex justify-between items-center pt-5 border-t border-void-200 dark:border-void-700">
+                    {% if not is_new %}
+                    <form method="POST" action="/plugins/github/repo/{{ repo.id }}/delete" class="inline"
+                          onsubmit="return confirm('Are you sure you want to delete this repository configuration?')">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-ember-500/30 text-ember-500 hover:bg-ember-500/10 transition-all">
+                            <i class="fas fa-trash"></i>
+                            Delete
+                        </button>
+                    </form>
+                    {% else %}
+                    <div></div>
+                    {% endif %}
+
+                    <div class="flex gap-3">
+                        <a href="/plugins/github" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-void-300 dark:border-void-600 text-void-600 dark:text-void-300 hover:bg-void-100 dark:hover:bg-void-800 transition-all">
+                            Cancel
+                        </a>
+                        <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-all">
+                            <i class="fas fa-save"></i>
+                            {% if is_new %}Add Repository{% else %}Save Changes{% endif %}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

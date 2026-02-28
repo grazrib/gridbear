@@ -1,0 +1,20 @@
+<!-- Reload Plugin Card -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-sync-alt text-frost-500"></i>
+            Apply Changes
+        </h3>
+    </div>
+    <div class="p-5 space-y-4">
+        <p class="text-sm text-void-600 dark:text-void-400">After saving secrets or configuration, reload the plugin to apply changes.</p>
+        <form method="POST" action="/plugins/{{ plugin_name }}/reload">
+            {% include "partials/csrf_field.html" %}
+            <button type="submit"
+                    class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-frost-500/30 text-frost-500 hover:bg-frost-500/10 transition-all font-medium">
+                <i class="fas fa-sync-alt"></i>
+                Reload Plugin
+            </button>
+        </form>
+    </div>
+</div>

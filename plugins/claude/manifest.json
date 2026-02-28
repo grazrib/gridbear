@@ -1,0 +1,80 @@
+{
+  "name": "claude",
+  "version": "0.1.1",
+  "type": "runner",
+  "description": "Claude AI backend via CLI or Anthropic API",
+  "entry_point": "runner.py",
+  "class_name": "ClaudeRunner",
+  "config_schema": {
+    "backend": {
+      "type": "string",
+      "default": "cli",
+      "description": "Backend: cli (Claude Code CLI) or api (Anthropic SDK)",
+      "enum": ["cli", "api"]
+    },
+    "anthropic_api_key": {
+      "type": "secret",
+      "env": "ANTHROPIC_API_KEY",
+      "description": "Anthropic API Key (required for backend api)",
+      "required": false
+    },
+    "model": {
+      "type": "string",
+      "default": "sonnet",
+      "description": "Claude model to use (haiku, sonnet, opus)",
+      "enum": ["haiku", "sonnet", "opus"]
+    },
+    "timeout": {
+      "type": "integer",
+      "default": 120,
+      "description": "Timeout in seconds"
+    },
+    "max_retries": {
+      "type": "integer",
+      "default": 2,
+      "description": "Maximum number of retries on failure"
+    },
+    "max_output_tokens": {
+      "type": "integer",
+      "default": 8192,
+      "description": "Max output tokens (api backend only)"
+    },
+    "max_tool_iterations": {
+      "type": "integer",
+      "default": 20,
+      "description": "Max tool loop iterations (api backend only)"
+    },
+    "max_tools": {
+      "type": "integer",
+      "default": 0,
+      "description": "Max MCP tools passed to the model, 0 = unlimited (api backend only)"
+    },
+    "use_pool": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable process pooling for persistent CLI processes (enables streaming tool notifications)"
+    },
+    "pool_max_processes": {
+      "type": "integer",
+      "default": 2,
+      "description": "Max concurrent CLI processes in the pool"
+    },
+    "notify_tool_use": {
+      "type": "boolean",
+      "default": true,
+      "description": "Send tool-use notifications to chat (requires use_pool=true for CLI backend)"
+    }
+  },
+  "dependencies": [],
+  "cli_meta": {
+    "cli_name": "Claude CLI",
+    "auth_actions": [
+      {"type": "login", "label": "OAuth Login"},
+      {"type": "token", "label": "Setup Token"}
+    ],
+    "token_endpoint": "token",
+    "token_hint": "Run <code class=\"px-1 py-0.5 rounded bg-void-100 dark:bg-void-800\">claude setup-token</code> on your local machine, then paste the token (starts with <code class=\"px-1 py-0.5 rounded bg-void-100 dark:bg-void-800\">sk-ant-oat01-</code>)",
+    "token_placeholder": "sk-ant-oat01-..."
+  },
+  "models_refreshable": false
+}

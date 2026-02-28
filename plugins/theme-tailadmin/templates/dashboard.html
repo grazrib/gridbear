@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}{{ _("Dashboard") }} - GridBear{% endblock %}
+{% block page_title %}{{ _("Dashboard") }}{% endblock %}
+{% block breadcrumb_active %}{{ _("Dashboard") }}{% endblock %}
+{% block page_description %}<p class="text-[13px] c-2 mt-0.5">{{ _("System overview and activity") }}</p>{% endblock %}
+
+{% block content %}
+<!-- Stat Cards -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 mb-6 fade-up">
+    <!-- Agents -->
+    <div class="stat-card">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-ib flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-robot c-blue text-lg"></i>
+            </div>
+            <div>
+                <div class="text-[28px] font-bold c-0 tracking-tight leading-none">{{ agents_count }}</div>
+                <div class="text-[12px] c-2 font-medium mt-1">{{ _("Agents") }}</div>
+            </div>
+        </div>
+        <div class="flex items-center gap-1.5 mt-3 pt-3" style="border-top: 1px solid var(--separator);">
+            <span class="dot dot-on dot-sm"></span>
+            <span class="text-[11px] c-2">{{ agents_list|length }} {{ _("configured") }}</span>
+        </div>
+    </div>
+
+    <!-- Tool Calls 24h -->
+    <div class="stat-card">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-ic flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-wrench c-cyan text-lg"></i>
+            </div>
+            <div>
+                <div class="text-[28px] font-bold c-0 tracking-tight leading-none">{{ "{:,}".format(tool_usage_24h) }}</div>
+                <div class="text-[12px] c-2 font-medium mt-1">{{ _("Tool Calls 24h") }}</div>
+            </div>
+        </div>
+        <div class="text-[11px] c-2 mt-3 pt-3" style="border-top: 1px solid var(--separator);">{{ _("MCP tool invocations") }}</div>
+    </div>
+
+    <!-- MCP Gateway -->
+    <div class="stat-card">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-ip flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-plug c-purple text-lg"></i>
+            </div>
+            <div>
+                {% set total_tools = mcp_servers|sum(attribute='tool_count') %}
+                <div class="text-[28px] font-bold c-0 tracking-tight leading-none">{{ total_tools }}</div>
+                <div class="text-[12px] c-2 font-medium mt-1">{{ _("MCP Gateway") }}</div>
+            </div>
+        </div>
+        <div class="text-[11px] c-2 mt-3 pt-3" style="border-top: 1px solid var(--separator);">{{ mcp_servers|length }} server</div>
+    </div>
+
+    <!-- Uptime -->
+    <div class="stat-card">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-ig flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-clock c-green text-lg"></i>
+            </div>
+            <div>
+                <div class="text-[28px] font-bold c-0 tracking-tight leading-none">{{ system_info.uptime or 'N/A' }}</div>
+                <div class="text-[12px] c-2 font-medium mt-1">{{ _("Uptime") }}</div>
+            </div>
+        </div>
+        <div class="text-[11px] c-2 mt-3 pt-3" style="border-top: 1px solid var(--separator);">{{ _("Since last restart") }}</div>
+    </div>
+</div>
+
+<!-- Main Grid: Agents + Log -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 fade-up fade-d1">
+    <!-- Agents Table -->
+    <div class="lg:col-span-2 card-ios">
+        <div class="card-ios-header">
+            <h2>{{ _("Agents") }}</h2>
+            <a href="/agents/" class="text-[13px] c-blue font-medium transition-colors hover:opacity-80">{{ _("View All") }}</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="agent-table">
+                <thead>
+                    <tr><th>{{ _("Name") }}</th><th>{{ _("Runner") }}</th><th>{{ _("Channels") }}</th><th>{{ _("Status") }}</th></tr>
+                </thead>
+                <tbody>
+                    {% set agent_colors = ['bg-ib', 'bg-ip', 'bg-io', 'bg-ig', 'bg-ic'] %}
+                    {% set agent_text_colors = ['c-blue', 'c-purple', 'c-orange', 'c-green', 'c-cyan'] %}
+                    {% for agent in agents_list %}
+                    {% set color_idx = loop.index0 % 5 %}
+                    <tr>
+                        <td>
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg {{ agent_colors[color_idx] }} flex items-center justify-center">
+                                    <i class="fas fa-robot {{ agent_text_colors[color_idx] }} text-xs"></i>
+                                </div>
+                                <span class="c-0 font-medium">{{ agent.name }}</span>
+                            </div>
+                        </td>
+                        <td><span class="c-2 font-mono text-xs">{{ agent.runner }}</span></td>
+                        <td>
+                            <div class="flex gap-2">
+                                {% for ch in agent.channels %}
+                                <i class="fab fa-{{ ch }} c-3 text-xs" title="{{ ch|title }}"></i>
+                                {% endfor %}
+                                {% if not agent.channels %}
+                                <span class="c-3 text-xs">-</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="pill pill-g">
+                                <span class="dot dot-on dot-sm"></span>{{ _("Active") }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not agents_list %}
+                    <tr>
+                        <td colspan="4" class="text-center py-8">
+                            <p class="c-3 text-[13px]">{{ _("No agents configured") }}</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Log Entries Panel -->
+    <div class="card-ios">
+        <div class="card-ios-header">
+            <h2>{{ _("Log") }}</h2>
+            <span class="text-[10px] c-3 font-medium uppercase tracking-wider">{{ _("Warnings & Errors") }}</span>
+        </div>
+        <div class="px-4 py-2 max-h-[400px] overflow-y-auto">
+            {% if log_entries %}
+            {% for entry in log_entries %}
+            <div class="flex items-start gap-3 py-2.5 {% if not loop.last %}border-b{% endif %}" style="border-color: var(--separator);">
+                {% if entry.level == 'ERROR' or entry.level == 'CRITICAL' %}
+                <div class="w-7 h-7 rounded-lg bg-io flex-shrink-0 flex items-center justify-center mt-0.5">
+                    <i class="fas fa-circle-exclamation c-orange text-[10px]"></i>
+                </div>
+                {% else %}
+                <div class="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center mt-0.5" style="background: rgba(234, 179, 8, 0.1);">
+                    <i class="fas fa-triangle-exclamation text-[10px]" style="color: #eab308;"></i>
+                </div>
+                {% endif %}
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-mono font-medium {% if entry.level == 'ERROR' or entry.level == 'CRITICAL' %}c-orange{% else %}c-2{% endif %}">{{ entry.level }}</span>
+                        {% if entry.logger_name and entry.logger_name != 'gridbear' %}
+                        <span class="c-3 text-[10px] font-mono">{{ entry.logger_name }}</span>
+                        {% endif %}
+                    </div>
+                    <p class="c-2 text-[11px] mt-0.5 line-clamp-2">{{ entry.message }}</p>
+                </div>
+                <span class="c-3 text-[10px] whitespace-nowrap flex-shrink-0 mt-1">{{ entry.created_at.strftime('%H:%M') if entry.created_at else '' }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="flex flex-col items-center justify-center py-8 text-center">
+                <div class="w-10 h-10 rounded-lg bg-ig flex items-center justify-center mb-3">
+                    <i class="fas fa-check c-green text-sm"></i>
+                </div>
+                <p class="c-2 text-[13px]">{{ _("All clear") }}</p>
+                <p class="c-3 text-[11px] mt-1">{{ _("No warnings or errors in the last 7 days") }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Bottom Panels: Channels + MCP + System -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 fade-up fade-d2">
+    <!-- Channels -->
+    <div class="card-ios">
+        <div class="card-ios-header"><h2>{{ _("Channels") }}</h2></div>
+        <div class="px-4 pb-4 space-y-3">
+            {% for ch in channels %}
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <i class="{{ ch.icon }} c-2 text-sm"></i>
+                    <span class="text-[13px] c-0">{{ ch.display_name }}</span>
+                </div>
+                <span class="pill pill-g"><span class="dot dot-on dot-sm"></span>{{ _("Enabled") }}</span>
+            </div>
+            {% endfor %}
+            {% if not channels %}
+            <p class="c-3 text-[13px] text-center py-4">{{ _("No channels enabled") }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- MCP Servers -->
+    <div class="card-ios">
+        <div class="card-ios-header"><h2>{{ _("MCP Servers") }}</h2></div>
+        <div class="px-4 pb-4 space-y-3">
+            {% for srv in mcp_servers %}
+            <div class="flex items-center justify-between text-[13px]">
+                <div class="flex items-center gap-2">
+                    <span class="dot dot-on dot-sm"></span>
+                    <span class="c-0">{{ srv.display_name }}</span>
+                </div>
+                <span class="c-3 font-mono text-xs">{{ srv.tool_count }} tool</span>
+            </div>
+            {% endfor %}
+            {% if not mcp_servers %}
+            <p class="c-3 text-[13px] text-center py-4">{{ _("No MCP servers enabled") }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- System -->
+    <div class="card-ios">
+        <div class="card-ios-header"><h2>{{ _("System") }}</h2></div>
+        <div class="px-4 pb-4 space-y-3">
+            <div class="flex items-center justify-between text-[13px]">
+                <span class="c-0">PostgreSQL</span>
+                {% if system_info.db_healthy %}
+                <span class="pill pill-g"><span class="dot dot-on dot-sm"></span>{{ _("Healthy") }}</span>
+                {% else %}
+                <span class="pill pill-o"><span class="dot dot-err dot-sm"></span>{{ _("Down") }}</span>
+                {% endif %}
+            </div>
+            <div class="flex items-center justify-between text-[13px]">
+                <span class="c-0">{{ _("ORM Models") }}</span>
+                <span class="c-3 font-mono text-xs">{{ system_info.orm_model_count }} {{ _("loaded") }}</span>
+            </div>
+            <div class="flex items-center justify-between text-[13px]">
+                <span class="c-0">{{ _("Plugins") }}</span>
+                <span class="c-3 font-mono text-xs">{{ system_info.plugin_count }} {{ _("discovered") }}</span>
+            </div>
+            <div class="flex items-center justify-between text-[13px]">
+                <span class="c-0">{{ _("Version") }}</span>
+                <span class="c-3 font-mono text-xs">v{{ system_info.version }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,1937 @@
+{% extends "me/base.html" %}
+
+{% block title %}Editor - {{ workflow.display_name }} - GridBear{% endblock %}
+{% block page_title %}{{ workflow.display_name }} — Editor{% endblock %}
+
+{% block extra_css %}
+<!-- Drawflow -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow@0.0.59/dist/drawflow.min.css">
+<script src="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow@0.0.59/dist/drawflow.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@dagrejs/dagre@1.1.4/dist/dagre.min.js"></script>
+
+<style>
+/* ══════════════════════════════════════════════════════════
+   Drawflow Theme — Light (default) + Dark (.dark)
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Canvas background ──────────────────────────────────── */
+.parent-drawflow {
+    background: #f1f5f9;
+    background-image: radial-gradient(circle, rgba(148,163,184,0.4) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+.dark .parent-drawflow {
+    background: #020617;
+    background-image: radial-gradient(circle, rgba(51,65,85,0.4) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+.drawflow { background: transparent; width: 100%; height: 100%; }
+
+/* ── Nodes ──────────────────────────────────────────────── */
+.drawflow .drawflow-node {
+    background: #ffffff; border: 1px solid #cbd5e1;
+    border-radius: 12px; color: #1e293b; min-width: 0;
+    padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.drawflow .drawflow-node:hover { border-color: #94a3b8; }
+.drawflow .drawflow-node.selected {
+    border-color: #0d9488;
+    box-shadow: 0 0 0 2px rgba(20,184,166,0.25), 0 4px 12px rgba(0,0,0,0.08);
+}
+.dark .drawflow .drawflow-node {
+    background: #1e293b; border-color: #334155;
+    color: #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.dark .drawflow .drawflow-node:hover { border-color: #475569; }
+.dark .drawflow .drawflow-node.selected {
+    border-color: #14b8a6;
+    box-shadow: 0 0 0 2px rgba(20,184,166,0.3), 0 4px 12px rgba(0,0,0,0.3);
+}
+.drawflow .drawflow-node .drawflow_content_node {
+    border-radius: 12px; overflow: hidden;
+}
+
+/* Node delete button: hidden by default, shown on right-click */
+.drawflow .drawflow-node .drawflow-delete { display: none; }
+.drawflow .drawflow-node.show-delete .drawflow-delete { display: flex; }
+.drawflow .drawflow-delete {
+    background: #ef4444; color: white; border: 2px solid #ffffff;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; cursor: pointer; z-index: 10;
+}
+.dark .drawflow .drawflow-delete { border-color: #1e293b; }
+.drawflow .drawflow-delete:hover { background: #dc2626; }
+
+/* ── Node type borders (same in both themes) ─────────────── */
+.drawflow .agent-node .drawflow_content_node     { border-left: 3px solid #3b82f6; }
+.drawflow .approval-node .drawflow_content_node  { border-left: 3px solid #f59e0b; }
+.drawflow .condition-node .drawflow_content_node  { border-left: 3px solid #10b981; }
+.drawflow .parallel-node .drawflow_content_node   { border-left: 3px solid #a855f7; }
+.drawflow .transform-node .drawflow_content_node  { border-left: 3px solid #64748b; }
+.drawflow .webhook-node .drawflow_content_node    { border-left: 3px solid #06b6d4; }
+.drawflow .n8n-node .drawflow_content_node        { border-left: 3px solid #f97316; }
+.drawflow .delay-node .drawflow_content_node      { border-left: 3px solid #6366f1; }
+.drawflow .tool-node .drawflow_content_node       { border-left: 3px solid #14b8a6; }
+.drawflow .notification-node .drawflow_content_node { border-left: 3px solid #f43f5e; }
+.drawflow .vault-node .drawflow_content_node      { border-left: 3px solid #eab308; }
+
+/* ── Ports ───────────────────────────────────────────────── */
+.drawflow .drawflow-node .inputs .input,
+.drawflow .drawflow-node .outputs .output {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #94a3b8; border: 2px solid #cbd5e1;
+}
+.dark .drawflow .drawflow-node .inputs .input,
+.dark .drawflow .drawflow-node .outputs .output {
+    background: #475569; border-color: #334155;
+}
+/* Equalize port distance from node border */
+.drawflow .drawflow-node .input  { left: -12px !important; }
+.drawflow .drawflow-node .output { right: -6px !important; }
+.drawflow .drawflow-node .outputs .output:hover,
+.drawflow .drawflow-node .inputs .input:hover {
+    background: #14b8a6; border-color: #0d9488;
+}
+
+/* ── Colored output ports ────────────────────────────────── */
+.drawflow .drawflow-node .outputs .output { position: relative; transition: transform 0.15s; }
+.drawflow .drawflow-node .outputs .output[data-label="success"],
+.drawflow .drawflow-node .outputs .output[data-label="approved"] {
+    background: #22c55e; border-color: #16a34a;
+}
+.drawflow .drawflow-node .outputs .output[data-label="failure"],
+.drawflow .drawflow-node .outputs .output[data-label="rejected"] {
+    background: #ef4444; border-color: #dc2626;
+}
+.drawflow .drawflow-node .outputs .output[data-label="timeout"] {
+    background: #f59e0b; border-color: #d97706;
+}
+/* Tooltip on hover */
+.drawflow .drawflow-node .outputs .output[data-label]:hover::after {
+    content: attr(data-label);
+    position: absolute; top: -22px; left: 50%;
+    transform: translateX(-50%); font-size: 9px;
+    color: #1e293b; background: #ffffff; border: 1px solid #cbd5e1;
+    padding: 1px 6px; border-radius: 4px; white-space: nowrap;
+    pointer-events: none; font-family: 'Geist Mono', monospace;
+    z-index: 10;
+}
+.dark .drawflow .drawflow-node .outputs .output[data-label]:hover::after {
+    color: #f1f5f9; background: #1e293b; border-color: #334155;
+}
+.drawflow .drawflow-node .outputs .output[data-label]:hover {
+    transform: scale(1.3);
+}
+
+/* ── Connections ─────────────────────────────────────────── */
+.drawflow .connection .main-path {
+    stroke: #94a3b8; stroke-width: 3; cursor: pointer; stroke-linecap: round;
+}
+.dark .drawflow .connection .main-path { stroke: #475569; }
+.drawflow .connection .main-path:hover { stroke: #14b8a6; stroke-width: 4; }
+.drawflow .connection.selected .main-path { stroke: #14b8a6; stroke-width: 4; }
+.drawflow .connection svg { overflow: visible; }
+
+/* ── Entry point badge ───────────────────────────────────── */
+.drawflow .drawflow-node.is-entry-point { border-color: #0d9488; }
+.dark .drawflow .drawflow-node.is-entry-point { border-color: #14b8a6; }
+.drawflow .drawflow-node.is-entry-point::before {
+    content: 'ENTRY'; position: absolute; top: -18px; left: 50%;
+    transform: translateX(-50%); font-size: 9px; font-weight: 600;
+    color: #0d9488; letter-spacing: 0.05em;
+    font-family: 'Geist Mono', monospace;
+}
+.dark .drawflow .drawflow-node.is-entry-point::before { color: #14b8a6; }
+
+/* ── Node inner content ──────────────────────────────────── */
+.node-inner { padding: 12px 14px; min-width: 170px; }
+.node-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.node-icon {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.node-title { font-size: 13px; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.dark .node-title { color: #f1f5f9; }
+.node-subtitle { font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dark .node-subtitle { color: #94a3b8; }
+
+/* Node icon colors (same in both themes — colored on transparent bg) */
+.agent-node .node-icon     { background: rgba(59,130,246,0.15); }
+.agent-node .node-icon i   { color: #3b82f6; font-size: 11px; }
+.approval-node .node-icon  { background: rgba(245,158,11,0.15); }
+.approval-node .node-icon i{ color: #f59e0b; font-size: 11px; }
+.condition-node .node-icon  { background: rgba(16,185,129,0.15); }
+.condition-node .node-icon i{ color: #10b981; font-size: 11px; }
+.parallel-node .node-icon   { background: rgba(168,85,247,0.15); }
+.parallel-node .node-icon i { color: #a855f7; font-size: 11px; }
+.transform-node .node-icon  { background: rgba(100,116,139,0.15); }
+.transform-node .node-icon i{ color: #64748b; font-size: 11px; }
+.webhook-node .node-icon    { background: rgba(6,182,212,0.15); }
+.webhook-node .node-icon i  { color: #06b6d4; font-size: 11px; }
+.n8n-node .node-icon        { background: rgba(249,115,22,0.15); }
+.n8n-node .node-icon i      { color: #f97316; font-size: 11px; }
+.delay-node .node-icon      { background: rgba(99,102,241,0.15); }
+.delay-node .node-icon i    { color: #6366f1; font-size: 11px; }
+.tool-node .node-icon       { background: rgba(20,184,166,0.15); }
+.tool-node .node-icon i     { color: #14b8a6; font-size: 11px; }
+.notification-node .node-icon  { background: rgba(244,63,94,0.15); }
+.notification-node .node-icon i{ color: #f43f5e; font-size: 11px; }
+.vault-node .node-icon      { background: rgba(234,179,8,0.15); }
+.vault-node .node-icon i    { color: #eab308; font-size: 11px; }
+
+/* ── Palette item ────────────────────────────────────────── */
+.palette-item {
+    cursor: pointer; user-select: none;
+}
+
+/* ── Properties panel ────────────────────────────────────── */
+.prop-label { font-size: 12px; font-weight: 500; color: #64748b; margin-bottom: 4px; display: block; }
+.dark .prop-label { color: #94a3b8; }
+.prop-input {
+    width: 100%; padding: 6px 10px; border-radius: 8px; font-size: 13px;
+    background: #f8fafc; border: 1px solid #cbd5e1; color: #1e293b;
+    outline: none; transition: border-color 0.15s;
+}
+.dark .prop-input {
+    background: #0f172a; border-color: #334155; color: #e2e8f0;
+}
+.prop-input:focus { border-color: rgba(20,184,166,0.5); }
+.prop-input::placeholder { color: #94a3b8; }
+.dark .prop-input::placeholder { color: #475569; }
+select.prop-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 28px; }
+textarea.prop-input { resize: vertical; min-height: 60px; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Workflow definition data (safe JSON embedding via script element) -->
+<script id="wf-definition" type="application/json">{{ definition_json | tojson }}</script>
+
+<div x-data="workflowEditor()" x-init="init()" class="flex flex-col" style="height: calc(100vh - 10rem);">
+
+    <!-- ── Toolbar ──────────────────────────────────────────── -->
+    <div class="flex items-center justify-between gap-3 mb-3 px-1">
+        <div class="flex items-center gap-3">
+            <a href="/me/workflows/{{ workflow.id }}"
+               class="px-3 py-1.5 rounded-lg border border-void-200 dark:border-void-700 text-void-500 hover:text-void-700 dark:hover:text-void-300 hover:border-void-400 dark:hover:border-void-600 text-sm transition-colors">
+                <i class="fas fa-arrow-left mr-1"></i> Back
+            </a>
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-void-800 dark:text-void-300">{{ workflow.display_name }}</span>
+                <span class="text-xs text-void-500 font-mono">v<span x-text="currentVersion">{{ workflow.version }}</span></span>
+                <span x-show="dirty" x-cloak class="w-2 h-2 rounded-full bg-ember-400 animate-pulse" title="Unsaved changes"></span>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button @click="undo()" :disabled="undoStack.length === 0"
+                    class="px-2.5 py-1.5 rounded-lg border border-void-300 dark:border-void-700 text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:border-void-400 dark:hover:border-void-600 text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Undo (Ctrl+Z)">
+                <i class="fas fa-undo"></i>
+            </button>
+            <button @click="redo()" :disabled="redoStack.length === 0"
+                    class="px-2.5 py-1.5 rounded-lg border border-void-300 dark:border-void-700 text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:border-void-400 dark:hover:border-void-600 text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Redo (Ctrl+Shift+Z)">
+                <i class="fas fa-redo"></i>
+            </button>
+            <div class="w-px h-5 bg-void-300 dark:bg-void-700 mx-1"></div>
+            <button @click="validateWorkflow()" :disabled="saving"
+                    class="px-3 py-1.5 rounded-lg border border-void-300 dark:border-void-700 text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:border-void-400 dark:hover:border-void-600 text-sm transition-colors">
+                <i class="fas fa-check-double mr-1"></i> Validate
+            </button>
+            <button @click="saveWorkflow()" :disabled="saving"
+                    class="px-3 py-1.5 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                <i class="fas fa-save mr-1"></i>
+                <span x-text="saving ? 'Saving...' : 'Save'">Save</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Editor 3-Column Layout ───────────────────────────── -->
+    <div class="flex flex-1 min-h-0 rounded-2xl overflow-hidden border border-void-200 dark:border-void-800">
+
+        <!-- Left: Palette -->
+        <div class="w-44 flex-shrink-0 bg-white/80 dark:bg-void-900/80 border-r border-void-200 dark:border-void-800 overflow-y-auto p-3 space-y-1.5">
+            <div class="text-[10px] font-semibold text-void-500 uppercase tracking-wider mb-2 px-1">Step Types</div>
+            {% for st in step_types %}
+            <div class="palette-item flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-colors"
+                 :class="pendingStepType === '{{ st.type }}' ? 'border-nordic-500/50 bg-nordic-500/10 ring-1 ring-nordic-500/30' : 'border-void-200 hover:border-void-400 hover:bg-void-200/60 dark:border-void-800 dark:hover:border-void-600 dark:hover:bg-void-800/60'"
+                 draggable="true"
+                 @dragstart="$event.dataTransfer.setData('application/x-step-type', '{{ st.type }}'); $event.dataTransfer.effectAllowed = 'copy'; pendingStepType = null;"
+                 @click="selectPaletteItem('{{ st.type }}')">
+                <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                     style="background: rgba(var(--c-{{ st.color }}), 0.15);">
+                    <i class="fas {{ st.icon }} text-xs" style="color: rgb(var(--c-{{ st.color }}));"></i>
+                </div>
+                <span class="text-xs font-medium text-void-700 dark:text-void-300">{{ st.label }}</span>
+            </div>
+            {% endfor %}
+
+            <!-- Palette color vars (inline since Tailwind CDN cannot process dynamic) -->
+            <style>
+                :root {
+                    --c-blue: 59,130,246; --c-amber: 245,158,11; --c-emerald: 16,185,129;
+                    --c-purple: 168,85,247; --c-slate: 100,116,139; --c-cyan: 6,182,212;
+                    --c-orange: 249,115,22; --c-indigo: 99,102,241; --c-teal: 20,184,166;
+                    --c-rose: 244,63,94; --c-yellow: 234,179,8;
+                }
+            </style>
+
+            <div class="border-t border-void-200 dark:border-void-800 mt-3 pt-3">
+                <div class="text-[10px] font-semibold text-void-500 uppercase tracking-wider mb-2 px-1">Actions</div>
+                <button @click="deleteSelected()" :disabled="!selectedNodeId"
+                        class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-void-200 dark:border-void-800 text-void-500 dark:text-void-400 hover:text-red-500 dark:hover:text-red-400 hover:border-red-300/50 dark:hover:border-red-800/50 hover:bg-red-100/50 dark:hover:bg-red-900/10 text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                    <i class="fas fa-trash-can w-5 text-center"></i>
+                    <span>Delete Node</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Center: Canvas -->
+        <div class="flex-1 relative overflow-hidden"
+             :class="pendingStepType ? 'cursor-crosshair' : ''"
+             @dragover.prevent="$event.dataTransfer.dropEffect = 'copy'"
+             @drop.prevent="handleCanvasDrop($event)">
+            <div x-ref="canvas" id="drawflow-canvas" class="absolute inset-0"></div>
+            <!-- Empty state -->
+            <div x-show="nodeCount === 0" x-cloak
+                 class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div class="text-center">
+                    <i class="fas fa-diagram-project text-4xl text-void-300 dark:text-void-700 mb-3"></i>
+                    <p class="text-void-500 text-sm">Drag a step type from the palette, or click + click to place</p>
+                </div>
+            </div>
+            <!-- Canvas Controls (bottom-left) — @mousedown.stop prevents Drawflow from capturing clicks -->
+            <div class="absolute bottom-3 left-3 flex items-center gap-1 bg-white/90 dark:bg-void-900/90 backdrop-blur-sm rounded-xl border border-void-300/50 dark:border-void-700/50 p-1 z-10"
+                 @mousedown.stop @mouseup.stop>
+                <button @click="zoomOut()" class="w-7 h-7 rounded-lg flex items-center justify-center text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:bg-void-200 dark:hover:bg-void-800 text-xs transition-colors" title="Zoom out">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <span class="text-[11px] text-void-500 dark:text-void-400 font-mono w-10 text-center select-none" x-text="Math.round(zoomLevel * 100) + '%'"></span>
+                <button @click="zoomIn()" class="w-7 h-7 rounded-lg flex items-center justify-center text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:bg-void-200 dark:hover:bg-void-800 text-xs transition-colors" title="Zoom in">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button @click="zoomReset()" class="w-7 h-7 rounded-lg flex items-center justify-center text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:bg-void-200 dark:hover:bg-void-800 text-xs transition-colors" title="Reset zoom (100%)">
+                    <i class="fas fa-crosshairs"></i>
+                </button>
+                <button @click="fitToView()" class="w-7 h-7 rounded-lg flex items-center justify-center text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:bg-void-200 dark:hover:bg-void-800 text-xs transition-colors" title="Fit to view">
+                    <i class="fas fa-expand-arrows-alt"></i>
+                </button>
+                <div class="w-px h-4 bg-void-300 dark:bg-void-700 mx-0.5"></div>
+                <button @click="toggleLock()" class="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-colors"
+                        :class="editorLocked ? 'text-ember-400 bg-ember-500/10 hover:bg-ember-500/20' : 'text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:bg-void-200 dark:hover:bg-void-800'"
+                        :title="editorLocked ? 'Unlock editor' : 'Lock editor (view only)'">
+                    <i class="fas" :class="editorLocked ? 'fa-lock' : 'fa-lock-open'"></i>
+                </button>
+                <button @click="toggleFullscreen()" class="w-7 h-7 rounded-lg flex items-center justify-center text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:bg-void-200 dark:hover:bg-void-800 text-xs transition-colors"
+                        :title="isFullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'">
+                    <i class="fas" :class="isFullscreen ? 'fa-compress' : 'fa-expand'"></i>
+                </button>
+                <div class="w-px h-4 bg-void-300 dark:bg-void-700 mx-0.5"></div>
+                <button @click="autoLayout()" class="w-7 h-7 rounded-lg flex items-center justify-center text-void-500 dark:text-void-400 hover:text-void-800 dark:hover:text-void-200 hover:bg-void-200 dark:hover:bg-void-800 text-xs transition-colors" title="Auto layout (arrange nodes)">
+                    <i class="fas fa-sitemap"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Right: Properties Panel -->
+        <div class="w-72 flex-shrink-0 bg-white/80 dark:bg-void-900/80 border-l border-void-200 dark:border-void-800 overflow-y-auto"
+             :class="selectedNodeId ? '' : 'flex items-center justify-center'">
+
+            <!-- No selection state -->
+            <div x-show="!selectedNodeId" class="text-center p-4">
+                <i class="fas fa-mouse-pointer text-2xl text-void-300 dark:text-void-700 mb-2"></i>
+                <p class="text-void-500 text-xs">Select a node to edit its properties</p>
+            </div>
+
+            <!-- Properties form -->
+            <div x-show="selectedNodeId" x-cloak class="p-4 space-y-4">
+                <div class="text-xs font-semibold text-void-500 uppercase tracking-wider flex items-center justify-between">
+                    <span>Properties</span>
+                    <span class="text-void-400 dark:text-void-600 font-mono normal-case" x-text="selectedData.type"></span>
+                </div>
+
+                <!-- Common: Step ID -->
+                <div>
+                    <label class="prop-label">Step ID</label>
+                    <input type="text" class="prop-input font-mono" placeholder="e.g. fetch_invoices"
+                           :value="selectedData.step_id"
+                           @input="selectedData.step_id = $event.target.value.replace(/[^a-z0-9_\-]/g, ''); updateNode()"
+                           pattern="[a-z0-9_\-]+">
+                </div>
+
+                <!-- Common: Entry Point -->
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="entry-point-toggle"
+                           :checked="selectedData.is_entry_point"
+                           @change="setEntryPoint($event.target.checked)"
+                           class="w-4 h-4 rounded border-void-300 bg-void-100 dark:border-void-600 dark:bg-void-800 text-nordic-500 focus:ring-nordic-500/30">
+                    <label for="entry-point-toggle" class="text-xs text-void-700 dark:text-void-300">Entry point</label>
+                </div>
+
+                <!-- ── Agent Fields ──────────────────────────── -->
+                <template x-if="selectedData.type === 'agent'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Agent</label>
+                            <select class="prop-input" x-model="selectedData.agent_id" @change="updateNode()">
+                                <option value="">Select agent...</option>
+                                <template x-for="a in agents" :key="a.id">
+                                    <option :value="a.id" x-text="a.name" :selected="a.id === selectedData.agent_id"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="prop-label">Prompt</label>
+                            <textarea class="prop-input" rows="4" placeholder="Describe what the agent should do..."
+                                      x-model="selectedData.prompt" @input="updateNode()"></textarea>
+                        </div>
+                        <div>
+                            <label class="prop-label">Output Key</label>
+                            <input type="text" class="prop-input font-mono" placeholder="e.g. invoices"
+                                   x-model="selectedData.output_key" @input="updateNode()">
+                        </div>
+                        <div>
+                            <label class="prop-label">Timeout (seconds)</label>
+                            <input type="number" class="prop-input" placeholder="120" min="0"
+                                   x-model.number="selectedData.timeout_seconds" @input="updateNode()">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Approval Fields ───────────────────────── -->
+                <template x-if="selectedData.type === 'approval'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Message</label>
+                            <textarea class="prop-input" rows="3" placeholder="Message shown to approver..."
+                                      x-model="selectedData.message" @input="updateNode()"></textarea>
+                        </div>
+                        <div>
+                            <label class="prop-label">Timeout (minutes)</label>
+                            <input type="number" class="prop-input" placeholder="60" min="1"
+                                   x-model.number="selectedData.timeout_minutes" @input="updateNode()">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Condition Fields ──────────────────────── -->
+                <template x-if="selectedData.type === 'condition'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div class="flex items-center justify-between">
+                            <span class="prop-label mb-0">Conditions</span>
+                            <button @click="addCondition()"
+                                    class="text-xs text-nordic-400 hover:text-nordic-300 transition-colors">
+                                <i class="fas fa-plus mr-0.5"></i> Add
+                            </button>
+                        </div>
+                        <template x-for="(cond, idx) in (selectedData.conditions || [])" :key="idx">
+                            <div class="flex gap-2 items-start">
+                                <div class="flex-1">
+                                    <input type="text" class="prop-input font-mono text-xs"
+                                           :placeholder="idx === (selectedData.conditions.length - 1) ? 'true (default)' : 'expression'"
+                                           x-model="cond.expression" @input="updateNode()">
+                                </div>
+                                <button x-show="selectedData.conditions.length > 1"
+                                        @click="removeCondition(idx)"
+                                        class="mt-1 text-void-500 hover:text-red-400 text-xs transition-colors">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </template>
+                        <p class="text-[10px] text-void-500">Each condition maps to an output port. Connect ports to target steps.</p>
+                    </div>
+                </template>
+
+                <!-- ── Parallel Fields ───────────────────────── -->
+                <template x-if="selectedData.type === 'parallel'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Branches (step IDs)</label>
+                            <input type="text" class="prop-input font-mono text-xs"
+                                   placeholder="step_a, step_b, step_c"
+                                   :value="(selectedData.branches || []).join(', ')"
+                                   @change="selectedData.branches = $event.target.value.split(',').map(s => s.trim()).filter(Boolean); updateNode()">
+                            <p class="text-[10px] text-void-500 mt-1">Comma-separated step IDs to run in parallel</p>
+                        </div>
+                        <div>
+                            <label class="prop-label">Join Mode</label>
+                            <select class="prop-input" x-model="selectedData.join_mode" @change="updateNode()">
+                                <option value="all">All (wait for every branch)</option>
+                                <option value="any">Any (first to complete)</option>
+                            </select>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Transform Fields ──────────────────────── -->
+                <template x-if="selectedData.type === 'transform'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Expression (Jinja2)</label>
+                            <textarea class="prop-input" rows="4"
+                                      placeholder='{"key": "{{ "{{" }} steps.prev.output.value {{ "}}" }}"}'
+                                      x-model="selectedData.expression" @input="updateNode()"></textarea>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Webhook Fields ────────────────────────── -->
+                <template x-if="selectedData.type === 'webhook'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">URL</label>
+                            <input type="url" class="prop-input text-xs" placeholder="https://..."
+                                   x-model="selectedData.url" @input="updateNode()">
+                        </div>
+                        <div>
+                            <label class="prop-label">Method</label>
+                            <select class="prop-input" x-model="selectedData.method" @change="updateNode()">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="prop-label">Headers (JSON)</label>
+                            <textarea class="prop-input" rows="2" placeholder='{"Authorization": "Bearer ..."}'
+                                      x-model="selectedData.headers_json" @input="updateNode()"></textarea>
+                        </div>
+                        <div>
+                            <label class="prop-label">Body</label>
+                            <textarea class="prop-input" rows="3" placeholder="Request body..."
+                                      x-model="selectedData.body" @input="updateNode()"></textarea>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── N8N Fields ────────────────────────────── -->
+                <template x-if="selectedData.type === 'n8n'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Webhook URL</label>
+                            <input type="url" class="prop-input text-xs" placeholder="https://n8n.example.com/webhook/..."
+                                   x-model="selectedData.webhook_url" @input="updateNode()">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="n8n-wait"
+                                   x-model="selectedData.wait_for_response"
+                                   @change="updateNode()"
+                                   class="w-4 h-4 rounded border-void-300 bg-void-100 dark:border-void-600 dark:bg-void-800 text-nordic-500 focus:ring-nordic-500/30">
+                            <label for="n8n-wait" class="text-xs text-void-700 dark:text-void-300">Wait for response</label>
+                        </div>
+                        <div>
+                            <label class="prop-label">Timeout (seconds)</label>
+                            <input type="number" class="prop-input" placeholder="30" min="0"
+                                   x-model.number="selectedData.timeout_seconds" @input="updateNode()">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Delay Fields ──────────────────────────── -->
+                <template x-if="selectedData.type === 'delay'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Delay (seconds)</label>
+                            <input type="number" class="prop-input" placeholder="60" min="0"
+                                   x-model.number="selectedData.seconds" @input="updateNode()">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Tool Fields ──────────────────────────────── -->
+                <template x-if="selectedData.type === 'tool'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">MCP Server</label>
+                            <select class="prop-input" x-model="selectedData.tool_server"
+                                    @change="selectedData.tool_name = ''; updateNode()">
+                                <option value="">All servers</option>
+                                <template x-for="s in mcpServers" :key="s">
+                                    <option :value="s" x-text="s"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="prop-label">Tool</label>
+                            <select class="prop-input" x-model="selectedData.tool_name" @change="updateNode()">
+                                <option value="">Select tool...</option>
+                                <template x-for="t in filteredTools()" :key="t.name">
+                                    <option :value="t.name" x-text="t.label || t.name"></option>
+                                </template>
+                            </select>
+                            <p class="text-void-400 dark:text-void-600 text-[10px] mt-1" x-show="selectedData.tool_name"
+                               x-text="(mcpTools.find(t => t.name === selectedData.tool_name) || {}).description || ''"></p>
+                        </div>
+                        <div>
+                            <label class="prop-label">Mode</label>
+                            <select class="prop-input" x-model="selectedData.tool_mode" @change="updateNode()">
+                                <option value="direct">Direct (parameters)</option>
+                                <option value="agent">Agent-assisted (prompt)</option>
+                            </select>
+                        </div>
+                        <div x-show="selectedData.tool_mode !== 'agent'">
+                            <label class="prop-label">Parameters (JSON)</label>
+                            <textarea class="prop-input font-mono text-xs" rows="4" placeholder='{"key": "value"}'
+                                      x-model="selectedData.parameters_json" @input="updateNode()"></textarea>
+                        </div>
+                        <div x-show="selectedData.tool_mode === 'agent'" class="space-y-3">
+                            <div>
+                                <label class="prop-label">Agent</label>
+                                <select class="prop-input" x-model="selectedData.tool_agent_id" @change="updateNode()">
+                                    <option value="">Select agent...</option>
+                                    <template x-for="a in agents" :key="a.id">
+                                        <option :value="a.id" x-text="a.name || a.id"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="prop-label">Prompt</label>
+                                <textarea class="prop-input" rows="3"
+                                          placeholder="Describe what the agent should do with this tool..."
+                                          x-model="selectedData.tool_prompt" @input="updateNode()"></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="prop-label">Output Key</label>
+                            <input type="text" class="prop-input font-mono" placeholder="e.g. result"
+                                   x-model="selectedData.output_key" @input="updateNode()">
+                        </div>
+                        <div>
+                            <label class="prop-label">Timeout (seconds)</label>
+                            <input type="number" class="prop-input" placeholder="30" min="0"
+                                   x-model.number="selectedData.timeout_seconds" @input="updateNode()">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Notification Fields ──────────────────────── -->
+                <template x-if="selectedData.type === 'notification'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Channel</label>
+                            <select class="prop-input" x-model="selectedData.channel_type" @change="updateNode()">
+                                <option value="telegram">Telegram</option>
+                                <option value="email">Email</option>
+                                <option value="whatsapp">WhatsApp</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="prop-label">Recipient</label>
+                            <input type="text" class="prop-input" placeholder="e.g. username or chat_id"
+                                   x-model="selectedData.recipient" @input="updateNode()">
+                        </div>
+                        <div x-show="selectedData.channel_type === 'email'">
+                            <label class="prop-label">Subject</label>
+                            <input type="text" class="prop-input" placeholder="Email subject..."
+                                   x-model="selectedData.subject" @input="updateNode()">
+                        </div>
+                        <div>
+                            <label class="prop-label">Message Mode</label>
+                            <select class="prop-input" x-model="selectedData.message_mode"
+                                    @change="updateNode()">
+                                <option value="template">Template</option>
+                                <option value="agent">Agent-generated</option>
+                            </select>
+                        </div>
+                        <div x-show="selectedData.message_mode !== 'agent'">
+                            <label class="prop-label">Message</label>
+                            <textarea class="prop-input" rows="4" placeholder="Use {{ '{{' }}previous_output.key{{ '}}' }} or {{ '{{' }}steps.step_id.output.key{{ '}}' }}..."
+                                      x-model="selectedData.message" @input="updateNode()"></textarea>
+                        </div>
+                        <div x-show="selectedData.message_mode === 'agent'" class="space-y-3">
+                            <div>
+                                <label class="prop-label">Agent</label>
+                                <select class="prop-input" x-model="selectedData.notif_agent_id" @change="updateNode()">
+                                    <option value="">Select agent...</option>
+                                    <template x-for="a in agents" :key="a.id">
+                                        <option :value="a.id" x-text="a.name || a.id"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="prop-label">Prompt</label>
+                                <textarea class="prop-input" rows="4"
+                                          placeholder="Describe the message to generate. The agent has access to all previous step outputs."
+                                          x-model="selectedData.notif_prompt" @input="updateNode()"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ── Vault Fields ──────────────────────────── -->
+                <template x-if="selectedData.type === 'vault'">
+                    <div class="space-y-3 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Service</label>
+                            <select class="prop-input" x-model="selectedData.service_id"
+                                    @change="var svc = vaultServices.find(s => s.service_id === selectedData.service_id); selectedData.service_name = svc ? svc.name : ''; updateNode()">
+                                <option value="">Select vault service...</option>
+                                <template x-for="s in vaultServices" :key="s.service_id">
+                                    <option :value="s.service_id" x-text="s.name + (s.url ? ' (' + s.url + ')' : '')"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <p class="text-[10px] text-void-500">
+                            Credentials are injected into the pipeline. Access via
+                            <code class="text-void-600 dark:text-void-400">{{ '{{' }} previous_output.key_name {{ '}}' }}</code>
+                            in downstream steps.
+                        </p>
+                    </div>
+                </template>
+
+                <!-- ── Output Format (agent, tool, webhook) ──── -->
+                <template x-if="['agent', 'tool', 'webhook'].includes(selectedData.type)">
+                    <div class="space-y-2 border-t border-void-200 dark:border-void-800 pt-3">
+                        <div>
+                            <label class="prop-label">Output Format</label>
+                            <select class="prop-input" x-model="selectedData.output_format" @change="updateNode()">
+                                <option value="text">Text (default)</option>
+                                <option value="json">JSON (strict)</option>
+                                <option value="boolean">Boolean (true/false routing)</option>
+                            </select>
+                        </div>
+                        <p class="text-[10px] text-void-500" x-show="selectedData.output_format === 'boolean'">
+                            Routes to <span class="text-emerald-400">success</span> on true,
+                            <span class="text-red-400">failure</span> on false.
+                        </p>
+                        <p class="text-[10px] text-void-500" x-show="selectedData.output_format === 'json'">
+                            Output must be valid JSON. Parse failure routes to <span class="text-red-400">failure</span>.
+                        </p>
+                    </div>
+                </template>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ── Validation Errors Overlay ────────────────────────── -->
+    <div x-show="errors.length > 0" x-cloak x-transition
+         class="mt-3 rounded-xl bg-red-900/20 border border-red-800/50 p-3">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-red-400">
+                <i class="fas fa-exclamation-triangle mr-1"></i>
+                <span x-text="errors.length"></span> validation error(s)
+            </span>
+            <button @click="errors = []" class="text-red-400/60 hover:text-red-400 text-xs">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="space-y-1 max-h-32 overflow-y-auto">
+            <template x-for="(err, i) in errors" :key="i">
+                <div class="text-xs text-red-300/80">
+                    <code x-show="err.step_id" class="text-red-400 font-mono" x-text="err.step_id + ':'"></code>
+                    <span x-text="err.error"></span>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ═══════════════════════════════════════════════════════════
+   Step Type Definitions
+   ═══════════════════════════════════════════════════════════ */
+var STEP_TYPES = {
+    agent:     { label: 'Agent',     icon: 'fa-robot',              outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+    approval:  { label: 'Approval',  icon: 'fa-hand',               outputs: ['approved', 'rejected', 'timeout'],        fields: { on_approved: 'output_1', on_rejected: 'output_2', on_timeout: 'output_3' } },
+    condition: { label: 'Condition', icon: 'fa-code-branch',        outputs: 'dynamic',                                   fields: 'dynamic' },
+    parallel:  { label: 'Parallel',  icon: 'fa-layer-group',        outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+    transform: { label: 'Transform', icon: 'fa-wand-magic-sparkles',outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+    webhook:   { label: 'Webhook',   icon: 'fa-globe',              outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+    n8n:       { label: 'N8N',       icon: 'fa-diagram-project',    outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+    delay:     { label: 'Delay',     icon: 'fa-clock',              outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+    tool:      { label: 'Tool',      icon: 'fa-wrench',             outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+    notification: { label: 'Notify', icon: 'fa-bell',               outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+    vault:      { label: 'Vault',  icon: 'fa-key',                outputs: ['success', 'failure'],                     fields: { on_success: 'output_1', on_failure: 'output_2' } },
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Utility: escape HTML for safe node rendering
+   All user-provided strings pass through this before being
+   placed into node display HTML.
+   ═══════════════════════════════════════════════════════════ */
+function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Safe node DOM update — uses textContent for user data,
+   builds structure with createElement (no raw innerHTML from
+   user input).
+   ═══════════════════════════════════════════════════════════ */
+function buildNodeDom(type, data) {
+    var info = STEP_TYPES[type];
+    var stepId = data.step_id || 'untitled';
+    var subtitle = '';
+
+    switch (type) {
+        case 'agent':
+            subtitle = data.agent_id ? 'Agent: ' + data.agent_id : 'No agent selected';
+            break;
+        case 'approval':
+            subtitle = 'Timeout: ' + (data.timeout_minutes || 60) + ' min';
+            break;
+        case 'condition':
+            var count = (data.conditions || []).length;
+            subtitle = count + ' condition' + (count !== 1 ? 's' : '');
+            break;
+        case 'parallel':
+            subtitle = 'Join: ' + (data.join_mode || 'all');
+            break;
+        case 'transform':
+            subtitle = 'Transform data';
+            break;
+        case 'webhook':
+            subtitle = (data.method || 'GET') + ' ' + (data.url || '').substring(0, 22);
+            break;
+        case 'n8n':
+            subtitle = data.webhook_url ? 'N8N webhook' : 'Configure N8N';
+            break;
+        case 'delay':
+            subtitle = (data.seconds || 0) + 's delay';
+            break;
+        case 'tool':
+            var toolLabel = data.tool_name ? data.tool_name.split('__').pop() : '';
+            var modeStr = data.tool_mode === 'agent' ? ' [AI]' : '';
+            subtitle = toolLabel ? toolLabel + modeStr : 'No tool selected';
+            break;
+        case 'notification':
+            var modeTag = data.message_mode === 'agent' ? ' [AI]' : '';
+            subtitle = data.channel_type ? data.channel_type + ': ' + (data.recipient || '') + modeTag : 'Configure...';
+            break;
+        case 'vault':
+            subtitle = data.service_name || data.service_id || 'No service selected';
+            break;
+    }
+
+    // Build DOM safely
+    var outer = document.createElement('div');
+    outer.className = 'node-inner';
+
+    var header = document.createElement('div');
+    header.className = 'node-header';
+
+    var iconWrap = document.createElement('div');
+    iconWrap.className = 'node-icon';
+    var icon = document.createElement('i');
+    icon.className = 'fas ' + info.icon;
+    iconWrap.appendChild(icon);
+
+    var title = document.createElement('span');
+    title.className = 'node-title';
+    title.textContent = stepId;
+
+    header.appendChild(iconWrap);
+    header.appendChild(title);
+    outer.appendChild(header);
+
+    var sub = document.createElement('div');
+    sub.className = 'node-subtitle';
+    sub.textContent = subtitle;
+    outer.appendChild(sub);
+
+    return outer;
+}
+
+/**
+ * Serialize a node to initial HTML string for Drawflow addNode().
+ * Uses escapeHtml on all user-provided values.
+ */
+function getNodeHtmlString(type, data) {
+    var info = STEP_TYPES[type];
+    var stepId = escapeHtml(data.step_id || 'untitled');
+    var subtitle = '';
+
+    switch (type) {
+        case 'agent':
+            subtitle = data.agent_id ? 'Agent: ' + escapeHtml(data.agent_id) : 'No agent selected';
+            break;
+        case 'approval':
+            subtitle = 'Timeout: ' + parseInt(data.timeout_minutes || 60) + ' min';
+            break;
+        case 'condition':
+            var count = (data.conditions || []).length;
+            subtitle = count + ' condition' + (count !== 1 ? 's' : '');
+            break;
+        case 'parallel':
+            subtitle = 'Join: ' + escapeHtml(data.join_mode || 'all');
+            break;
+        case 'transform':
+            subtitle = 'Transform data';
+            break;
+        case 'webhook':
+            subtitle = escapeHtml((data.method || 'GET') + ' ' + (data.url || '').substring(0, 22));
+            break;
+        case 'n8n':
+            subtitle = data.webhook_url ? 'N8N webhook' : 'Configure N8N';
+            break;
+        case 'delay':
+            subtitle = parseInt(data.seconds || 0) + 's delay';
+            break;
+        case 'tool':
+            var toolLabel = data.tool_name ? data.tool_name.split('__').pop() : '';
+            var modeStr = data.tool_mode === 'agent' ? ' [AI]' : '';
+            subtitle = toolLabel ? escapeHtml(toolLabel + modeStr) : 'No tool selected';
+            break;
+        case 'notification':
+            var modeTag = data.message_mode === 'agent' ? ' [AI]' : '';
+            subtitle = data.channel_type ? escapeHtml(data.channel_type + ': ' + (data.recipient || '') + modeTag) : 'Configure...';
+            break;
+        case 'vault':
+            subtitle = escapeHtml(data.service_name || data.service_id || 'No service selected');
+            break;
+    }
+
+    return '<div class="node-inner">' +
+        '<div class="node-header">' +
+            '<div class="node-icon"><i class="fas ' + escapeHtml(info.icon) + '"></i></div>' +
+            '<span class="node-title">' + stepId + '</span>' +
+        '</div>' +
+        '<div class="node-subtitle">' + subtitle + '</div>' +
+    '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Alpine Component: Workflow Editor
+   ═══════════════════════════════════════════════════════════ */
+// Store Drawflow instance OUTSIDE Alpine's reactive proxy system.
+// Alpine wraps all data properties in ES6 Proxies for change tracking,
+// which breaks Drawflow's internal this.drawflow.drawflow[module].data[id]
+// chain during connection drag operations.
+var _rawEditor = null;
+
+function workflowEditor() {
+    return {
+        selectedNodeId: null,
+        selectedData: {},
+        nodes: {},           // drawflowNodeId -> step data
+        agents: [],          // [{id, name}]
+        mcpTools: [],        // [{name, server, tool_name, label, description}]
+        vaultServices: [],   // [{service_id, name, url}]
+        dirty: false,
+        saving: false,
+        errors: [],
+        undoStack: [],
+        redoStack: [],
+        zoomLevel: 1,
+        editorLocked: false,
+        isFullscreen: false,
+        nodeCount: 0,
+        currentVersion: {{ workflow.version }},
+        csrfToken: '{{ csrf_token(request) }}',
+        workflowId: {{ workflow.id }},
+        _skipSnapshot: false,
+        pendingStepType: null,
+
+        /* ─── Initialization ─────────────────────────── */
+        async init() {
+            if (this._initialized) return;
+            this._initialized = true;
+            var self = this;
+
+            // Fetch agents, tools, vault-services in parallel (non-blocking)
+            Promise.allSettled([
+                fetch('/me/workflows/api/agents').then(function(r) { return r.json(); }),
+                fetch('/me/workflows/api/tools').then(function(r) { return r.json(); }),
+                fetch('/me/workflows/api/vault-services').then(function(r) { return r.json(); }),
+            ]).then(function(results) {
+                if (results[0].status === 'fulfilled') self.agents = results[0].value;
+                if (results[1].status === 'fulfilled') self.mcpTools = results[1].value;
+                if (results[2].status === 'fulfilled') self.vaultServices = results[2].value;
+            });
+
+            // ── Patch Drawflow.prototype.dragEnd BEFORE instantiation ──
+            // Must be patched here so .bind(this) in start() binds our version.
+            // Drawflow's original dragEnd crashes on data[id].outputs access,
+            // and e.target may be the SVG preview line (not the input port).
+            if (!Drawflow.__dragEndPatched) {
+                var _origDragEnd = Drawflow.prototype.dragEnd;
+                Drawflow.prototype.dragEnd = function(e) {
+                    if (this.connection) {
+                        // Connection drag end — handle ourselves
+                        var inputPort = null;
+                        var els = document.elementsFromPoint(e.clientX, e.clientY);
+                        for (var i = 0; i < els.length; i++) {
+                            if (els[i].classList.contains('input')) {
+                                inputPort = els[i];
+                                break;
+                            }
+                        }
+                        if (inputPort && this.ele_selected) {
+                            var srcNode = this.ele_selected.parentElement?.parentElement;
+                            var tgtNode = inputPort.parentElement?.parentElement;
+                            if (srcNode && tgtNode && srcNode.id !== tgtNode.id) {
+                                var srcId = srcNode.id.slice(5);
+                                var tgtId = tgtNode.id.slice(5);
+                                var srcOutput = this.ele_selected.classList[1];
+                                var tgtInput = inputPort.classList[1];
+                                try {
+                                    this.addConnection(
+                                        parseInt(srcId), parseInt(tgtId),
+                                        srcOutput, tgtInput
+                                    );
+                                } catch (ex) {
+                                    console.warn('Connection error:', ex);
+                                }
+                            }
+                        }
+                        // Cleanup
+                        if (this.connection_ele) {
+                            this.connection_ele.remove();
+                            this.connection_ele = null;
+                        }
+                        this.connection = false;
+                        this.ele_selected = null;
+                        this.drag = false;
+                        this.drag_point = false;
+                        this.editor_selected = false;
+                        var pc = this.precanvas;
+                        pc.querySelectorAll('svg.connection:not([class*="node_in_"])').forEach(function(el) { el.remove(); });
+                        requestAnimationFrame(function() {
+                            pc.querySelectorAll('svg.connection:not([class*="node_in_"])').forEach(function(el) { el.remove(); });
+                        });
+                    } else {
+                        // Non-connection drag (node move, canvas pan) — use original
+                        _origDragEnd.call(this, e);
+                    }
+                };
+                Drawflow.__dragEndPatched = true;
+            }
+
+            // Create Drawflow editor
+            var canvas = self.$refs.canvas;
+            _rawEditor = new Drawflow(canvas);
+            _rawEditor.reroute = true;
+            _rawEditor.reroute_fix_curvature = true;
+            _rawEditor.force_first_input = false;
+            _rawEditor.start();
+
+            // Fix Drawflow 0.0.59 bug: four problems when canvas has many nodes:
+            // (a) onpointerleave/onpointerout reset drag=false when cursor
+            //     exits the container boundary → drag gets cancelled
+            // (b) mousemove/mouseup only fire inside container → no events
+            //     when cursor is outside
+            // (c) overflow:hidden on container prevents hit-testing on nodes
+            //     whose canvas coords exceed the container's layout size
+            // (d) after panning, the precanvas (width:100%) leaves a "dead zone"
+            //     in the container where clicks don't reach the precanvas,
+            //     so Drawflow doesn't recognize them as canvas clicks
+            canvas.onpointerleave = null;                            // fix (a)
+            canvas.onpointerout = null;
+            window.addEventListener('mousemove', _rawEditor.position.bind(_rawEditor));  // fix (b)
+            window.addEventListener('mouseup', _rawEditor.dragEnd.bind(_rawEditor));
+            canvas.style.overflow = 'visible';                       // fix (c)
+            canvas.addEventListener('mousedown', function(e) {       // fix (d)
+                // Click hit the container (dead zone), not the precanvas
+                if (e.target === canvas && !_rawEditor.editor_selected && !_rawEditor.drag) {
+                    _rawEditor.ele_selected = canvas;
+                    _rawEditor.editor_selected = true;
+                    _rawEditor.pos_x = e.clientX;
+                    _rawEditor.pos_x_start = e.clientX;
+                    _rawEditor.pos_y = e.clientY;
+                    _rawEditor.pos_y_start = e.clientY;
+                }
+            });
+
+            // Fix Drawflow 0.0.59 bug: horizontal scroll (deltaX) triggers
+            // zoom instead of panning. Intercept in capture phase so Drawflow
+            // never sees horizontal-dominant wheel events.
+            canvas.addEventListener('wheel', function(e) {
+                if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Pan canvas horizontally instead of zooming
+                    _rawEditor.canvas_x -= e.deltaX;
+                    _rawEditor.canvas_y -= e.deltaY;
+                    _rawEditor.precanvas.style.transform =
+                        'translate(' + _rawEditor.canvas_x + 'px, ' +
+                        _rawEditor.canvas_y + 'px) scale(' + _rawEditor.zoom + ')';
+                }
+            }, { capture: true, passive: false });
+
+            // Load existing definition
+            var defEl = document.getElementById('wf-definition');
+            var definition = {};
+            try { definition = JSON.parse(defEl.textContent); } catch (e) {}
+
+            if (definition.steps && Object.keys(definition.steps).length > 0) {
+                self._skipSnapshot = true;
+                self.importDefinition(definition);
+                self._skipSnapshot = false;
+                self.pushSnapshot(); // capture initial state for undo
+                self.dirty = false;  // initial load is not a user change
+            }
+
+            // ── Click-to-place: capture mousedown on canvas before Drawflow ──
+            canvas.addEventListener('mousedown', function(e) {
+                if (!self.pendingStepType) return;
+                // Don't intercept clicks on existing nodes (let Drawflow handle selection)
+                if (e.target.closest('.drawflow-node')) {
+                    self.pendingStepType = null;
+                    return;
+                }
+                e.stopPropagation();
+                e.preventDefault();
+                var rect = _rawEditor.container.getBoundingClientRect();
+                var posX = (e.clientX - rect.x - _rawEditor.canvas_x) / _rawEditor.zoom;
+                var posY = (e.clientY - rect.y - _rawEditor.canvas_y) / _rawEditor.zoom;
+                self.addStep(self.pendingStepType, posX, posY);
+                self.pendingStepType = null;
+            }, true); // capture phase fires before Drawflow's bubble-phase listener
+
+            // ── Event bindings ──
+            _rawEditor.on('nodeSelected', function(id) { self.pendingStepType = null; self.selectNode(id); });
+            _rawEditor.on('nodeUnselected', function() { self.deselectNode(); });
+            _rawEditor.on('nodeRemoved', function(id) { self.onNodeRemoved(id); });
+
+            _rawEditor.on('connectionCreated', function() { self.pushSnapshot(); self.markDirty(); });
+            _rawEditor.on('connectionRemoved', function() { self.pushSnapshot(); self.markDirty(); });
+            _rawEditor.on('nodeMoved', function() { self.pushSnapshot(); self.markDirty(); });
+
+            _rawEditor.on('zoom', function(zoom) { self.zoomLevel = zoom; });
+
+            // Right-click on node: show delete button (X)
+            canvas.addEventListener('contextmenu', function(e) {
+                var node = e.target.closest('.drawflow-node');
+                // Hide any previously shown delete button
+                canvas.querySelectorAll('.drawflow-node.show-delete').forEach(function(el) {
+                    el.classList.remove('show-delete');
+                });
+                if (node) {
+                    e.preventDefault(); // suppress browser context menu
+                    node.classList.add('show-delete');
+                }
+            });
+            // Hide delete button on click anywhere else
+            document.addEventListener('mousedown', function(e) {
+                if (!e.target.closest('.drawflow-delete')) {
+                    canvas.querySelectorAll('.drawflow-node.show-delete').forEach(function(el) {
+                        el.classList.remove('show-delete');
+                    });
+                }
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') { self.pendingStepType = null; return; }
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); self.undo(); }
+                if ((e.ctrlKey || e.metaKey) && (e.key === 'Z' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); self.redo(); }
+                if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); self.saveWorkflow(); }
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    if (self.selectedNodeId) {
+                        self.deleteSelected();
+                    } else if (_rawEditor.connection_selected) {
+                        // Delete selected connection — Drawflow tracks it internally
+                        _rawEditor.removeConnection();
+                    }
+                }
+            });
+
+            // Warn on unload if dirty
+            window.addEventListener('beforeunload', function(e) {
+                if (self.dirty) { e.preventDefault(); e.returnValue = ''; }
+            });
+
+            // Sync fullscreen state when user exits via Esc
+            document.addEventListener('fullscreenchange', function() {
+                self.isFullscreen = !!document.fullscreenElement;
+            });
+        },
+
+        /* ─── Color Output Ports ─────────────────────── */
+        colorOutputPorts: function(nodeId, type, data) {
+            var info = STEP_TYPES[type || 'agent'];
+            var labels;
+            if (type === 'condition') {
+                labels = (data && data.conditions || []).map(function(_, i) { return 'c' + (i + 1); });
+            } else if (type === 'parallel') {
+                labels = (info.outputs || []).slice();
+                (data && data.branches || []).forEach(function(bid, i) {
+                    labels.push('b' + (i + 1));
+                });
+            } else {
+                labels = info.outputs || [];
+            }
+            setTimeout(function() {
+                var el = document.getElementById('node-' + nodeId);
+                if (!el) return;
+                var outputs = el.querySelectorAll('.outputs .output');
+                outputs.forEach(function(out, i) {
+                    if (labels[i]) out.setAttribute('data-label', labels[i]);
+                });
+            }, 20);
+        },
+
+        /* ─── Add Step to Canvas ─────────────────────── */
+        addStep: function(type, posX, posY) {
+            var info = STEP_TYPES[type];
+            var data = {
+                step_id: '',
+                type: type,
+                is_entry_point: false,
+            };
+
+            // Type-specific defaults
+            switch (type) {
+                case 'agent': data.agent_id = ''; data.prompt = ''; data.output_key = ''; data.timeout_seconds = 120; data.output_format = 'text'; break;
+                case 'approval': data.message = ''; data.timeout_minutes = 60; break;
+                case 'condition': data.conditions = [{ expression: '' }, { expression: 'true' }]; break;
+                case 'parallel': data.branches = []; data.join_mode = 'all'; break;
+                case 'transform': data.expression = ''; break;
+                case 'webhook': data.url = ''; data.method = 'POST'; data.headers_json = ''; data.body = ''; data.output_format = 'text'; break;
+                case 'n8n': data.webhook_url = ''; data.wait_for_response = false; data.timeout_seconds = 30; break;
+                case 'delay': data.seconds = 60; break;
+                case 'tool': data.tool_name = ''; data.tool_server = ''; data.tool_mode = 'direct'; data.tool_agent_id = ''; data.tool_prompt = ''; data.parameters_json = '{}'; data.output_key = ''; data.timeout_seconds = 30; data.output_format = 'text'; break;
+                case 'notification': data.channel_type = 'telegram'; data.recipient = ''; data.message = ''; data.subject = ''; data.message_mode = 'template'; data.notif_agent_id = ''; data.notif_prompt = ''; break;
+                case 'vault': data.service_id = ''; data.service_name = ''; break;
+            }
+
+            // If first node, make it the entry point
+            if (Object.keys(this.nodes).length === 0) {
+                data.is_entry_point = true;
+            }
+
+            var outputCount = (type === 'condition') ? data.conditions.length : info.outputs.length;
+            var html = getNodeHtmlString(type, data);
+
+            var nodeId = _rawEditor.addNode(
+                type,               // name
+                1,                  // inputs
+                outputCount,        // outputs
+                posX, posY,         // position
+                type + '-node' + (data.is_entry_point ? ' is-entry-point' : ''),
+                data,               // data
+                html                // html
+            );
+
+            this.nodes[nodeId] = data;
+            this.nodeCount = Object.keys(this.nodes).length;
+            this.colorOutputPorts(nodeId, type, data);
+            this.pushSnapshot();
+            this.markDirty();
+
+            return nodeId;
+        },
+
+        /* ─── Node Events ────────────────────────────── */
+        onNodeRemoved: function(id) {
+            delete this.nodes[id];
+            this.nodeCount = Object.keys(this.nodes).length;
+            if (Number(this.selectedNodeId) === Number(id)) {
+                this.selectedNodeId = null;
+                this.selectedData = {};
+            }
+            this.pushSnapshot();
+            this.markDirty();
+        },
+
+        selectNode: function(id) {
+            this.selectedNodeId = id;
+            this.selectedData = this.nodes[id] || {};
+        },
+
+        deselectNode: function() {
+            this.selectedNodeId = null;
+            this.selectedData = {};
+        },
+
+        /* ─── Update Node Display (safe DOM rebuild) ── */
+        updateNode: function() {
+            if (!this.selectedNodeId || !this.nodes[this.selectedNodeId]) return;
+            var data = this.nodes[this.selectedNodeId];
+            var contentEl = document.querySelector('#node-' + this.selectedNodeId + ' .drawflow_content_node');
+            if (contentEl) {
+                // Clear existing content safely
+                while (contentEl.firstChild) contentEl.removeChild(contentEl.firstChild);
+                // Build and append new DOM
+                contentEl.appendChild(buildNodeDom(data.type, data));
+            }
+            this.markDirty();
+        },
+
+        /* ─── MCP Tool helpers ────────────────────────── */
+        get mcpServers() {
+            var seen = {};
+            this.mcpTools.forEach(function(t) {
+                if (t.server) seen[t.server] = true;
+            });
+            return Object.keys(seen).sort();
+        },
+
+        filteredTools: function() {
+            var server = this.selectedData && this.selectedData.tool_server;
+            if (!server) return this.mcpTools;
+            return this.mcpTools.filter(function(t) { return t.server === server; });
+        },
+
+        deleteSelected: function() {
+            if (!this.selectedNodeId) return;
+            _rawEditor.removeNodeId('node-' + this.selectedNodeId);
+        },
+
+        /* ─── Entry Point ────────────────────────────── */
+        setEntryPoint: function(checked) {
+            var self = this;
+            // Clear existing entry point
+            Object.keys(self.nodes).forEach(function(nid) {
+                if (self.nodes[nid].is_entry_point) {
+                    self.nodes[nid].is_entry_point = false;
+                    var el = document.getElementById('node-' + nid);
+                    if (el) el.classList.remove('is-entry-point');
+                }
+            });
+            if (checked && self.selectedNodeId) {
+                self.nodes[self.selectedNodeId].is_entry_point = true;
+                var el = document.getElementById('node-' + self.selectedNodeId);
+                if (el) el.classList.add('is-entry-point');
+            }
+            self.markDirty();
+        },
+
+        /* ─── Condition Management ───────────────────── */
+        addCondition: function() {
+            if (!this.selectedData.conditions) return;
+            this.selectedData.conditions.push({ expression: '' });
+            _rawEditor.addNodeOutput(this.selectedNodeId);
+            this.colorOutputPorts(this.selectedNodeId, 'condition', this.selectedData);
+            this.updateNode();
+            this.pushSnapshot();
+        },
+
+        removeCondition: function(idx) {
+            if (!this.selectedData.conditions || this.selectedData.conditions.length <= 1) return;
+            this.selectedData.conditions.splice(idx, 1);
+            var outputClass = 'output_' + (this.selectedData.conditions.length + 1);
+            _rawEditor.removeNodeOutput(this.selectedNodeId, outputClass);
+            this.colorOutputPorts(this.selectedNodeId, 'condition', this.selectedData);
+            this.updateNode();
+            this.pushSnapshot();
+        },
+
+        /* ─── Click-to-Place from Palette ────────────── */
+        selectPaletteItem: function(type) {
+            // Toggle: click same item again to deselect
+            this.pendingStepType = (this.pendingStepType === type) ? null : type;
+        },
+
+        /* ─── Drag-and-Drop from Palette ────────────── */
+        handleCanvasDrop: function(e) {
+            var stepType = e.dataTransfer.getData('application/x-step-type');
+            if (!stepType) return;
+            var rect = _rawEditor.container.getBoundingClientRect();
+            var posX = (e.clientX - rect.x - _rawEditor.canvas_x) / _rawEditor.zoom;
+            var posY = (e.clientY - rect.y - _rawEditor.canvas_y) / _rawEditor.zoom;
+            this.addStep(stepType, posX, posY);
+        },
+
+        /* ─── Serialization: Drawflow -> Definition ──── */
+        drawflowToDefinition: function() {
+            var self = this;
+            var exportData = _rawEditor.export();
+            var nodesData = exportData.drawflow.Home.data;
+            var steps = {};
+            var layout = {};
+            var entryPoint = null;
+
+            // Build nodeId -> stepId map
+            var nodeToStep = {};
+            Object.keys(nodesData).forEach(function(nodeId) {
+                var d = self.nodes[nodeId];
+                if (d && d.step_id) nodeToStep[nodeId] = d.step_id;
+            });
+
+            Object.keys(nodesData).forEach(function(nodeId) {
+                var node = nodesData[nodeId];
+                var data = self.nodes[nodeId];
+                if (!data || !data.step_id) return;
+
+                var step = { type: data.type };
+
+                // Type-specific config
+                switch (data.type) {
+                    case 'agent':
+                        if (data.agent_id) step.agent_id = data.agent_id;
+                        if (data.prompt) step.prompt = data.prompt;
+                        if (data.output_key) step.output_key = data.output_key;
+                        if (data.timeout_seconds) step.timeout_seconds = parseInt(data.timeout_seconds) || 120;
+                        if (data.output_format && data.output_format !== 'text') step.output_format = data.output_format;
+                        break;
+                    case 'approval':
+                        if (data.message) step.message = data.message;
+                        step.timeout_minutes = parseInt(data.timeout_minutes) || 60;
+                        break;
+                    case 'condition':
+                        break; // handled below with dynamic outputs
+                    case 'parallel':
+                        step.branches = data.branches || [];
+                        step.join_mode = data.join_mode || 'all';
+                        break;
+                    case 'transform':
+                        if (data.expression) step.expression = data.expression;
+                        break;
+                    case 'webhook':
+                        if (data.url) step.url = data.url;
+                        step.method = data.method || 'POST';
+                        if (data.headers_json) {
+                            try { step.headers = JSON.parse(data.headers_json); } catch (e) {}
+                        }
+                        if (data.body) step.body = data.body;
+                        if (data.output_format && data.output_format !== 'text') step.output_format = data.output_format;
+                        break;
+                    case 'n8n':
+                        if (data.webhook_url) step.webhook_url = data.webhook_url;
+                        if (data.wait_for_response) step.wait_for_response = true;
+                        if (data.timeout_seconds) step.timeout_seconds = parseInt(data.timeout_seconds) || 30;
+                        break;
+                    case 'delay':
+                        step.seconds = parseInt(data.seconds) || 0;
+                        break;
+                    case 'tool':
+                        if (data.tool_name) step.tool_name = data.tool_name;
+                        if (data.tool_mode === 'agent') {
+                            if (data.tool_agent_id) step.agent_id = data.tool_agent_id;
+                            if (data.tool_prompt) step.prompt = data.tool_prompt;
+                        } else {
+                            if (data.parameters_json) {
+                                try { step.parameters = JSON.parse(data.parameters_json); } catch (e) {}
+                            }
+                        }
+                        if (data.output_key) step.output_key = data.output_key;
+                        if (data.timeout_seconds) step.timeout_seconds = parseInt(data.timeout_seconds) || 30;
+                        if (data.output_format && data.output_format !== 'text') step.output_format = data.output_format;
+                        break;
+                    case 'vault':
+                        if (data.service_id) step.service_id = data.service_id;
+                        break;
+                    case 'notification':
+                        step.channel_type = data.channel_type || 'telegram';
+                        if (data.recipient) step.recipient = data.recipient;
+                        if (data.subject) step.subject = data.subject;
+                        if (data.message_mode === 'agent') {
+                            if (data.notif_agent_id) step.agent_id = data.notif_agent_id;
+                            if (data.notif_prompt) step.prompt = data.notif_prompt;
+                        } else {
+                            if (data.message) step.message = data.message;
+                        }
+                        break;
+                }
+
+                // Resolve connections
+                if (data.type === 'condition') {
+                    step.conditions = (data.conditions || []).map(function(cond, i) {
+                        var outputKey = 'output_' + (i + 1);
+                        var conn = ((node.outputs || {})[outputKey] || {}).connections || [];
+                        var targetStepId = null;
+                        if (conn.length > 0) targetStepId = nodeToStep[conn[0].node] || null;
+                        return { expression: cond.expression, target: targetStepId };
+                    });
+                } else {
+                    var info = STEP_TYPES[data.type];
+                    (info.outputs || []).forEach(function(label, i) {
+                        var outputKey = 'output_' + (i + 1);
+                        var conn = ((node.outputs || {})[outputKey] || {}).connections || [];
+                        var targetStepId = null;
+                        if (conn.length > 0) targetStepId = nodeToStep[conn[0].node] || null;
+                        step['on_' + label] = targetStepId;
+                    });
+                    // Parallel: reconstruct branches from extra output ports
+                    if (data.type === 'parallel') {
+                        var baseIdx = info.outputs.length;
+                        var branches = [];
+                        var outKeys = Object.keys(node.outputs || {}).sort();
+                        outKeys.forEach(function(outputKey) {
+                            var idx = parseInt(outputKey.replace('output_', ''));
+                            if (idx <= baseIdx) return; // skip success/failure
+                            var conn = (node.outputs[outputKey] || {}).connections || [];
+                            if (conn.length > 0) {
+                                var branchStepId = nodeToStep[conn[0].node] || null;
+                                if (branchStepId) branches.push(branchStepId);
+                            }
+                        });
+                        step.branches = branches;
+                    }
+                }
+
+                layout[data.step_id] = { x: Math.round(node.pos_x), y: Math.round(node.pos_y) };
+                if (data.is_entry_point) entryPoint = data.step_id;
+
+                steps[data.step_id] = step;
+            });
+
+            return { entry_point: entryPoint, steps: steps, layout: layout };
+        },
+
+        /* ─── Serialization: Definition -> Drawflow ──── */
+        importDefinition: function(definition) {
+            var self = this;
+            var steps = definition.steps || {};
+            var layout = definition.layout || {};
+            var entryPoint = definition.entry_point;
+            var stepToNode = {};
+            var counter = 1;
+
+            // Pass 1: Create nodes
+            Object.keys(steps).forEach(function(stepId) {
+                var step = steps[stepId];
+                var type = step.type;
+                var info = STEP_TYPES[type];
+                if (!info) return;
+
+                var pos = layout[stepId] || { x: counter * 280, y: 150 };
+                var outputCount;
+                if (type === 'condition') {
+                    outputCount = (step.conditions || []).length;
+                } else if (type === 'parallel') {
+                    // success + failure + one port per branch
+                    outputCount = info.outputs.length + (step.branches || []).length;
+                } else {
+                    outputCount = info.outputs.length;
+                }
+
+                var data = {
+                    step_id: stepId,
+                    type: type,
+                    is_entry_point: stepId === entryPoint,
+                };
+
+                // Extract type-specific config
+                switch (type) {
+                    case 'agent':
+                        data.agent_id = step.agent_id || '';
+                        data.prompt = step.prompt || '';
+                        data.output_key = step.output_key || '';
+                        data.timeout_seconds = step.timeout_seconds || 120;
+                        data.output_format = step.output_format || 'text';
+                        break;
+                    case 'approval':
+                        data.message = step.message || '';
+                        data.timeout_minutes = step.timeout_minutes || 60;
+                        break;
+                    case 'condition':
+                        data.conditions = (step.conditions || []).map(function(c) {
+                            return { expression: c.expression || '' };
+                        });
+                        break;
+                    case 'parallel':
+                        data.branches = step.branches || [];
+                        data.join_mode = step.join_mode || 'all';
+                        break;
+                    case 'transform':
+                        data.expression = step.expression || '';
+                        break;
+                    case 'webhook':
+                        data.url = step.url || '';
+                        data.method = step.method || 'POST';
+                        data.headers_json = step.headers ? JSON.stringify(step.headers) : '';
+                        data.body = step.body || '';
+                        data.output_format = step.output_format || 'text';
+                        break;
+                    case 'n8n':
+                        data.webhook_url = step.webhook_url || '';
+                        data.wait_for_response = step.wait_for_response || false;
+                        data.timeout_seconds = step.timeout_seconds || 30;
+                        break;
+                    case 'delay':
+                        data.seconds = step.seconds || 0;
+                        break;
+                    case 'tool':
+                        data.tool_name = step.tool_name || '';
+                        var toolParts = data.tool_name.split('__');
+                        data.tool_server = toolParts.length > 1 ? toolParts[0] : '';
+                        if (step.agent_id && step.prompt) {
+                            data.tool_mode = 'agent';
+                            data.tool_agent_id = step.agent_id || '';
+                            data.tool_prompt = step.prompt || '';
+                            data.parameters_json = '{}';
+                        } else {
+                            data.tool_mode = 'direct';
+                            data.parameters_json = step.parameters ? JSON.stringify(step.parameters, null, 2) : '{}';
+                            data.tool_agent_id = '';
+                            data.tool_prompt = '';
+                        }
+                        data.output_key = step.output_key || '';
+                        data.timeout_seconds = step.timeout_seconds || 30;
+                        data.output_format = step.output_format || 'text';
+                        break;
+                    case 'vault':
+                        data.service_id = step.service_id || '';
+                        data.service_name = '';
+                        break;
+                    case 'notification':
+                        data.channel_type = step.channel_type || 'telegram';
+                        data.recipient = step.recipient || '';
+                        data.subject = step.subject || '';
+                        if (step.prompt && step.agent_id) {
+                            data.message_mode = 'agent';
+                            data.notif_agent_id = step.agent_id || '';
+                            data.notif_prompt = step.prompt || '';
+                            data.message = '';
+                        } else {
+                            data.message_mode = 'template';
+                            data.message = step.message || '';
+                            data.notif_agent_id = '';
+                            data.notif_prompt = '';
+                        }
+                        break;
+                }
+
+                var html = getNodeHtmlString(type, data);
+                var className = type + '-node' + (data.is_entry_point ? ' is-entry-point' : '');
+
+                var nodeId = _rawEditor.addNode(
+                    type, 1, outputCount,
+                    pos.x, pos.y,
+                    className, data, html
+                );
+
+                self.nodes[nodeId] = data;
+                stepToNode[stepId] = nodeId;
+                self.colorOutputPorts(nodeId, type, data);
+                counter++;
+            });
+
+            // Pass 2: Create connections
+            Object.keys(steps).forEach(function(stepId) {
+                var step = steps[stepId];
+                var sourceNodeId = stepToNode[stepId];
+                if (!sourceNodeId) return;
+
+                if (step.type === 'condition') {
+                    (step.conditions || []).forEach(function(cond, i) {
+                        if (cond.target && stepToNode[cond.target]) {
+                            _rawEditor.addConnection(
+                                sourceNodeId, stepToNode[cond.target],
+                                'output_' + (i + 1), 'input_1'
+                            );
+                        }
+                    });
+                } else {
+                    var info = STEP_TYPES[step.type];
+                    if (!info) return;
+                    (info.outputs || []).forEach(function(label, i) {
+                        var targetStepId = step['on_' + label];
+                        if (targetStepId && stepToNode[targetStepId]) {
+                            _rawEditor.addConnection(
+                                sourceNodeId, stepToNode[targetStepId],
+                                'output_' + (i + 1), 'input_1'
+                            );
+                        }
+                    });
+                    // Parallel branches: connect extra output ports to branch steps
+                    if (step.type === 'parallel' && step.branches) {
+                        var baseIdx = info.outputs.length; // after success/failure
+                        step.branches.forEach(function(branchStepId, i) {
+                            if (branchStepId && stepToNode[branchStepId]) {
+                                _rawEditor.addConnection(
+                                    sourceNodeId, stepToNode[branchStepId],
+                                    'output_' + (baseIdx + i + 1), 'input_1'
+                                );
+                            }
+                        });
+                    }
+                }
+            });
+
+            self.nodeCount = Object.keys(self.nodes).length;
+
+            // Auto-layout when no saved positions exist
+            var hasLayout = Object.keys(layout).length > 0;
+            if (!hasLayout && self.nodeCount > 0) {
+                self.autoLayout();
+            } else if (hasLayout && self.nodeCount > 0) {
+                // Fit saved layout into viewport
+                requestAnimationFrame(function() { self.fitToView(); });
+            }
+        },
+
+        /* ─── Save & Validate ────────────────────────── */
+        saveWorkflow: async function() {
+            var self = this;
+            if (self.saving) return;
+            self.saving = true;
+            self.errors = [];
+
+            var definition = self.drawflowToDefinition();
+
+            try {
+                var resp = await fetch('/me/workflows/' + self.workflowId + '/definition', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': self.csrfToken,
+                    },
+                    body: JSON.stringify({ definition: definition }),
+                });
+                var result = await resp.json();
+
+                if (result.success) {
+                    self.dirty = false;
+                    self.currentVersion = result.version;
+                    showToast('Workflow saved (v' + result.version + ')', 'success');
+                } else {
+                    self.errors = result.errors || [];
+                    self.highlightErrorNodes();
+                    showToast('Validation errors — check below', 'error');
+                }
+            } catch (e) {
+                showToast('Save failed: ' + e.message, 'error');
+            } finally {
+                self.saving = false;
+            }
+        },
+
+        validateWorkflow: async function() {
+            var self = this;
+            self.errors = [];
+
+            var definition = self.drawflowToDefinition();
+
+            try {
+                var resp = await fetch('/me/workflows/' + self.workflowId + '/validate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': self.csrfToken,
+                    },
+                    body: JSON.stringify({ definition: definition }),
+                });
+                var result = await resp.json();
+
+                if (result.errors && result.errors.length > 0) {
+                    self.errors = result.errors;
+                    self.highlightErrorNodes();
+                    showToast(result.errors.length + ' error(s) found', 'warning');
+                } else {
+                    showToast('Workflow is valid', 'success');
+                }
+            } catch (e) {
+                showToast('Validation failed: ' + e.message, 'error');
+            }
+        },
+
+        highlightErrorNodes: function() {
+            var self = this;
+            // Remove existing error highlights
+            document.querySelectorAll('.drawflow-node.has-error').forEach(function(el) {
+                el.classList.remove('has-error');
+                el.style.boxShadow = '';
+            });
+            // Add error highlight to nodes with errors
+            self.errors.forEach(function(err) {
+                if (!err.step_id) return;
+                Object.keys(self.nodes).forEach(function(nid) {
+                    if (self.nodes[nid].step_id === err.step_id) {
+                        var el = document.getElementById('node-' + nid);
+                        if (el) {
+                            el.classList.add('has-error');
+                            el.style.boxShadow = '0 0 0 2px rgba(239,68,68,0.5)';
+                        }
+                    }
+                });
+            });
+        },
+
+        /* ─── Undo / Redo ────────────────────────────── */
+        pushSnapshot: function() {
+            if (this._skipSnapshot) return;
+            this.undoStack.push(JSON.stringify(_rawEditor.export()));
+            this.redoStack = [];
+            // Keep stack bounded
+            if (this.undoStack.length > 50) this.undoStack.shift();
+        },
+
+        undo: function() {
+            if (this.undoStack.length === 0) return;
+            var snapshot = this.undoStack.pop();
+            this.redoStack.push(JSON.stringify(_rawEditor.export()));
+            this._restoreSnapshot(snapshot);
+        },
+
+        redo: function() {
+            if (this.redoStack.length === 0) return;
+            var snapshot = this.redoStack.pop();
+            this.undoStack.push(JSON.stringify(_rawEditor.export()));
+            this._restoreSnapshot(snapshot);
+        },
+
+        _restoreSnapshot: function(snapshot) {
+            var self = this;
+            self._skipSnapshot = true;
+            var data = JSON.parse(snapshot);
+
+            // Rebuild nodes map from snapshot
+            self.nodes = {};
+            var nodesData = data.drawflow.Home.data;
+            Object.keys(nodesData).forEach(function(nid) {
+                var nd = nodesData[nid];
+                if (nd.data) self.nodes[nid] = nd.data;
+            });
+            self.nodeCount = Object.keys(self.nodes).length;
+
+            _rawEditor.import(data);
+            self.deselectNode();
+
+            // Re-label all output ports and re-apply entry point classes
+            Object.keys(self.nodes).forEach(function(nid) {
+                var d = self.nodes[nid];
+                self.colorOutputPorts(nid, d.type, d);
+                if (d.is_entry_point) {
+                    var el = document.getElementById('node-' + nid);
+                    if (el) el.classList.add('is-entry-point');
+                }
+            });
+
+            self._skipSnapshot = false;
+            self.markDirty();
+        },
+
+        /* ─── Zoom & Lock Controls ───────────────────── */
+        zoomIn: function() { _rawEditor.zoom_in(); },
+        zoomOut: function() { _rawEditor.zoom_out(); },
+        zoomReset: function() { _rawEditor.zoom_reset(); },
+        toggleLock: function() {
+            this.editorLocked = !this.editorLocked;
+            _rawEditor.editor_mode = this.editorLocked ? 'fixed' : 'edit';
+        },
+        toggleFullscreen: function() {
+            var editorRoot = this.$root; // the x-data element (whole editor)
+            if (!document.fullscreenElement) {
+                editorRoot.requestFullscreen().catch(function() {});
+                this.isFullscreen = true;
+            } else {
+                document.exitFullscreen();
+                this.isFullscreen = false;
+            }
+        },
+
+        /* ─── Auto Layout (dagre) ───────────────────── */
+        autoLayout: function() {
+            var exportData = _rawEditor.export();
+            var nodesData = exportData.drawflow.Home.data;
+            var nodeIds = Object.keys(nodesData);
+            if (nodeIds.length === 0) return;
+
+            var g = new dagre.graphlib.Graph();
+            g.setGraph({ rankdir: 'LR', nodesep: 50, ranksep: 100, marginx: 30, marginy: 30 });
+            g.setDefaultEdgeLabel(function() { return {}; });
+
+            // Add nodes (estimate size from type)
+            nodeIds.forEach(function(id) {
+                g.setNode(id, { width: 200, height: 60 });
+            });
+
+            // Add edges from Drawflow connections
+            nodeIds.forEach(function(id) {
+                var outputs = nodesData[id].outputs || {};
+                Object.keys(outputs).forEach(function(outClass) {
+                    var conns = outputs[outClass].connections || [];
+                    conns.forEach(function(c) {
+                        g.setEdge(id, String(c.node));
+                    });
+                });
+            });
+
+            dagre.layout(g);
+
+            // Apply positions
+            nodeIds.forEach(function(id) {
+                var pos = g.node(id);
+                // dagre gives center coords; Drawflow uses top-left
+                var x = Math.round(pos.x - pos.width / 2);
+                var y = Math.round(pos.y - pos.height / 2);
+                var el = _rawEditor.container.querySelector('#node-' + id);
+                if (el) {
+                    el.style.left = x + 'px';
+                    el.style.top = y + 'px';
+                    nodesData[id].pos_x = x;
+                    nodesData[id].pos_y = y;
+                }
+            });
+
+            // Reimport to sync internal state
+            _rawEditor.import(exportData);
+            // Re-select if there was a selection
+            if (this.selectedNodeId) {
+                var self = this;
+                setTimeout(function() { _rawEditor.selectNode(self.selectedNodeId); }, 50);
+            }
+            this.pushSnapshot();
+            this.markDirty();
+            // Fit nodes into viewport after layout (next paint = layout computed)
+            var fitSelf = this;
+            requestAnimationFrame(function() { fitSelf.fitToView(); });
+        },
+
+        fitToView: function() {
+            var container = _rawEditor.container;
+            var nodes = container.querySelectorAll('.drawflow-node');
+            if (nodes.length === 0) return;
+            var parent = container.parentElement;
+            var pw = parent.clientWidth || 600;
+            var ph = parent.clientHeight || 400;
+
+            // Compute bounding box of all nodes
+            var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            nodes.forEach(function(n) {
+                var x = parseInt(n.style.left) || 0;
+                var y = parseInt(n.style.top) || 0;
+                var w = n.offsetWidth || 160;
+                var h = n.offsetHeight || 60;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x + w > maxX) maxX = x + w;
+                if (y + h > maxY) maxY = y + h;
+            });
+
+            var pad = 40;
+            var bw = maxX - minX + pad * 2;
+            var bh = maxY - minY + pad * 2;
+            var zoom = Math.min(pw / bw, ph / bh, 1);
+            zoom = Math.round(zoom * 20) / 20;
+
+            // If zoom would be too small, use 0.5 and center on entry point
+            var MIN_ZOOM = 0.3;
+            if (zoom < MIN_ZOOM) {
+                zoom = 0.5;
+                // Find entry point node to center on it
+                var entryNode = container.querySelector('.drawflow-node.is-entry-point');
+                if (!entryNode) entryNode = nodes[0];
+                var ex = parseInt(entryNode.style.left) || 0;
+                var ey = parseInt(entryNode.style.top) || 0;
+                var ew = entryNode.offsetWidth || 160;
+                var eh = entryNode.offsetHeight || 60;
+                var cx = ex + ew / 2;
+                var cy = ey + eh / 2;
+                _rawEditor.zoom = zoom;
+                _rawEditor.canvas_x = pw / 2 - cx * zoom;
+                _rawEditor.canvas_y = ph / 2 - cy * zoom;
+            } else {
+                if (zoom < 0.15) zoom = 0.15;
+                _rawEditor.zoom = zoom;
+                _rawEditor.canvas_x = -(minX - pad) * zoom + (pw - bw * zoom) / 2;
+                _rawEditor.canvas_y = -(minY - pad) * zoom + (ph - bh * zoom) / 2;
+            }
+
+            _rawEditor.precanvas.style.transform =
+                'translate(' + _rawEditor.canvas_x + 'px, ' +
+                _rawEditor.canvas_y + 'px) scale(' + zoom + ')';
+            this.zoomLevel = zoom;
+        },
+
+        /* ─── Dirty State ────────────────────────────── */
+        markDirty: function() {
+            this.dirty = true;
+        },
+    };
+}
+</script>
+{% endblock %}

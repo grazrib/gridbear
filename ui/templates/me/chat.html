@@ -1,0 +1,1190 @@
+{% extends "me/base.html" %}
+
+{% block title %}GridBear - Chat{% endblock %}
+{% block page_title %}Chat{% endblock %}
+
+{% block extra_css %}
+<style>
+    #chat-messages { scroll-behavior: smooth; }
+    .msg-user { background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(45, 212, 191, 0.05)); }
+    .msg-agent { background: rgba(100, 116, 139, 0.05); }
+    .typing-indicator span {
+        animation: blink 1.4s infinite both;
+        display: inline-block;
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        margin: 0 1px;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink {
+        0%, 80%, 100% { opacity: 0.3; }
+        40% { opacity: 1; }
+    }
+    /* Markdown prose styles */
+    .prose pre { background: rgba(0,0,0,0.15); border-radius: 0.5rem; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.5em 0; }
+    .prose code { background: rgba(0,0,0,0.1); border-radius: 0.25rem; padding: 0.1em 0.3em; font-size: 0.85em; }
+    .prose pre code { background: none; padding: 0; font-size: 0.85em; }
+    .prose ul, .prose ol { padding-left: 1.5em; margin: 0.5em 0; }
+    .prose ul { list-style-type: disc; }
+    .prose ol { list-style-type: decimal; }
+    .prose p { margin: 0.4em 0; }
+    .prose p:first-child { margin-top: 0; }
+    .prose p:last-child { margin-bottom: 0; }
+    .prose a { color: #0ea5e9; text-decoration: underline; }
+    .prose blockquote { border-left: 3px solid rgba(100,116,139,0.3); padding-left: 0.75em; margin: 0.5em 0; opacity: 0.85; }
+    .prose table { border-collapse: collapse; margin: 0.5em 0; }
+    .prose th, .prose td { border: 1px solid rgba(100,116,139,0.2); padding: 0.3em 0.6em; }
+    .prose h1, .prose h2, .prose h3 { font-weight: 600; margin: 0.6em 0 0.3em; }
+    .prose h1 { font-size: 1.25em; }
+    .prose h2 { font-size: 1.1em; }
+    .prose h3 { font-size: 1em; }
+    /* Conversation list */
+    .conv-item { transition: all 0.15s ease; }
+    .conv-item:hover { background: rgba(100, 116, 139, 0.08); }
+    .conv-active { background: linear-gradient(135deg, rgba(45, 212, 191, 0.1), rgba(14, 165, 233, 0.05)); border-left: 2px solid #2dd4bf; }
+    /* Attachment preview strip */
+    .attach-preview { max-height: 80px; }
+    .attach-preview img { height: 64px; width: 64px; object-fit: cover; border-radius: 0.5rem; }
+    /* Drop zone overlay */
+    .drop-overlay { background: rgba(20, 184, 166, 0.08); border: 2px dashed rgba(20, 184, 166, 0.4); }
+    /* Voice recording pulse */
+    @keyframes pulse-ring {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+        70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .mic-recording { animation: pulse-ring 1.5s ease-out infinite; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hidden CSRF field -->
+<input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+<!-- Hidden file input -->
+<input type="file" id="file-input" class="hidden" multiple
+       accept="image/*,.pdf,.txt,.csv,.json,.xml,.md,.doc,.docx,.xls,.xlsx,.mp3,.wav,.m4a,.ogg,.flac,.webm,.mp4">
+
+<div class="flex h-[calc(100dvh-10rem)] gap-4" x-data="chatApp()">
+    <!-- Sidebar: conversations -->
+    <div class="flex-shrink-0 flex flex-col rounded-2xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30 overflow-hidden"
+         :class="mobileView === 'conversations' ? 'w-full lg:w-72 lg:flex' : 'hidden lg:flex lg:w-72'">
+        <!-- Agent selector -->
+        <div class="p-3 border-b border-void-200 dark:border-void-800" x-data="{ agentOpen: false }">
+            <button @click="agentOpen = !agentOpen" @click.outside="agentOpen = false"
+                    class="w-full flex items-center gap-3 px-3 py-2 rounded-xl bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 hover:border-nordic-500/40 transition-all relative">
+                {% for agent in agents %}
+                <template x-if="selectedAgent === '{{ agent.name }}'">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                        {% if agent.avatar %}
+                        <img src="/static/avatars/{{ agent.avatar }}" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0">
+                        {% else %}
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-nordic-500 to-frost-500 flex items-center justify-center flex-shrink-0">
+                            <span class="text-white text-xs font-bold">{{ (agent.display_name or agent.name)[0]|upper }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium truncate">{{ agent.display_name or agent.name }}</p>
+                            {% if agent.description %}
+                            <p class="text-[10px] text-void-400 truncate">{{ agent.description }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </template>
+                {% endfor %}
+                <i class="fas fa-chevron-down text-void-400 text-xs flex-shrink-0 transition-transform" :class="agentOpen && 'rotate-180'"></i>
+            </button>
+            <!-- Dropdown -->
+            <div x-show="agentOpen" x-transition
+                 class="mt-2 rounded-xl bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 shadow-lg overflow-hidden">
+                {% for agent in agents %}
+                <button @click="selectedAgent = '{{ agent.name }}'; agentOpen = false; switchAgent()"
+                        class="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-void-50 dark:hover:bg-void-700/50 transition-colors"
+                        :class="selectedAgent === '{{ agent.name }}' && 'bg-nordic-500/5'">
+                    {% if agent.avatar %}
+                    <img src="/static/avatars/{{ agent.avatar }}" alt="" class="w-8 h-8 rounded-lg object-cover flex-shrink-0">
+                    {% else %}
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-nordic-500 to-frost-500 flex items-center justify-center flex-shrink-0">
+                        <span class="text-white text-xs font-bold">{{ (agent.display_name or agent.name)[0]|upper }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="text-left min-w-0">
+                        <p class="text-sm font-medium truncate">{{ agent.display_name or agent.name }}</p>
+                        {% if agent.description %}
+                        <p class="text-[10px] text-void-400 truncate">{{ agent.description }}</p>
+                        {% endif %}
+                    </div>
+                    <i x-show="selectedAgent === '{{ agent.name }}'" class="fas fa-check text-nordic-500 text-xs ml-auto flex-shrink-0"></i>
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- New conversation button -->
+        <div class="p-3 border-b border-void-200 dark:border-void-800">
+            <button @click="newConversation()"
+                    :disabled="creatingConversation"
+                    class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-nordic-500 to-nordic-600 text-white text-sm font-medium hover:from-nordic-600 hover:to-nordic-700 transition-all shadow-lg shadow-nordic-500/20 disabled:opacity-50">
+                <i class="fas fa-plus text-xs"></i>
+                <span>{{ _("New conversation") }}</span>
+            </button>
+        </div>
+
+        <!-- Conversation list -->
+        <div class="flex-1 overflow-y-auto">
+            <template x-if="sidebarLoading">
+                <div class="flex items-center justify-center py-8 text-void-400">
+                    <i class="fas fa-circle-notch fa-spin mr-2"></i>
+                    <span class="text-sm">{{ _("Loading...") }}</span>
+                </div>
+            </template>
+            <template x-if="!sidebarLoading && conversations.length === 0">
+                <div class="text-center py-8 px-4">
+                    <i class="fas fa-comments text-2xl text-void-300 dark:text-void-600 mb-2"></i>
+                    <p class="text-sm text-void-400">{{ _("No conversations") }}</p>
+                </div>
+            </template>
+            <template x-for="conv in conversations" :key="conv.id">
+                <div class="conv-item px-3 py-3 cursor-pointer flex items-start gap-2 group"
+                     :class="activeConversationId === conv.id ? 'conv-active' : ''"
+                     @click="selectConversation(conv)">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium truncate"
+                           :class="activeConversationId === conv.id ? 'text-nordic-700 dark:text-nordic-300' : 'text-void-700 dark:text-void-300'"
+                           x-text="conv.title || i18n.newConversation"></p>
+                        <p class="text-[10px] text-void-400 mt-0.5" x-text="formatDate(conv.updated_at)"></p>
+                    </div>
+                    <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                        <button @click.stop="renameConversation(conv)"
+                                class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all"
+                                title="{{ _("Rename") }}">
+                            <i class="fas fa-pen text-xs"></i>
+                        </button>
+                        <button @click.stop="deleteConversation(conv.id)"
+                                class="p-1 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-all"
+                                title="{{ _("Delete") }}">
+                            <i class="fas fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Footer: status + TTS toggle -->
+        <div class="p-3 border-t border-void-200 dark:border-void-800 flex items-center justify-between">
+            <span class="text-xs px-2 py-1 rounded-full" :class="wsConnected ? 'bg-nordic-500/10 text-nordic-600 dark:text-nordic-400' : 'bg-red-500/10 text-red-500'">
+                <i class="fas fa-circle text-[6px] mr-1"></i>
+                <span x-text="wsConnected ? i18n.connected : i18n.disconnected"></span>
+            </span>
+            <button @click="toggleTts()"
+                    class="p-1.5 rounded-lg transition-all text-xs"
+                    :class="ttsEnabled ? 'bg-nordic-500/10 text-nordic-600 dark:text-nordic-400' : 'text-void-400 hover:text-void-600 dark:hover:text-void-300'"
+                    :title="ttsEnabled ? i18n.disableTts : i18n.enableTts">
+                <i class="fas" :class="ttsEnabled ? 'fa-volume-high' : 'fa-volume-xmark'"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Chat area -->
+    <div class="flex-1 min-w-0"
+         :class="mobileView === 'chat' ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'">
+        <!-- Mobile back button -->
+        <button @click="mobileView = 'conversations'"
+                class="lg:hidden flex items-center gap-2 px-3 py-2 mb-2 text-sm text-void-500 hover:text-nordic-600 dark:hover:text-nordic-400 transition-colors">
+            <i class="fas fa-arrow-left"></i>
+            <span>{{ _("Conversations") }}</span>
+        </button>
+        <!-- Empty state -->
+        <template x-if="!activeConversationId">
+            <div class="flex-1 flex flex-col items-center justify-center text-void-400">
+                <i class="fas fa-message text-4xl mb-4 text-void-300 dark:text-void-600"></i>
+                <p class="text-lg font-medium mb-1">{{ _("Select or create a conversation") }}</p>
+                <p class="text-sm">{{ _("Conversations are saved automatically") }}</p>
+            </div>
+        </template>
+
+        <!-- Active conversation -->
+        <template x-if="activeConversationId">
+            <div class="flex-1 flex flex-col min-h-0">
+                <!-- Messages -->
+                <div id="chat-messages" class="flex-1 overflow-y-auto space-y-3 rounded-2xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30 p-4 relative"
+                     @dragover.prevent="dragOver = true"
+                     @dragleave.prevent="dragOver = false"
+                     @drop.prevent="handleDrop($event)">
+                    <!-- Drop overlay -->
+                    <div x-show="dragOver" x-transition
+                         class="drop-overlay absolute inset-0 z-10 flex items-center justify-center rounded-2xl">
+                        <div class="text-nordic-500 text-center">
+                            <i class="fas fa-cloud-arrow-up text-3xl mb-2"></i>
+                            <p class="text-sm font-medium">{{ _("Drop files here") }}</p>
+                        </div>
+                    </div>
+
+                    <template x-if="messagesLoading">
+                        <div class="flex items-center justify-center py-8 text-void-400">
+                            <i class="fas fa-circle-notch fa-spin mr-2"></i>
+                            <span class="text-sm">{{ _("Loading messages...") }}</span>
+                        </div>
+                    </template>
+                    <template x-for="msg in messages" :key="msg.id">
+                        <div :class="msg.role === 'user' ? 'msg-user ml-2 sm:ml-8' : msg.role === 'system' ? 'mx-2 sm:mx-8 text-center' : 'msg-agent mr-2 sm:mr-8'" class="rounded-xl p-4">
+                            <template x-if="msg.role === 'system'">
+                                <div class="text-[11px] text-void-400 italic" x-text="msg.text"></div>
+                            </template>
+                            <template x-if="msg.role !== 'system'">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-[10px] font-semibold uppercase tracking-wide"
+                                              :class="msg.role === 'user' ? 'text-frost-500' : 'text-nordic-500'"
+                                              x-text="msg.role === 'user' ? '{{ user.display_name or user.username }}' : msg.agent || selectedAgent"></span>
+                                        <span class="text-[10px] text-void-400" x-text="msg.time"></span>
+                                    </div>
+                                    <!-- Attachment thumbnails in message -->
+                                    <template x-if="msg.attachments && msg.attachments.length">
+                                        <div class="flex flex-wrap gap-2 mb-2">
+                                            <template x-for="att in msg.attachments" :key="att.filename">
+                                                <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-void-100 dark:bg-void-800/50 text-xs">
+                                                    <template x-if="att.previewUrl">
+                                                        <img :src="att.previewUrl" class="h-10 w-10 object-cover rounded">
+                                                    </template>
+                                                    <template x-if="!att.previewUrl">
+                                                        <i class="fas fa-file text-void-400"></i>
+                                                    </template>
+                                                    <span class="text-void-500 truncate max-w-[120px]" x-text="att.filename"></span>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <div class="text-sm leading-relaxed prose max-w-none" x-html="renderMarkdown(msg.text)"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- Typing indicator -->
+                    <div x-show="isTyping" class="msg-agent mr-2 sm:mr-8 rounded-xl p-4">
+                        <div class="typing-indicator text-void-400">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Attachment preview strip -->
+                <div x-show="pendingFiles.length > 0" class="mt-2 flex items-center gap-2 px-2 attach-preview overflow-x-auto">
+                    <template x-for="(pf, idx) in pendingFiles" :key="idx">
+                        <div class="relative flex-shrink-0 group">
+                            <template x-if="pf.previewUrl">
+                                <img :src="pf.previewUrl" class="h-16 w-16 object-cover rounded-lg border border-void-200 dark:border-void-700">
+                            </template>
+                            <template x-if="!pf.previewUrl">
+                                <div class="h-16 w-16 rounded-lg border border-void-200 dark:border-void-700 flex flex-col items-center justify-center bg-void-50 dark:bg-void-800/50">
+                                    <i class="fas fa-file text-void-400 text-lg"></i>
+                                    <span class="text-[8px] text-void-400 truncate w-14 text-center mt-0.5" x-text="pf.file.name"></span>
+                                </div>
+                            </template>
+                            <!-- Uploading spinner -->
+                            <div x-show="pf.uploading" class="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-circle-notch fa-spin text-white text-sm"></i>
+                            </div>
+                            <!-- Remove button -->
+                            <button @click="removePendingFile(idx)"
+                                    class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fas fa-xmark"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Input -->
+                <div class="mt-3 flex flex-col gap-2">
+                    <!-- Voice interim text preview -->
+                    <div x-show="voiceInterim" x-transition class="px-4 py-1.5 text-xs text-void-400 italic truncate">
+                        <i class="fas fa-microphone text-red-400 mr-1"></i>
+                        <span x-text="voiceInterim"></span>
+                    </div>
+                    <div class="flex gap-2 items-end">
+                        <!-- Attach button -->
+                        <button @click="$refs.fileInput ? $refs.fileInput.click() : document.getElementById('file-input').click()"
+                                :disabled="!wsConnected"
+                                class="px-3 py-3 rounded-xl bg-void-100 dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-void-500 hover:text-nordic-500 hover:border-nordic-500/30 transition-all disabled:opacity-50"
+                                title="{{ _("Attach file") }}">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <input type="text" x-model="inputText"
+                               @keydown.enter="sendMessage()"
+                               @paste="handlePaste($event)"
+                               placeholder="{{ _("Type a message or paste an image...") }}"
+                               :disabled="!wsConnected"
+                               class="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all disabled:opacity-50">
+                        <!-- Microphone button -->
+                        <button x-show="voiceSupported"
+                                @click="toggleVoice()"
+                                :disabled="!wsConnected"
+                                :class="voiceActive ? 'bg-red-500 text-white border-red-500 mic-recording' : 'bg-void-100 dark:bg-void-800/50 border-void-200 dark:border-void-700 text-void-500 hover:text-nordic-500 hover:border-nordic-500/30'"
+                                class="px-3 py-3 rounded-xl border transition-all disabled:opacity-50"
+                                :title="voiceActive ? i18n.stopRecording : i18n.startRecording">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                        <button @click="sendMessage()" :disabled="!wsConnected || (!inputText.trim() && !pendingFiles.length)"
+                                class="px-3 sm:px-5 py-3 rounded-xl bg-gradient-to-r from-nordic-500 to-nordic-600 text-white text-sm font-medium hover:from-nordic-600 hover:to-nordic-700 transition-all shadow-lg shadow-nordic-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+window.i18n = {
+    newConversation: {{ _("New conversation")|tojson }},
+    connected: {{ _("Connected")|tojson }},
+    disconnected: {{ _("Disconnected")|tojson }},
+    typePlaceholder: {{ _("Type a message or paste an image...")|tojson }},
+    loading: {{ _("Loading...")|tojson }},
+    loadingMessages: {{ _("Loading messages...")|tojson }},
+    noConversations: {{ _("No conversations")|tojson }},
+    rename: {{ _("Rename")|tojson }},
+    deleteLabel: {{ _("Delete")|tojson }},
+    startRecording: {{ _("Start dictation")|tojson }},
+    stopRecording: {{ _("Stop dictation")|tojson }},
+    enableTts: {{ _("Enable voice reading")|tojson }},
+    disableTts: {{ _("Disable voice reading")|tojson }},
+    uploadFailed: {{ _("Upload failed")|tojson }},
+    networkError: {{ _("Network error")|tojson }},
+    micDenied: {{ _("Microphone access denied")|tojson }},
+    attachFile: {{ _("Attach file")|tojson }},
+    dropFilesHere: {{ _("Drop files here")|tojson }},
+    deleteConfirm: {{ _("Delete this conversation?")|tojson }},
+    renamePrompt: {{ _("Rename conversation:")|tojson }},
+    error: {{ _("Error:")|tojson }},
+    toolCall: {{ _("Tool call")|tojson }},
+    audioRecorded: {{ _("Audio recorded - press enter to send")|tojson }},
+    audioRecording: {{ _("Audio recording...")|tojson }},
+    voiceRecognitionError: {{ _("Voice recognition startup error")|tojson }},
+    codeBlock: {{ _("code block")|tojson }},
+};
+</script>
+<script>
+function chatApp() {
+    return {
+        selectedAgent: '{{ agents[0].name if agents else '' }}',
+        messages: [],
+        inputText: '',
+        isTyping: false,
+        wsConnected: false,
+        ws: null,
+        msgCounter: 0,
+
+        // Mobile view toggle: 'conversations' or 'chat'
+        mobileView: 'conversations',
+
+        conversations: [],
+        activeConversationId: null,
+        sidebarLoading: false,
+        messagesLoading: false,
+        creatingConversation: false,
+
+        // Attachments
+        pendingFiles: [],  // [{file, previewUrl, uploading, uploadedPath, filename}]
+        dragOver: false,
+
+        // Voice
+        voiceSupported: false,
+        voiceActive: false,
+        voiceInterim: '',
+        _recognition: null,
+        _mediaRecorder: null,
+        _audioChunks: [],
+        _voiceMode: null,  // 'speech-api' or 'recorder'
+        _voiceCommitted: '',  // text already committed to inputText by speech API
+        _voiceRestarting: false,
+
+        // TTS
+        ttsEnabled: localStorage.getItem('gridbear_tts') === '1',
+        ttsProvider: 'browser',
+        _currentAudio: null,
+
+        init() {
+            var self = this;
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({ breaks: true, gfm: true });
+            }
+            this.loadConversations();
+
+            // Wire up the global file input
+            var fileInput = document.getElementById('file-input');
+            if (fileInput) {
+                fileInput.addEventListener('change', function(e) {
+                    self.addFiles(e.target.files);
+                    e.target.value = '';
+                });
+            }
+
+            // Detect voice support
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                self._voiceMode = 'speech-api';
+                self.voiceSupported = true;
+            } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                self._voiceMode = 'recorder';
+                self.voiceSupported = true;
+            }
+
+            // Fetch TTS provider config
+            fetch('/me/chat/api/tts/config')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var d = data.data || {};
+                    if (d.provider) self.ttsProvider = d.provider;
+                })
+                .catch(function() {});
+        },
+
+        _csrfToken() {
+            var el = document.querySelector('input[name="csrf_token"]');
+            return el ? el.value : '';
+        },
+
+        _apiHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': this._csrfToken(),
+            };
+        },
+
+        renderMarkdown(text) {
+            if (!text) return '';
+            if (typeof marked !== 'undefined') {
+                return marked.parse(text);
+            }
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+        },
+
+        // --- File handling ---
+
+        handlePaste(e) {
+            var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            var files = [];
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].kind === 'file') {
+                    var file = items[i].getAsFile();
+                    if (file) files.push(file);
+                }
+            }
+            if (files.length > 0) {
+                e.preventDefault();
+                this.addFiles(files);
+            }
+            // If no files pasted, let the default text paste happen
+        },
+
+        handleDrop(e) {
+            this.dragOver = false;
+            if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+                this.addFiles(e.dataTransfer.files);
+            }
+        },
+
+        addFiles(fileList) {
+            var self = this;
+            for (var i = 0; i < fileList.length; i++) {
+                var file = fileList[i];
+                var entry = {
+                    file: file,
+                    filename: file.name,
+                    previewUrl: null,
+                    uploading: false,
+                    uploadedPath: null,
+                };
+
+                // Generate preview for images
+                if (file.type && file.type.startsWith('image/')) {
+                    entry.previewUrl = URL.createObjectURL(file);
+                }
+
+                self.pendingFiles.push(entry);
+            }
+        },
+
+        removePendingFile(idx) {
+            var entry = this.pendingFiles[idx];
+            if (entry && entry.previewUrl) {
+                URL.revokeObjectURL(entry.previewUrl);
+            }
+            this.pendingFiles.splice(idx, 1);
+        },
+
+        async _uploadPendingFiles() {
+            var self = this;
+            var paths = [];
+            for (var i = 0; i < self.pendingFiles.length; i++) {
+                var pf = self.pendingFiles[i];
+                if (pf.uploadedPath) {
+                    paths.push(pf.uploadedPath);
+                    continue;
+                }
+                pf.uploading = true;
+                try {
+                    var formData = new FormData();
+                    formData.append('file', pf.file);
+                    var resp = await fetch('/me/chat/api/upload', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': self._csrfToken() },
+                        body: formData,
+                    });
+                    var data = await resp.json();
+                    var ud = data.data || {};
+                    if (resp.ok && ud.path) {
+                        pf.uploadedPath = ud.path;
+                        pf.filename = ud.filename;
+                        paths.push(ud.path);
+                    } else {
+                        if (typeof showToast === 'function') {
+                            showToast(i18n.uploadFailed + ': ' + (data.error || i18n.error), 'error');
+                        }
+                    }
+                } catch(err) {
+                    if (typeof showToast === 'function') {
+                        showToast(i18n.uploadFailed + ': ' + err.message, 'error');
+                    }
+                }
+                pf.uploading = false;
+            }
+            return paths;
+        },
+
+        // --- Conversation management ---
+
+        loadConversations() {
+            var self = this;
+            self.sidebarLoading = true;
+            fetch('/me/chat/api/conversations?agent=' + encodeURIComponent(self.selectedAgent))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    self.conversations = (data.data && data.data.conversations) || [];
+                    self.sidebarLoading = false;
+                })
+                .catch(function() {
+                    self.sidebarLoading = false;
+                });
+        },
+
+        newConversation() {
+            var self = this;
+            self.creatingConversation = true;
+            fetch('/me/chat/api/conversations', {
+                method: 'POST',
+                headers: self._apiHeaders(),
+                body: JSON.stringify({ agent_name: self.selectedAgent }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var cd = data.data || {};
+                if (cd.conversation) {
+                    self.conversations.unshift(cd.conversation);
+                    self.selectConversation(cd.conversation);
+                }
+                self.creatingConversation = false;
+            })
+            .catch(function() {
+                self.creatingConversation = false;
+            });
+        },
+
+        selectConversation(conv) {
+            var self = this;
+            if (self.activeConversationId === conv.id) return;
+
+            window.speechSynthesis.cancel();
+            self._stopServerAudio();
+            self.activeConversationId = conv.id;
+            self.mobileView = 'chat';
+            self.messages = [];
+            self.isTyping = false;
+            self.messagesLoading = true;
+            self._clearPendingFiles();
+
+            // Load history
+            fetch('/me/chat/api/conversations/' + conv.id + '/messages')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var msgs = (data.data && data.data.messages) || [];
+                    self.messages = msgs.map(function(m) {
+                        return {
+                            id: ++self.msgCounter,
+                            role: m.role === 'assistant' ? 'agent' : m.role,
+                            text: m.content,
+                            time: self._formatTime(m.created_at),
+                            agent: self.selectedAgent,
+                        };
+                    });
+                    self.messagesLoading = false;
+                    self.$nextTick(function() { self.scrollToBottom(); });
+                })
+                .catch(function() {
+                    self.messagesLoading = false;
+                });
+
+            // (Re)connect WebSocket with conversation_id
+            self._connectWs();
+        },
+
+        deleteConversation(convId) {
+            if (!confirm(i18n.deleteConfirm)) return;
+            var self = this;
+            fetch('/me/chat/api/conversations/' + convId, {
+                method: 'DELETE',
+                headers: self._apiHeaders(),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    self.conversations = self.conversations.filter(function(c) { return c.id !== convId; });
+                    if (self.activeConversationId === convId) {
+                        self.activeConversationId = null;
+                        self.messages = [];
+                        self.mobileView = 'conversations';
+                        self._clearPendingFiles();
+                        if (self.ws) { self.ws.close(); self.ws = null; }
+                    }
+                }
+            });
+        },
+
+        renameConversation(conv) {
+            var newTitle = prompt(i18n.renamePrompt, conv.title || '');
+            if (newTitle === null) return;
+            newTitle = newTitle.trim();
+            if (!newTitle) return;
+            var self = this;
+            fetch('/me/chat/api/conversations/' + conv.id + '/rename', {
+                method: 'POST',
+                headers: self._apiHeaders(),
+                body: JSON.stringify({ title: newTitle }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    conv.title = (data.data && data.data.title) || conv.title;
+                }
+            });
+        },
+
+        // --- WebSocket ---
+
+        connect() {
+            // Called on init - we don't auto-connect until a conversation is selected
+        },
+
+        _connectWs() {
+            var self = this;
+            // Close existing connection
+            if (self.ws) {
+                self.ws.onclose = null; // prevent reconnect loop
+                self.ws.close();
+                self.ws = null;
+                self.wsConnected = false;
+            }
+            if (!self.activeConversationId) return;
+
+            var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            var url = proto + '//' + location.host + '/ws/chat?agent=' + encodeURIComponent(self.selectedAgent)
+                    + '&conversation_id=' + encodeURIComponent(self.activeConversationId);
+            self.ws = new WebSocket(url);
+
+            self.ws.onopen = function() {
+                self.wsConnected = true;
+            };
+
+            self.ws.onmessage = function(event) {
+                var data = JSON.parse(event.data);
+                if (data.type === 'message') {
+                    self.isTyping = false;
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'agent',
+                        agent: data.agent || self.selectedAgent,
+                        text: data.text,
+                        time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                    self._speakText(data.text);
+                    self._bubbleConversation();
+                    self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'stream') {
+                    self.isTyping = false;
+                    var last = self.messages[self.messages.length - 1];
+                    if (last && last.role === 'agent' && last._streaming) {
+                        last.text += data.text;
+                    } else {
+                        self.messages.push({
+                            id: ++self.msgCounter,
+                            role: 'agent',
+                            agent: data.agent || self.selectedAgent,
+                            text: data.text,
+                            time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                            _streaming: true,
+                        });
+                    }
+                    self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'stream_end') {
+                    var last = self.messages[self.messages.length - 1];
+                    if (last) {
+                        last._streaming = false;
+                        self._speakText(last.text);
+                    }
+                    self._bubbleConversation();
+                } else if (data.type === 'tool_call') {
+                    self.isTyping = true;
+                    var last = self.messages[self.messages.length - 1];
+                    if (last && last._isTool) {
+                        last.text = '\u{1F527} ' + (data.tool || 'tool');
+                    } else {
+                        self.messages.push({
+                            id: ++self.msgCounter,
+                            role: 'system',
+                            text: '\u{1F527} ' + (data.tool || 'tool'),
+                            time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                            _isTool: true,
+                        });
+                    }
+                    self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'typing') {
+                    self.isTyping = true;
+                } else if (data.type === 'error') {
+                    self.isTyping = false;
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'agent',
+                        text: i18n.error + ' ' + data.text,
+                        time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                } else if (data.type === 'conversation_update') {
+                    // Update title in sidebar
+                    for (var i = 0; i < self.conversations.length; i++) {
+                        if (self.conversations[i].id === data.conversation_id) {
+                            self.conversations[i].title = data.title;
+                            break;
+                        }
+                    }
+                }
+            };
+
+            self.ws.onclose = function() {
+                self.wsConnected = false;
+                // Reconnect only if this conversation is still active
+                if (self.activeConversationId) {
+                    setTimeout(function() {
+                        if (self.activeConversationId) self._connectWs();
+                    }, 3000);
+                }
+            };
+
+            self.ws.onerror = function() {
+                self.wsConnected = false;
+            };
+        },
+
+        async sendMessage() {
+            var text = this.inputText.trim();
+            var hasFiles = this.pendingFiles.length > 0;
+            if ((!text && !hasFiles) || !this.wsConnected || !this.activeConversationId) return;
+
+            // Upload files first if any
+            var attachments = [];
+            var attachmentInfo = [];
+            if (hasFiles) {
+                attachments = await this._uploadPendingFiles();
+                // Collect preview info for message display
+                for (var i = 0; i < this.pendingFiles.length; i++) {
+                    attachmentInfo.push({
+                        filename: this.pendingFiles[i].filename,
+                        previewUrl: this.pendingFiles[i].previewUrl,
+                    });
+                }
+            }
+
+            // Show user message with attachments
+            this.messages.push({
+                id: ++this.msgCounter,
+                role: 'user',
+                text: text,
+                time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                attachments: attachmentInfo.length > 0 ? attachmentInfo : null,
+            });
+
+            this.inputText = '';
+            this._voiceCommitted = '';
+            this.pendingFiles = [];
+            this.isTyping = true;
+
+            // Restart speech recognition to clear old results buffer
+            if (this.voiceActive && this._recognition) {
+                this._voiceRestarting = true;
+                this._recognition.stop();
+            }
+
+            // Send via WebSocket
+            var payload = {
+                type: 'message',
+                text: text,
+                agent: this.selectedAgent,
+            };
+            if (attachments.length > 0) {
+                payload.attachments = attachments;
+            }
+            this.ws.send(JSON.stringify(payload));
+
+            var self = this;
+            this.$nextTick(function() { self.scrollToBottom(); });
+        },
+
+        switchAgent() {
+            window.speechSynthesis.cancel();
+            this._stopServerAudio();
+            if (this.ws) {
+                this.ws.onclose = null;
+                this.ws.close();
+                this.ws = null;
+            }
+            this.wsConnected = false;
+            this.activeConversationId = null;
+            this.messages = [];
+            this.mobileView = 'conversations';
+            this._clearPendingFiles();
+            this.loadConversations();
+        },
+
+        // --- Helpers ---
+
+        _clearPendingFiles() {
+            for (var i = 0; i < this.pendingFiles.length; i++) {
+                if (this.pendingFiles[i].previewUrl) {
+                    URL.revokeObjectURL(this.pendingFiles[i].previewUrl);
+                }
+            }
+            this.pendingFiles = [];
+        },
+
+        // --- Voice ---
+
+        toggleVoice() {
+            if (this.voiceActive) {
+                this.stopVoice();
+            } else {
+                this.startVoice();
+            }
+        },
+
+        startVoice() {
+            var self = this;
+            if (self._voiceMode === 'speech-api') {
+                self._startSpeechApi();
+            } else if (self._voiceMode === 'recorder') {
+                self._startRecorder();
+            }
+        },
+
+        stopVoice() {
+            var self = this;
+            if (self._voiceMode === 'speech-api' && self._recognition) {
+                self._recognition.stop();
+            } else if (self._voiceMode === 'recorder' && self._mediaRecorder) {
+                self._mediaRecorder.stop();
+            }
+            self.voiceActive = false;
+            self.voiceInterim = '';
+        },
+
+        _startSpeechApi() {
+            var self = this;
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            var recognition = new SpeechRecognition();
+            recognition.lang = 'it-IT';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            self._voiceCommitted = self.inputText;
+
+            recognition.onresult = function(event) {
+                var interim = '';
+                // Only process results from resultIndex onward to avoid
+                // re-processing already finalized results
+                for (var i = event.resultIndex; i < event.results.length; i++) {
+                    var transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        var sep = self._voiceCommitted && !self._voiceCommitted.endsWith(' ') ? ' ' : '';
+                        self._voiceCommitted += sep + transcript;
+                        self.inputText = self._voiceCommitted;
+                    } else {
+                        interim += transcript;
+                    }
+                }
+                self.voiceInterim = interim;
+            };
+
+            recognition.onerror = function(event) {
+                if (event.error === 'not-allowed') {
+                    if (typeof showToast === 'function') {
+                        showToast(i18n.micDenied, 'error');
+                    }
+                }
+                self.voiceActive = false;
+                self.voiceInterim = '';
+            };
+
+            recognition.onend = function() {
+                self._recognition = null;
+                if (self._voiceRestarting) {
+                    // Restart after sendMessage cleared the buffer
+                    self._voiceRestarting = false;
+                    self._startSpeechApi();
+                } else {
+                    self.voiceActive = false;
+                    self.voiceInterim = '';
+                }
+            };
+
+            try {
+                recognition.start();
+                self._recognition = recognition;
+                self.voiceActive = true;
+            } catch(e) {
+                if (typeof showToast === 'function') {
+                    showToast(i18n.voiceRecognitionError, 'error');
+                }
+            }
+        },
+
+        async _startRecorder() {
+            var self = this;
+            try {
+                var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                self._audioChunks = [];
+                var recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+                recorder.ondataavailable = function(e) {
+                    if (e.data.size > 0) self._audioChunks.push(e.data);
+                };
+
+                recorder.onstop = async function() {
+                    // Stop microphone
+                    stream.getTracks().forEach(function(t) { t.stop(); });
+                    self.voiceActive = false;
+                    self.voiceInterim = '';
+
+                    if (self._audioChunks.length === 0) return;
+
+                    var blob = new Blob(self._audioChunks, { type: 'audio/webm' });
+                    var file = new File([blob], 'voce.webm', { type: 'audio/webm' });
+
+                    // Add as pending file and let the user send it as attachment
+                    self.pendingFiles.push({
+                        file: file,
+                        filename: 'voce.webm',
+                        previewUrl: null,
+                        uploading: false,
+                        uploadedPath: null,
+                    });
+
+                    if (typeof showToast === 'function') {
+                        showToast(i18n.audioRecorded, 'info');
+                    }
+                };
+
+                recorder.start();
+                self._mediaRecorder = recorder;
+                self.voiceActive = true;
+                self.voiceInterim = i18n.audioRecording;
+            } catch(e) {
+                if (typeof showToast === 'function') {
+                    showToast(i18n.micDenied, 'error');
+                }
+            }
+        },
+
+        // --- TTS ---
+
+        toggleTts() {
+            this.ttsEnabled = !this.ttsEnabled;
+            localStorage.setItem('gridbear_tts', this.ttsEnabled ? '1' : '0');
+            if (!this.ttsEnabled) {
+                window.speechSynthesis.cancel();
+                this._stopServerAudio();
+            }
+        },
+
+        _stopServerAudio() {
+            if (this._currentAudio) {
+                this._currentAudio.pause();
+                this._currentAudio = null;
+            }
+        },
+
+        _speakText(text) {
+            if (!this.ttsEnabled || !text) return;
+            if (this.ttsProvider === 'browser') {
+                this._speakBrowser(text);
+            } else {
+                this._speakServer(text);
+            }
+        },
+
+        _speakBrowser(text) {
+            if (!window.speechSynthesis) return;
+
+            // Strip markdown for cleaner speech
+            var clean = text
+                .replace(/```[\s\S]*?```/g, ' ' + i18n.codeBlock + ' ')
+                .replace(/`[^`]+`/g, function(m) { return m.slice(1, -1); })
+                .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                .replace(/[#*_~>|]/g, '')
+                .replace(/\n{2,}/g, '. ')
+                .replace(/\n/g, ' ')
+                .trim();
+            if (!clean) return;
+
+            window.speechSynthesis.cancel();
+
+            var chunks = this._splitForSpeech(clean);
+            for (var i = 0; i < chunks.length; i++) {
+                var utterance = new SpeechSynthesisUtterance(chunks[i]);
+                utterance.lang = 'it-IT';
+                utterance.rate = 1.05;
+
+                var voices = window.speechSynthesis.getVoices();
+                for (var v = 0; v < voices.length; v++) {
+                    if (voices[v].lang && voices[v].lang.startsWith('it')) {
+                        utterance.voice = voices[v];
+                        break;
+                    }
+                }
+                window.speechSynthesis.speak(utterance);
+            }
+        },
+
+        _speakServer(text) {
+            var self = this;
+            self._stopServerAudio();
+
+            fetch('/me/chat/api/tts', {
+                method: 'POST',
+                headers: self._apiHeaders(),
+                body: JSON.stringify({ text: text }),
+            })
+            .then(function(resp) {
+                if (!resp.ok) throw new Error('TTS request failed');
+                return resp.blob();
+            })
+            .then(function(blob) {
+                if (!self.ttsEnabled) return;
+                var url = URL.createObjectURL(blob);
+                var audio = new Audio(url);
+                audio.onended = function() {
+                    URL.revokeObjectURL(url);
+                    self._currentAudio = null;
+                };
+                audio.onerror = function() {
+                    URL.revokeObjectURL(url);
+                    self._currentAudio = null;
+                };
+                self._currentAudio = audio;
+                audio.play();
+            })
+            .catch(function(err) {
+                console.error('Server TTS error:', err);
+            });
+        },
+
+        _splitForSpeech(text) {
+            // Split at sentence boundaries, max ~200 chars per chunk
+            var maxLen = 200;
+            if (text.length <= maxLen) return [text];
+
+            var chunks = [];
+            var remaining = text;
+            while (remaining.length > 0) {
+                if (remaining.length <= maxLen) {
+                    chunks.push(remaining);
+                    break;
+                }
+                // Find last sentence end within maxLen
+                var cut = -1;
+                var separators = ['. ', '! ', '? ', '; '];
+                for (var s = 0; s < separators.length; s++) {
+                    var idx = remaining.lastIndexOf(separators[s], maxLen);
+                    if (idx > cut) cut = idx + separators[s].length;
+                }
+                if (cut <= 0) {
+                    // No sentence boundary, cut at last space
+                    cut = remaining.lastIndexOf(' ', maxLen);
+                    if (cut <= 0) cut = maxLen;
+                }
+                chunks.push(remaining.substring(0, cut).trim());
+                remaining = remaining.substring(cut).trim();
+            }
+            return chunks;
+        },
+
+        _bubbleConversation() {
+            // Move active conversation to top of list and update timestamp
+            var self = this;
+            if (!self.activeConversationId) return;
+            var idx = -1;
+            for (var i = 0; i < self.conversations.length; i++) {
+                if (self.conversations[i].id === self.activeConversationId) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx > 0) {
+                var conv = self.conversations.splice(idx, 1)[0];
+                conv.updated_at = new Date().toISOString().replace('T', ' ').substring(0, 19);
+                self.conversations.unshift(conv);
+            } else if (idx === 0) {
+                self.conversations[0].updated_at = new Date().toISOString().replace('T', ' ').substring(0, 19);
+            }
+        },
+
+        formatDate(ts) {
+            if (!ts) return '';
+            // ts is like "2025-01-15 14:30:00"
+            try {
+                var d = new Date(ts.replace(' ', 'T'));
+                var now = new Date();
+                var diff = now - d;
+                if (diff < 86400000 && d.getDate() === now.getDate()) {
+                    return d.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'});
+                }
+                if (diff < 604800000) {
+                    return d.toLocaleDateString('it-IT', {weekday: 'short', hour: '2-digit', minute: '2-digit'});
+                }
+                return d.toLocaleDateString('it-IT', {day: 'numeric', month: 'short'});
+            } catch(e) {
+                return ts;
+            }
+        },
+
+        _formatTime(ts) {
+            if (!ts) return '';
+            try {
+                var d = new Date(ts.replace(' ', 'T'));
+                return d.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'});
+            } catch(e) {
+                return '';
+            }
+        },
+
+        scrollToBottom() {
+            var el = document.getElementById('chat-messages');
+            if (el) el.scrollTop = el.scrollHeight;
+        }
+    };
+}
+</script>
+{% endblock %}

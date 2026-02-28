@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Gmail Accounts - GridBear{% endblock %}
+{% block page_title %}Gmail Accounts{% endblock %}
+{% block breadcrumb_active %}Gmail{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage Gmail OAuth connections for email integration</p>{% endblock %}
+
+{% block content %}
+{% if not oauth_configured %}
+<div class="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3">
+    <i class="fas fa-triangle-exclamation text-red-500 mt-0.5"></i>
+    <div>
+        <p class="font-medium text-void-900 dark:text-white">OAuth not configured!</p>
+        <p class="text-sm text-void-600 dark:text-void-300">
+            Copy the <code class="font-mono bg-void-100 dark:bg-void-800 px-1 rounded">credentials.json</code> file from Google Cloud Console to <code class="font-mono bg-void-100 dark:bg-void-800 px-1 rounded">credentials/oauth_client.json</code>
+        </p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Linked Accounts -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-envelope text-red-500"></i>
+            Linked Accounts
+        </h3>
+        <p class="text-sm text-void-500 dark:text-void-400 mt-1">Each user can have one or more Gmail accounts linked</p>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                    <th class="px-5 py-3">Identity</th>
+                    <th class="px-5 py-3">Email</th>
+                    <th class="px-5 py-3">Status</th>
+                    <th class="px-5 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                {% for account in accounts %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                    <td class="px-5 py-4 font-medium text-void-900 dark:text-white">{{ account.unified_id }}</td>
+                    <td class="px-5 py-4 text-void-600 dark:text-void-300">{{ account.email }}</td>
+                    <td class="px-5 py-4">
+                        {% if account.has_credentials %}
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+                            <span class="w-1.5 h-1.5 rounded-full bg-nordic-500"></span>
+                            Connected
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">
+                            <span class="w-1.5 h-1.5 rounded-full bg-ember-500"></span>
+                            Missing credentials
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-5 py-4">
+                        <div class="flex items-center justify-end gap-2">
+                            {% if account.has_credentials %}
+                            <form method="POST" action="/oauth/gmail/revoke/{{ account.email }}" class="inline">
+                                {% include "partials/csrf_field.html" %}
+                                <button type="submit"
+                                        class="px-3 py-1.5 rounded-lg bg-ember-500/10 hover:bg-ember-500/20 text-ember-600 dark:text-ember-400 text-sm font-medium transition-colors">
+                                    Revoke
+                                </button>
+                            </form>
+                            {% endif %}
+                            <form method="POST" action="/oauth/gmail/remove/{{ account.unified_id }}/{{ account.email }}" class="inline">
+                                {% include "partials/csrf_field.html" %}
+                                <button type="submit"
+                                        class="px-3 py-1.5 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 text-sm font-medium transition-colors">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not accounts %}
+                <tr>
+                    <td colspan="4" class="px-5 py-12 text-center">
+                        <i class="fas fa-envelope-open text-4xl text-void-300 dark:text-void-600 mb-3"></i>
+                        <p class="text-void-500 dark:text-void-400">No Gmail accounts linked</p>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Generate OAuth Link -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-link text-frost-500"></i>
+            Generate OAuth Link
+        </h3>
+        <p class="text-sm text-void-500 dark:text-void-400 mt-1">Generate a link to send to the user to link their Gmail account</p>
+    </div>
+    <div class="p-5">
+        <form id="generate-link-form">
+            {% include "partials/csrf_field.html" %}
+            <div class="flex flex-wrap items-center gap-3">
+                <select id="unified_id" name="unified_id"
+                        class="bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 w-full max-w-xs">
+                    <option value="">-- Select identity --</option>
+                    {% for uid in unified_ids %}
+                    <option value="{{ uid }}">{{ uid }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" onclick="generateLink()"
+                        {% if not oauth_configured %}disabled{% endif %}
+                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-magic"></i>
+                    Generate Link
+                </button>
+            </div>
+        </form>
+
+        <div id="link-result" class="mt-4 hidden">
+            <p class="text-sm text-void-700 dark:text-void-200 mb-2">Generated link (valid for 1h):</p>
+            <div class="flex gap-2">
+                <input type="text" id="generated-link" readonly
+                       class="flex-1 bg-void-100 dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white font-mono text-sm">
+                <button onclick="copyLink()"
+                        class="px-4 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-colors">
+                    <i class="fas fa-copy mr-1"></i> Copy
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- How It Works -->
+<div class="rounded-2xl bg-gradient-to-br from-void-900 to-void-800 border border-void-700 p-5 text-white">
+    <h3 class="font-semibold flex items-center gap-2 mb-3">
+        <i class="fas fa-lightbulb text-ember-400"></i>
+        How It Works
+    </h3>
+    <ol class="text-sm space-y-2 text-void-300 list-decimal list-inside">
+        <li>User writes to the assistant: <em class="text-frost-400">"link my email"</em></li>
+        <li>The assistant generates an OAuth link and sends it to the user</li>
+        <li>User clicks the link and authorizes Gmail access</li>
+        <li>Credentials are saved automatically</li>
+        <li>From then on, user can use email commands</li>
+    </ol>
+</div>
+
+<script>
+async function generateLink() {
+    const unified_id = document.getElementById('unified_id').value;
+    if (!unified_id) {
+        alert('Select an identity');
+        return;
+    }
+
+    const form = document.getElementById('generate-link-form');
+    const formData = new FormData(form);
+
+    const resp = await fetch('/oauth/gmail/generate-link', {
+        method: 'POST',
+        body: new URLSearchParams(formData),
+    });
+
+    const data = await resp.json();
+    document.getElementById('generated-link').value = data.link;
+    document.getElementById('link-result').classList.remove('hidden');
+}
+
+function copyLink() {
+    const link = document.getElementById('generated-link');
+    link.select();
+    navigator.clipboard.writeText(link.value);
+    alert('Link copied!');
+}
+</script>
+{% endblock %}

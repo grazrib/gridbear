@@ -1,0 +1,27 @@
+{
+  "name": "memory",
+  "version": "0.1.0",
+  "type": "service",
+  "description": "Structured semantic memory (episodic + declarative) using PostgreSQL pgvector",
+  "entry_point": "service.py",
+  "class_name": "MemoryService",
+  "provides": "memory",
+  "depends": [],
+  "config_schema": {
+    "embedding_model": {
+      "type": "string",
+      "default": "all-MiniLM-L6-v2",
+      "description": "Sentence-transformers model for embeddings"
+    },
+    "episodic_weight": {
+      "type": "number",
+      "default": 0.4,
+      "description": "Weight for episodic memories in combined search"
+    },
+    "declarative_weight": {
+      "type": "number",
+      "default": 0.6,
+      "description": "Weight for declarative memories in combined search"
+    }
+  }
+}

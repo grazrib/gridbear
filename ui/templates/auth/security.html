@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block title %}Security - GridBear{% endblock %}
+{% block page_title %}Security Settings{% endblock %}
+{% block breadcrumb_active %}Security{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage your account security, 2FA, and active sessions</p>{% endblock %}
+
+{% block content %}
+{% if success == 'passkey_added' %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Passkey registered successfully!</span>
+</div>
+{% elif success == 'passkey_deleted' %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Passkey removed.</span>
+</div>
+{% endif %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Account Info -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-user text-nordic-500"></i>
+                Account
+            </h3>
+        </div>
+        <div class="p-5 space-y-4">
+            <div>
+                <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Username</p>
+                <p class="font-medium text-void-900 dark:text-white">{{ user.username }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Email</p>
+                <p class="text-void-600 dark:text-void-300">{{ user.email or '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Role</p>
+                {% if user.is_superadmin %}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">Super Admin</span>
+                {% else %}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-void-200 dark:bg-void-700 text-void-600 dark:text-void-300 text-xs font-medium">Admin</span>
+                {% endif %}
+            </div>
+            <div>
+                <p class="text-xs text-void-500 dark:text-void-400 uppercase tracking-wider mb-1">Last login</p>
+                <p class="text-sm text-void-600 dark:text-void-300">{{ user.last_login or 'Never' }}</p>
+            </div>
+
+            <a href="/auth/change-password"
+               class="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-nordic-500/30 hover:bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 font-medium transition-colors">
+                <i class="fas fa-key"></i> Change Password
+            </a>
+        </div>
+    </div>
+
+    <!-- 2FA Settings -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r {{ 'from-nordic-500/5' if user.totp_enabled else 'from-ember-500/5' }} to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-shield-halved {{ 'text-nordic-500' if user.totp_enabled else 'text-ember-500' }}"></i>
+                Two-Factor Authentication
+            </h3>
+        </div>
+        <div class="p-5">
+            {% if user.totp_enabled %}
+            <div class="p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 mb-4 flex items-start gap-3">
+                <i class="fas fa-check-circle text-nordic-500 mt-0.5"></i>
+                <div>
+                    <p class="font-medium text-void-900 dark:text-white">2FA Active</p>
+                    <p class="text-sm text-void-600 dark:text-void-300">Your account is protected with two-factor authentication.</p>
+                </div>
+            </div>
+
+            <p class="text-void-700 dark:text-void-200 mb-2">
+                <strong>Remaining recovery codes:</strong> <span class="font-mono">{{ recovery_count }}</span>
+            </p>
+
+            {% if recovery_count < 3 %}
+            <div class="p-3 rounded-xl bg-ember-500/10 border border-ember-500/20 mb-4 flex items-center gap-2 text-ember-600 dark:text-ember-400 text-sm">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span>Few codes remaining! Generate new codes.</span>
+            </div>
+            {% endif %}
+
+            <div class="space-y-2">
+                <button type="button" onclick="regenerate_modal.showModal()"
+                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-ember-500/30 hover:bg-ember-500/10 text-ember-600 dark:text-ember-400 font-medium transition-colors">
+                    <i class="fas fa-sync"></i> Regenerate Recovery Codes
+                </button>
+
+                <button type="button" onclick="disable2fa_modal.showModal()"
+                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/30 hover:bg-red-500/10 text-red-500 font-medium transition-colors">
+                    <i class="fas fa-times"></i> Disable 2FA
+                </button>
+            </div>
+
+            {% else %}
+            <div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 mb-4 flex items-start gap-3">
+                <i class="fas fa-triangle-exclamation text-ember-500 mt-0.5"></i>
+                <div>
+                    <p class="font-medium text-void-900 dark:text-white">2FA Not Active</p>
+                    <p class="text-sm text-void-600 dark:text-void-300">We recommend enabling 2FA for better security.</p>
+                </div>
+            </div>
+
+            <form method="POST" action="/auth/security/enable-2fa">
+                {% include "partials/csrf_field.html" %}
+                <button type="submit"
+                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-colors">
+                    <i class="fas fa-shield-halved"></i> Enable 2FA
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Active Sessions -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-desktop text-frost-500"></i>
+                Active Sessions ({{ sessions|length }})
+            </h3>
+        </div>
+        <ul class="divide-y divide-void-100 dark:divide-void-800 max-h-64 overflow-y-auto">
+            {% for session in sessions %}
+            <li class="p-4 {{ 'bg-nordic-500/5' if session.is_current else '' }}">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs text-void-500 dark:text-void-400 flex items-center gap-1">
+                            <i class="fas fa-globe"></i> {{ session.ip_address or 'Unknown' }}
+                        </p>
+                        <p class="text-xs text-void-500 dark:text-void-400 flex items-center gap-1" title="{{ session.user_agent }}">
+                            <i class="fas fa-clock"></i> {{ session.created_at|datefmt }}
+                        </p>
+                        {% if session.is_current %}
+                        <span class="inline-flex items-center mt-1 px-2 py-0.5 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">Current</span>
+                        {% endif %}
+                    </div>
+                    {% if not session.is_current %}
+                    <form method="POST" action="/auth/security/revoke-session/{{ session.id }}"
+                          onsubmit="return confirm('Terminate this session?');">
+                        {% include "partials/csrf_field.html" %}
+                        <button type="submit"
+                                class="p-2 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="p-4 border-t border-void-200 dark:border-void-800">
+            <form method="POST" action="/auth/security/revoke-all-sessions"
+                  onsubmit="return confirm('Terminate all other sessions?');">
+                {% include "partials/csrf_field.html" %}
+                <button type="submit"
+                        {% if sessions|length <= 1 %}disabled{% endif %}
+                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-red-500/30 hover:bg-red-500/10 text-red-500 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-sign-out-alt"></i> Terminate All Other Sessions
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Passkeys -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r {{ 'from-frost-500/5' if webauthn_credentials else 'from-ember-500/5' }} to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-fingerprint {{ 'text-frost-500' if webauthn_credentials else 'text-ember-500' }}"></i>
+                Passkeys
+            </h3>
+        </div>
+        <div class="p-5">
+            {% if webauthn_credentials %}
+            <div class="p-4 rounded-xl bg-frost-500/10 border border-frost-500/20 mb-4 flex items-start gap-3">
+                <i class="fas fa-check-circle text-frost-500 mt-0.5"></i>
+                <div>
+                    <p class="font-medium text-void-900 dark:text-white">{{ webauthn_credentials|length }} Passkey{{ 's' if webauthn_credentials|length != 1 else '' }} Registered</p>
+                    <p class="text-sm text-void-600 dark:text-void-300">You can use biometrics or a security key to log in.</p>
+                </div>
+            </div>
+
+            <ul class="space-y-2 mb-4">
+                {% for cred in webauthn_credentials %}
+                <li class="flex items-center justify-between p-3 rounded-xl bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700">
+                    <div>
+                        <p class="text-sm font-medium text-void-900 dark:text-white">{{ cred.device_name }}</p>
+                        <p class="text-xs text-void-500 dark:text-void-400">
+                            Added {{ cred.created_at|datefmt('%Y-%m-%d') }}
+                            {% if cred.last_used_at %} &middot; Last used {{ cred.last_used_at|datefmt('%Y-%m-%d') }}{% endif %}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="document.getElementById('rename_{{ cred.id }}').showModal()"
+                                class="p-2 rounded-lg hover:bg-void-200 dark:hover:bg-void-700 text-void-500 hover:text-void-700 dark:hover:text-void-300 transition-colors" title="Rename">
+                            <i class="fas fa-pencil text-xs"></i>
+                        </button>
+                        <form method="POST" action="/auth/security/delete-passkey/{{ cred.id }}"
+                              onsubmit="return confirm('Remove this passkey?');">
+                            {% include "partials/csrf_field.html" %}
+                            <button type="submit"
+                                    class="p-2 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 transition-colors" title="Remove">
+                                <i class="fas fa-times text-xs"></i>
+                            </button>
+                        </form>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+
+            <a href="/auth/webauthn-setup"
+               class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-frost-500/30 hover:bg-frost-500/10 text-frost-600 dark:text-frost-400 font-medium transition-colors">
+                <i class="fas fa-plus"></i> Add Another Passkey
+            </a>
+
+            {% else %}
+            <div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 mb-4 flex items-start gap-3">
+                <i class="fas fa-triangle-exclamation text-ember-500 mt-0.5"></i>
+                <div>
+                    <p class="font-medium text-void-900 dark:text-white">No Passkeys</p>
+                    <p class="text-sm text-void-600 dark:text-void-300">Register a passkey for faster and more secure login.</p>
+                </div>
+            </div>
+
+            <a href="/auth/webauthn-setup" id="btn-register-passkey"
+               class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-colors">
+                <i class="fas fa-fingerprint"></i> Register Passkey
+            </a>
+            <p id="webauthn-unsupported" class="hidden mt-3 text-center text-xs text-ember-500">
+                <i class="fas fa-triangle-exclamation"></i> Your browser does not support passkeys.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if user.is_superadmin and audit_logs %}
+<!-- Audit Log (Superadmin only) -->
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-history text-void-500"></i>
+            Security Log (Last 50)
+        </h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                    <th class="px-2 sm:px-5 py-3">Date</th>
+                    <th class="px-2 sm:px-5 py-3">Event</th>
+                    <th class="px-2 sm:px-5 py-3 hidden sm:table-cell">Username</th>
+                    <th class="px-2 sm:px-5 py-3 hidden md:table-cell">IP</th>
+                    <th class="px-2 sm:px-5 py-3 hidden lg:table-cell">Result</th>
+                    <th class="px-2 sm:px-5 py-3 hidden lg:table-cell">Details</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                {% for log in audit_logs %}
+                <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                    <td class="px-2 sm:px-5 py-3 text-xs text-void-500 dark:text-void-400 whitespace-nowrap">{{ log.created_at|datefmt }}</td>
+                    <td class="px-2 sm:px-5 py-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium
+                            {% if 'failed' in log.event_type or 'blocked' in log.event_type %}bg-red-500/10 text-red-500
+                            {% elif 'success' in log.event_type %}bg-nordic-500/10 text-nordic-600 dark:text-nordic-400
+                            {% else %}bg-void-200 dark:bg-void-700 text-void-600 dark:text-void-300{% endif %}">
+                            {{ log.event_type }}
+                        </span>
+                    </td>
+                    <td class="px-2 sm:px-5 py-3 text-void-600 dark:text-void-300 hidden sm:table-cell">{{ log.username or '-' }}</td>
+                    <td class="px-2 sm:px-5 py-3 text-xs text-void-500 dark:text-void-400 font-mono hidden md:table-cell">{{ log.ip_address or '-' }}</td>
+                    <td class="px-2 sm:px-5 py-3 hidden lg:table-cell">
+                        {% if log.success %}
+                        <i class="fas fa-check text-nordic-500"></i>
+                        {% else %}
+                        <i class="fas fa-times text-red-500"></i>
+                        {% endif %}
+                    </td>
+                    <td class="px-2 sm:px-5 py-3 text-xs text-void-500 dark:text-void-400 max-w-xs truncate hidden lg:table-cell">{{ log.details or '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Disable 2FA Modal -->
+<dialog id="disable2fa_modal" class="rounded-2xl bg-white dark:bg-void-900 border border-void-200 dark:border-void-800 p-0 backdrop:bg-black/50 max-w-md w-full">
+    <div class="p-6">
+        <form method="POST" action="/auth/security/disable-2fa">
+            {% include "partials/csrf_field.html" %}
+            <h3 class="text-lg font-semibold text-void-900 dark:text-white flex items-center gap-2 mb-4">
+                <i class="fas fa-triangle-exclamation text-red-500"></i>
+                Disable 2FA
+            </h3>
+            <div class="p-4 rounded-xl bg-red-500/10 border border-red-500/20 mb-4 flex items-start gap-2 text-red-500 text-sm">
+                <i class="fas fa-ban mt-0.5"></i>
+                <span><strong>Warning!</strong> Disabling 2FA will make your account less secure.</span>
+            </div>
+            <div class="mb-4 space-y-2">
+                <label class="block text-sm font-medium text-void-700 dark:text-void-200">Enter your password to confirm</label>
+                <input type="password" name="password" required
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="disable2fa_modal.close()"
+                        class="px-4 py-2 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 font-medium transition-colors">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium transition-colors">
+                    Disable 2FA
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<!-- Regenerate Recovery Codes Modal -->
+<dialog id="regenerate_modal" class="rounded-2xl bg-white dark:bg-void-900 border border-void-200 dark:border-void-800 p-0 backdrop:bg-black/50 max-w-md w-full">
+    <div class="p-6">
+        <form method="POST" action="/auth/security/regenerate-recovery">
+            {% include "partials/csrf_field.html" %}
+            <h3 class="text-lg font-semibold text-void-900 dark:text-white flex items-center gap-2 mb-4">
+                <i class="fas fa-sync text-ember-500"></i>
+                Regenerate Recovery Codes
+            </h3>
+            <div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 mb-4 flex items-start gap-2 text-ember-600 dark:text-ember-400 text-sm">
+                <i class="fas fa-triangle-exclamation mt-0.5"></i>
+                <span><strong>Warning!</strong> Current codes will be invalidated.</span>
+            </div>
+            <div class="mb-4 space-y-2">
+                <label class="block text-sm font-medium text-void-700 dark:text-void-200">Enter your password to confirm</label>
+                <input type="password" name="password" required
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="regenerate_modal.close()"
+                        class="px-4 py-2 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 font-medium transition-colors">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 rounded-xl bg-ember-500 hover:bg-ember-600 text-white font-medium transition-colors">
+                    Regenerate Codes
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<!-- Rename Passkey Modals -->
+{% if webauthn_credentials %}
+{% for cred in webauthn_credentials %}
+<dialog id="rename_{{ cred.id }}" class="rounded-2xl bg-white dark:bg-void-900 border border-void-200 dark:border-void-800 p-0 backdrop:bg-black/50 max-w-sm w-full">
+    <div class="p-6">
+        <form method="POST" action="/auth/security/rename-passkey/{{ cred.id }}">
+            {% include "partials/csrf_field.html" %}
+            <h3 class="text-lg font-semibold text-void-900 dark:text-white flex items-center gap-2 mb-4">
+                <i class="fas fa-pencil text-frost-500"></i>
+                Rename Passkey
+            </h3>
+            <div class="mb-4 space-y-2">
+                <label class="block text-sm font-medium text-void-700 dark:text-void-200">Device name</label>
+                <input type="text" name="new_name" required maxlength="50"
+                       value="{{ cred.device_name }}"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="document.getElementById('rename_{{ cred.id }}').close()"
+                        class="px-4 py-2 rounded-xl hover:bg-void-100 dark:hover:bg-void-800 text-void-600 dark:text-void-300 font-medium transition-colors">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-colors">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
+{% endfor %}
+{% endif %}
+
+{% if request.query_params.get('error') == 'password' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    alert('Incorrect password. Please try again.');
+});
+</script>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (!window.PublicKeyCredential) {
+        var btn = document.getElementById('btn-register-passkey');
+        var msg = document.getElementById('webauthn-unsupported');
+        if (btn) { btn.classList.add('opacity-50', 'pointer-events-none'); }
+        if (msg) { msg.classList.remove('hidden'); }
+    }
+});
+</script>
+{% endblock %}

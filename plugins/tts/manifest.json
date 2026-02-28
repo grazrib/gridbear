@@ -1,0 +1,16 @@
+{
+  "name": "tts",
+  "version": "0.1.0",
+  "type": "service",
+  "description": "Text-to-speech — delegates to configured provider (tts-openai, tts-edge, etc.)",
+  "entry_point": "service.py",
+  "class_name": "TTSBaseService",
+  "config_schema": {
+    "default_provider": {
+      "type": "string",
+      "default": "",
+      "description": "Default TTS provider (overridden per-agent in YAML)"
+    }
+  },
+  "dependencies": []
+}

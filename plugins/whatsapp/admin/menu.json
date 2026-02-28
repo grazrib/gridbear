@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "WhatsApp",
+      "url": "/plugin/whatsapp",
+      "icon": "fab fa-whatsapp",
+      "section": "channels",
+      "priority": 15
+    }
+  ]
+}

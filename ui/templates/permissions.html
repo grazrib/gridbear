@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}Permissions - GridBear{% endblock %}
+{% block page_title %}MCP Permissions{% endblock %}
+{% block breadcrumb_active %}Permissions{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Configure MCP server access for users and groups</p>{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <!-- Main Content -->
+    <div class="xl:col-span-2 space-y-6">
+        <!-- Permissions by User -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-user-shield text-nordic-500"></i>
+                    User Permissions
+                </h3>
+                <p class="text-sm text-void-500 dark:text-void-400 mt-1">Configure which MCP servers each user can access</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                            <th class="px-2 sm:px-5 py-3">Username</th>
+                            <th class="px-2 sm:px-5 py-3">Allowed MCP Servers</th>
+                            <th class="px-2 sm:px-5 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                        {% for username, servers in permissions.items() %}
+                        <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                            <td class="px-2 sm:px-5 py-4">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-medium text-void-900 dark:text-white">@{{ username }}</span>
+                                    {% for platform in user_platforms.get(username, []) %}
+                                        {% set cui = channel_ui.get(platform, {}) %}
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                              style="background: {{ cui.get('color', '#6B7280') }}15; color: {{ cui.get('color', '#6B7280') }}">
+                                            {{ cui.get('badge_abbr', platform[:2]|upper) }}
+                                        </span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td class="px-2 sm:px-5 py-4">
+                                <div class="flex flex-wrap gap-1">
+                                    {% if servers %}
+                                        {% for server in servers %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">{{ server }}</span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">No permissions</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-2 sm:px-5 py-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button onclick='editPermissions("{{ username }}", {{ servers | tojson }})'
+                                            class="px-3 py-1.5 rounded-lg bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
+                                        Edit
+                                    </button>
+                                    <form method="POST" action="/permissions/delete/{{ username }}" class="inline">
+                                        {% include "partials/csrf_field.html" %}
+                                        <button type="submit" class="px-3 py-1.5 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 text-sm font-medium transition-colors">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not permissions %}
+                        <tr>
+                            <td colspan="3" class="px-5 py-12 text-center">
+                                <i class="fas fa-shield-halved text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+                                <p class="text-void-500 dark:text-void-400">No permissions configured</p>
+                                <p class="text-xs text-void-400 dark:text-void-500 mt-1">All users have access to all servers</p>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Group Permissions -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-users text-frost-500"></i>
+                    Group Permissions
+                </h3>
+                <p class="text-sm text-void-500 dark:text-void-400 mt-1">Group permissions apply to all members. Group Gmail servers are added automatically.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                            <th class="px-2 sm:px-5 py-3">Group</th>
+                            <th class="px-2 sm:px-5 py-3 hidden md:table-cell">Members</th>
+                            <th class="px-2 sm:px-5 py-3">Allowed MCP Servers</th>
+                            <th class="px-2 sm:px-5 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                        {% for group_name, members in memory_groups.items() %}
+                        <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                            <td class="px-2 sm:px-5 py-4">
+                                <span class="font-semibold text-void-900 dark:text-white">{{ group_name }}</span>
+                            </td>
+                            <td class="px-2 sm:px-5 py-4 hidden md:table-cell">
+                                <div class="flex flex-wrap gap-1">
+                                    {% for member in members %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-void-100 dark:bg-void-800 text-void-700 dark:text-void-200 text-xs font-medium">
+                                        {{ member }}
+                                        <form method="POST" action="/permissions/group/{{ group_name }}/remove-member" class="inline">
+                                            {% include "partials/csrf_field.html" %}
+                                            <input type="hidden" name="unified_id" value="{{ member }}">
+                                            <button type="submit" onclick="return confirm('Remove {{ member }} from {{ group_name }}?')"
+                                                    class="ml-0.5 text-void-400 hover:text-ember-500 transition-colors" title="Remove member">
+                                                <i class="fas fa-times text-[10px]"></i>
+                                            </button>
+                                        </form>
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td class="px-2 sm:px-5 py-4">
+                                <div class="flex flex-wrap gap-1">
+                                    {% set servers = group_permissions.get(group_name, []) %}
+                                    {% if servers %}
+                                        {% for server in servers %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">{{ server }}</span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">No permissions</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-2 sm:px-5 py-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button onclick='editGroupPermissions("{{ group_name }}", {{ group_permissions.get(group_name, []) | tojson }})'
+                                            class="px-3 py-1.5 rounded-lg bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
+                                        Edit
+                                    </button>
+                                    <form method="POST" action="/permissions/group/delete/{{ group_name }}" class="inline">
+                                        {% include "partials/csrf_field.html" %}
+                                        <button type="submit" onclick="return confirm('Delete group {{ group_name }} and all its permissions?')"
+                                                class="px-3 py-1.5 rounded-lg bg-ember-500/10 hover:bg-ember-500/20 text-ember-600 dark:text-ember-400 text-sm font-medium transition-colors">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not memory_groups %}
+                        <tr>
+                            <td colspan="4" class="px-5 py-12 text-center">
+                                <i class="fas fa-users-slash text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
+                                <p class="text-void-500 dark:text-void-400">No groups configured</p>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Forms -->
+    <div class="space-y-6">
+        <!-- Add/Edit User Permissions -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-user-plus text-nordic-500"></i>
+                    Add/Edit User
+                </h3>
+            </div>
+            <form method="POST" action="/permissions/save" id="permissions-form" class="p-5 space-y-4">
+                {% include "partials/csrf_field.html" %}
+
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-2">Username</label>
+                    <input type="text" id="username" name="username" placeholder="@username" required
+                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-2">MCP Servers</label>
+                    <div id="servers-checkboxes" class="space-y-2 max-h-64 overflow-y-auto p-3 bg-void-50 dark:bg-void-800/30 rounded-xl border border-void-200 dark:border-void-700">
+                        {% for server in available_servers %}
+                        <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-void-100 dark:hover:bg-void-700/50 transition-colors">
+                            <input type="checkbox" name="servers" value="{{ server }}"
+                                   class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-nordic-500 focus:ring-nordic-500/20">
+                            <span class="text-sm text-void-700 dark:text-void-200">{{ server }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full px-4 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-colors">
+                    Save Permissions
+                </button>
+            </form>
+        </div>
+
+        <!-- Edit Group Permissions -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-users-gear text-frost-500"></i>
+                    Edit Group
+                </h3>
+            </div>
+            <form method="POST" action="/permissions/group/save" id="group-permissions-form" class="p-5 space-y-4">
+                {% include "partials/csrf_field.html" %}
+
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-2">Group</label>
+                    <select id="group_name_select" name="group_name" required
+                            onchange="toggleNewGroup(this)"
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="">-- Select group --</option>
+                        {% for group_name in memory_groups.keys() %}
+                        <option value="{{ group_name }}">{{ group_name }}</option>
+                        {% endfor %}
+                        <option value="__new__">+ Create new group...</option>
+                    </select>
+                    <div id="new-group-input" class="mt-2 hidden">
+                        <input type="text" id="new_group_name" placeholder="New group name"
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-frost-500/50 transition-all">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-2">MCP Servers</label>
+                    <div id="group-servers-checkboxes" class="space-y-2 max-h-64 overflow-y-auto p-3 bg-void-50 dark:bg-void-800/30 rounded-xl border border-void-200 dark:border-void-700">
+                        {% for server in available_servers %}
+                        <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-void-100 dark:hover:bg-void-700/50 transition-colors">
+                            <input type="checkbox" name="servers" value="{{ server }}"
+                                   class="w-4 h-4 rounded border-void-300 dark:border-void-600 text-frost-500 focus:ring-frost-500/20">
+                            <span class="text-sm text-void-700 dark:text-void-200">{{ server }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full px-4 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-colors">
+                    Save Group Permissions
+                </button>
+            </form>
+        </div>
+
+        <!-- How It Works -->
+        <div class="rounded-2xl bg-gradient-to-br from-void-900 to-void-800 border border-void-700 p-5 text-white">
+            <h3 class="font-semibold flex items-center gap-2 mb-3">
+                <i class="fas fa-lightbulb text-ember-400"></i>
+                How It Works
+            </h3>
+            <ul class="text-sm space-y-2 text-void-300">
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-users text-frost-400 mt-0.5"></i>
+                    <span><strong class="text-white">Group permissions</strong> apply to all members</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-user text-nordic-400 mt-0.5"></i>
+                    <span><strong class="text-white">User permissions</strong> add to group permissions</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-envelope text-red-400 mt-0.5"></i>
+                    <span><strong class="text-white">Gmail servers</strong> are added automatically for groups</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-ban text-ember-400 mt-0.5"></i>
+                    <span><strong class="text-white">No permissions</strong> = no MCP access</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+function flashForm(form) {
+    form.classList.add('ring-2', 'ring-nordic-500');
+    form.scrollIntoView({behavior: 'smooth', block: 'start'});
+    setTimeout(() => form.classList.remove('ring-2', 'ring-nordic-500'), 2000);
+}
+
+function editPermissions(username, servers) {
+    document.getElementById('username').value = username;
+    const checkboxes = document.querySelectorAll('#servers-checkboxes input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    servers.forEach(server => {
+        checkboxes.forEach(cb => {
+            if (cb.value === server) cb.checked = true;
+        });
+    });
+    flashForm(document.getElementById('permissions-form'));
+}
+
+function editGroupPermissions(groupName, servers) {
+    const select = document.getElementById('group_name_select');
+    select.value = groupName;
+    toggleNewGroup(select);
+    const checkboxes = document.querySelectorAll('#group-servers-checkboxes input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    servers.forEach(server => {
+        checkboxes.forEach(cb => {
+            if (cb.value === server) cb.checked = true;
+        });
+    });
+    flashForm(document.getElementById('group-permissions-form'));
+}
+
+function toggleNewGroup(select) {
+    const newInput = document.getElementById('new-group-input');
+    const nameField = document.getElementById('new_group_name');
+    if (select.value === '__new__') {
+        newInput.classList.remove('hidden');
+        nameField.required = true;
+        nameField.focus();
+    } else {
+        newInput.classList.add('hidden');
+        nameField.required = false;
+        nameField.value = '';
+    }
+}
+
+document.getElementById('group-permissions-form').addEventListener('submit', function(e) {
+    const select = document.getElementById('group_name_select');
+    if (select.value === '__new__') {
+        const newName = document.getElementById('new_group_name').value.trim();
+        if (!newName) {
+            e.preventDefault();
+            return;
+        }
+        select.value = '';
+        select.name = '';
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = 'group_name';
+        hidden.value = newName;
+        this.appendChild(hidden);
+    }
+});
+</script>
+{% endblock %}

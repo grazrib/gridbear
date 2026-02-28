@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_new %}New Client{% else %}{{ client.name }}{% endif %} - OAuth2 - GridBear{% endblock %}
+
+{% block content_alerts %}
+{% if secret %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-start gap-3">
+    <i class="fas fa-triangle-exclamation text-ember-500 mt-0.5"></i>
+    <div class="flex-1">
+        <p class="font-medium text-ember-600 dark:text-ember-400">{{ success or 'Client Secret' }}</p>
+        <p class="text-sm text-void-600 dark:text-void-300 mt-1">Copy this secret now. It will not be shown again.</p>
+        <div class="mt-3 flex items-center gap-2">
+            <code id="secret-value" class="flex-1 px-4 py-2.5 rounded-lg bg-void-900 text-nordic-400 font-mono text-sm select-all">{{ secret }}</code>
+            <button id="copy-secret-btn"
+                    class="px-4 py-2.5 rounded-lg bg-void-800 hover:bg-void-700 text-white transition-colors"
+                    title="Copy to clipboard">
+                <i class="fas fa-copy"></i>
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if success and not secret %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span class="text-sm">{{ success }}</span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <!-- Main Form -->
+    <div class="xl:col-span-2 space-y-6">
+        <!-- Breadcrumb -->
+        <div class="flex items-center gap-2 text-sm text-void-500">
+            <a href="/oauth2/clients" class="hover:text-nordic-500 transition-colors">OAuth2 Clients</a>
+            <i class="fas fa-chevron-right text-[10px]"></i>
+            <span class="text-void-700 dark:text-void-200">{% if is_new %}New Client{% else %}{{ client.name }}{% endif %}</span>
+        </div>
+
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+                <h2 class="font-semibold flex items-center gap-2">
+                    <i class="fas fa-{% if is_new %}plus{% else %}pen-to-square{% endif %} text-nordic-500"></i>
+                    {% if is_new %}Create New Client{% else %}Edit Client{% endif %}
+                </h2>
+            </div>
+            <div class="p-5">
+                <form method="POST"
+                      action="{% if is_new %}/oauth2/clients/new{% else %}/oauth2/clients/{{ client.id }}/update{% endif %}"
+                      class="space-y-5">
+                    {% include "partials/csrf_field.html" %}
+
+                    <div>
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-1.5">Application Name</label>
+                        <input type="text" name="name" value="{{ client.name if client else '' }}" required
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all"
+                               placeholder="e.g., Claude Desktop - Davide">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-1.5">Client Type</label>
+                            <select name="client_type" {% if not is_new %}disabled{% endif %}
+                                    class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                                <option value="confidential" {% if not client or client.client_type == 'confidential' %}selected{% endif %}>Confidential (Server-side)</option>
+                                <option value="public" {% if client and client.client_type == 'public' %}selected{% endif %}>Public (SPA, Mobile)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="flex items-center gap-3 cursor-pointer mt-7">
+                                <div class="relative">
+                                    <input type="checkbox" name="require_pkce" value="true" class="sr-only peer"
+                                           {% if not client or client.require_pkce %}checked{% endif %}>
+                                    <div class="w-11 h-6 bg-void-300 dark:bg-void-600 rounded-full peer peer-checked:bg-nordic-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                                </div>
+                                <span class="text-sm font-medium">Require PKCE</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-1.5">Redirect URIs</label>
+                        <textarea name="redirect_uris" rows="3"
+                                  class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all font-mono text-sm"
+                                  placeholder="https://claude.ai/oauth/callback&#10;http://localhost:3000/callback">{{ client.redirect_uris if client and client.redirect_uris else '' }}</textarea>
+                        <p class="text-xs text-void-400 mt-1">One URI per line</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-1.5">Allowed Scopes</label>
+                        <input type="text" name="allowed_scopes"
+                               value="{{ client.allowed_scopes if client else 'openid profile email mcp' }}"
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all"
+                               placeholder="openid profile email mcp">
+                        <p class="text-xs text-void-400 mt-1">Space-separated</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-1.5">Access Token Expiry (seconds)</label>
+                            <input type="number" name="access_token_expiry"
+                                   value="{{ client.access_token_expiry if client else 3600 }}"
+                                   class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-1.5">Refresh Token Expiry (seconds)</label>
+                            <input type="number" name="refresh_token_expiry"
+                                   value="{{ client.refresh_token_expiry if client else 2592000 }}"
+                                   class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-1.5">Description</label>
+                        <textarea name="description" rows="2"
+                                  class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all"
+                                  placeholder="Optional description">{{ client.description if client and client.description else '' }}</textarea>
+                    </div>
+
+                    {% if not is_new %}
+                    <div>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <div class="relative">
+                                <input type="checkbox" name="active" value="true" class="sr-only peer"
+                                       {% if client.active %}checked{% endif %}>
+                                <div class="w-11 h-6 bg-void-300 dark:bg-void-600 rounded-full peer peer-checked:bg-nordic-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                            </div>
+                            <span class="text-sm font-medium">Active</span>
+                        </label>
+                    </div>
+                    {% endif %}
+
+                    <div class="pt-3 border-t border-void-200 dark:border-void-800">
+                        <button type="submit"
+                                class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all">
+                            <i class="fas fa-{% if is_new %}plus{% else %}save{% endif %}"></i>
+                            {% if is_new %}Create Client{% else %}Save Changes{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if not is_new and tokens is defined and tokens %}
+        <!-- Active Tokens -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800">
+                <h2 class="font-semibold flex items-center gap-2">
+                    <i class="fas fa-key text-frost-500"></i>
+                    Active Tokens
+                    <span class="text-xs text-void-500 font-normal">({{ tokens|length }})</span>
+                </h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-xs font-medium text-void-500 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                            <th class="px-5 py-3">Token</th>
+                            <th class="px-5 py-3">User</th>
+                            <th class="px-5 py-3">Created</th>
+                            <th class="px-5 py-3">Last Used</th>
+                            <th class="px-5 py-3"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                        {% for t in tokens %}
+                        <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                            <td class="px-5 py-3">
+                                <code class="text-xs font-mono text-void-500">{{ t.token[:12] }}...</code>
+                            </td>
+                            <td class="px-5 py-3 text-sm">{{ t.user_identity or '-' }}</td>
+                            <td class="px-5 py-3 text-sm text-void-500">{{ t.created_at|datefmt }}</td>
+                            <td class="px-5 py-3 text-sm text-void-500">{{ t.last_used_at|datefmt if t.last_used_at else 'Never' }}</td>
+                            <td class="px-5 py-3 text-right">
+                                <form method="POST" action="/oauth2/tokens/{{ t.id }}/revoke" class="inline">
+                                    {% include "partials/csrf_field.html" %}
+                                    <button type="submit"
+                                            class="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-medium transition-colors"
+                                            onclick="return confirm('Revoke this token?')">
+                                        Revoke
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Sidebar -->
+    <div class="space-y-6">
+        {% if not is_new and client %}
+        <!-- Client Info -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800">
+                <h3 class="font-semibold text-sm">Client Info</h3>
+            </div>
+            <div class="p-5 space-y-3">
+                <div>
+                    <p class="text-xs text-void-500 mb-1">Client ID</p>
+                    <code class="block px-3 py-2 rounded-lg bg-void-50 dark:bg-void-800/50 text-xs font-mono text-void-700 dark:text-void-300 break-all select-all">{{ client.client_id }}</code>
+                </div>
+                <div>
+                    <p class="text-xs text-void-500 mb-1">Type</p>
+                    <p class="text-sm font-medium">{{ client.client_type }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-void-500 mb-1">Created</p>
+                    <p class="text-sm">{{ client.created_at|datefmt('%Y-%m-%d %H:%M:%S') }}</p>
+                </div>
+            </div>
+        </div>
+
+        {% if client.client_type == 'confidential' %}
+        <!-- Secret Management -->
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800">
+                <h3 class="font-semibold text-sm">Secret Management</h3>
+            </div>
+            <div class="p-5">
+                <p class="text-xs text-void-500 mb-3">Regenerate the client secret. This will invalidate the current one.</p>
+                <form method="POST" action="/oauth2/clients/{{ client.id }}/regenerate-secret">
+                    {% include "partials/csrf_field.html" %}
+                    <button type="submit"
+                            class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-ember-500/10 hover:bg-ember-500/20 text-ember-600 dark:text-ember-400 font-medium text-sm transition-colors"
+                            onclick="return confirm('Regenerate secret? Current secret will be invalidated.')">
+                        <i class="fas fa-rotate"></i>
+                        Regenerate Secret
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Danger Zone -->
+        <div class="rounded-2xl border border-red-500/20 overflow-hidden">
+            <div class="p-5 border-b border-red-500/20 bg-gradient-to-r from-red-500/5 to-transparent">
+                <h3 class="font-semibold text-sm text-red-500">Danger Zone</h3>
+            </div>
+            <div class="p-5">
+                <form method="POST" action="/oauth2/clients/{{ client.id }}/deactivate">
+                    {% include "partials/csrf_field.html" %}
+                    <button type="submit"
+                            class="w-full px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-all"
+                            onclick="return confirm('Deactivate this client? All tokens will stop working.')">
+                        <i class="fas fa-ban"></i>
+                        Deactivate Client
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if secret %}
+<script>
+document.getElementById('copy-secret-btn').addEventListener('click', function() {
+    var secretEl = document.getElementById('secret-value');
+    navigator.clipboard.writeText(secretEl.textContent).then(function() {
+        var btn = document.getElementById('copy-secret-btn');
+        btn.textContent = 'Copied!';
+        setTimeout(function() {
+            btn.textContent = '';
+            var icon = document.createElement('i');
+            icon.className = 'fas fa-copy';
+            btn.appendChild(icon);
+        }, 2000);
+    });
+});
+</script>
+{% endif %}
+{% endblock %}
