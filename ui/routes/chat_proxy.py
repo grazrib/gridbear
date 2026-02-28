@@ -67,7 +67,7 @@ async def proxy_chat(request: Request):
         {
             "text": "message text",
             "user_id": "unified_id",
-            "agent_name": "peggy",
+            "agent_name": "myagent",
             "username": "optional",
             "display_name": "optional"
         }

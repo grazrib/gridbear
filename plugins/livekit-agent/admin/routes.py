@@ -177,7 +177,7 @@ async def reload_plugin(
 async def start_call(
     request: Request,
     user_id: str = None,
-    agent_id: str = "peggy",
+    agent_id: str = "myagent",
     _=Depends(require_login),
 ):
     """Avvia una chiamata con l'agente."""

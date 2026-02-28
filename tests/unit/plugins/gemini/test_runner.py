@@ -175,7 +175,7 @@ class TestGeminiRunnerRun:
         """no_tools=True doesn't attempt tool loading."""
         r, _, _ = runner
         with patch.object(r, "_setup_tools") as mock_setup:
-            result = await r.run(prompt="Test", no_tools=True, agent_id="peggy")
+            result = await r.run(prompt="Test", no_tools=True, agent_id="myagent")
             mock_setup.assert_not_called()
         assert result.is_error is False
 
@@ -211,7 +211,7 @@ class TestGeminiRunnerRun:
 
     async def test_agent_id_passed(self, runner):
         r, _, _ = runner
-        result = await r.run(prompt="Test", agent_id="peggy")
+        result = await r.run(prompt="Test", agent_id="myagent")
         assert result.is_error is False
 
     async def test_client_not_initialized(self, mock_genai):
@@ -340,7 +340,7 @@ class TestGeminiRunnerToolCalls:
             return_value=[{"name": "odoo__search", "description": "Search"}]
         )
 
-        result = await r.run(prompt="Search Odoo", agent_id="peggy")
+        result = await r.run(prompt="Search Odoo", agent_id="myagent")
 
         assert result.text == "Found 3 records"
         assert result.is_error is False
@@ -387,7 +387,7 @@ class TestGeminiRunnerToolCalls:
         )
 
         tool_cb = AsyncMock()
-        await r.run(prompt="Test", agent_id="peggy", tool_callback=tool_cb)
+        await r.run(prompt="Test", agent_id="myagent", tool_callback=tool_cb)
 
         tool_cb.assert_called_once_with("tool1", {})
 
@@ -421,7 +421,7 @@ class TestGeminiRunnerToolCalls:
             return_value=[{"name": "loop_tool", "description": "T"}]
         )
 
-        result = await r.run(prompt="Test", agent_id="peggy")
+        result = await r.run(prompt="Test", agent_id="myagent")
 
         assert result.is_error is True
         assert "Max tool iterations" in result.text
@@ -728,7 +728,7 @@ class TestGeminiRunnerSanitizePrompt:
     def test_removes_mcp_with_clause(self, mock_genai):
         from plugins.gemini.runner import GeminiRunner
 
-        prompt = 'use mcp__gmail-hello__send_email with from_alias="bot" and from_name="Peggy"'
+        prompt = 'use mcp__gmail-hello__send_email with from_alias="bot" and from_name="My Agent"'
         result = GeminiRunner._sanitize_prompt_for_api(prompt)
         assert "mcp__gmail" not in result
         assert "from_alias" not in result
@@ -755,7 +755,7 @@ class TestGeminiRunnerSanitizePrompt:
         from plugins.gemini.runner import GeminiRunner
 
         prompt = (
-            "Sei Peggy, un'assistente virtuale. Aiuta l'utente con le sue richieste."
+            "Sei My Agent, un'assistente virtuale. Aiuta l'utente con le sue richieste."
         )
         result = GeminiRunner._sanitize_prompt_for_api(prompt)
         assert result == prompt

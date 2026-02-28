@@ -114,7 +114,7 @@ class LiveKitService(BaseService):
                 "LIVEKIT_API_KEY": self.api_key,
                 "LIVEKIT_API_SECRET": self.api_secret,
                 "OPENAI_API_KEY": openai_key,
-                "AGENT_NAME": self.config.get("agent_name", "Peggy"),
+                "AGENT_NAME": self.config.get("agent_name", "My Agent"),
                 "TTS_VOICE": self.config.get("tts_voice", "nova"),
                 # LLM bridge via internal API on port 8000
                 "GRIDBEAR_LLM_ENABLED": "1",
@@ -189,14 +189,14 @@ class LiveKitService(BaseService):
     async def create_call(
         self,
         user_id: str,
-        agent_id: str = "peggy",
+        agent_id: str = "myagent",
         user_name: Optional[str] = None,
     ) -> CallSession:
         """Crea una nuova room per una chiamata.
 
         Args:
             user_id: ID dell'utente
-            agent_id: ID dell'agente (default: peggy)
+            agent_id: ID dell'agente (default: myagent)
             user_name: Nome visualizzato dell'utente
 
         Returns:

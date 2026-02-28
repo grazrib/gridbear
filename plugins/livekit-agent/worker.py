@@ -35,10 +35,10 @@ GRIDBEAR_LLM_ENABLED = os.environ.get("GRIDBEAR_LLM_ENABLED", "0") == "1"
 GRIDBEAR_LLM_PORT = int(os.environ.get("GRIDBEAR_LLM_PORT", "0"))
 
 # Agent configuration
-AGENT_NAME = os.environ.get("AGENT_NAME", "Peggy")
+AGENT_NAME = os.environ.get("AGENT_NAME", "My Agent")
 SYSTEM_PROMPT = os.environ.get(
     "SYSTEM_PROMPT",
-    """Sei Peggy, un'assistente virtuale amichevole e competente.
+    """Sei un'assistente virtuale amichevole e competente.
 Rispondi in italiano in modo naturale e conversazionale.
 Sii concisa nelle risposte vocali - massimo 2-3 frasi per risposta.
 Se non capisci qualcosa, chiedi gentilmente di ripetere.""",

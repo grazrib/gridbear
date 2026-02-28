@@ -165,12 +165,12 @@ class TestRecordToolUsage:
         with patch("core.registry.get_database", return_value=mock_db):
             from core.mcp_gateway.server import _record_tool_usage
 
-            await _record_tool_usage("peggy", "odoo_mcp__search_read", True, 150)
+            await _record_tool_usage("myagent", "odoo_mcp__search_read", True, 150)
 
         mock_db.execute.assert_called_once()
         args = mock_db.execute.call_args
         assert "INSERT INTO public.tool_usage" in args[0][0]
-        assert args[0][1] == ("peggy", "odoo_mcp__search_read", True, 150)
+        assert args[0][1] == ("myagent", "odoo_mcp__search_read", True, 150)
 
     @pytest.mark.asyncio
     async def test_records_failed_call(self):
@@ -179,10 +179,10 @@ class TestRecordToolUsage:
         with patch("core.registry.get_database", return_value=mock_db):
             from core.mcp_gateway.server import _record_tool_usage
 
-            await _record_tool_usage("peggy", "gmail__send", False, 3000)
+            await _record_tool_usage("myagent", "gmail__send", False, 3000)
 
         args = mock_db.execute.call_args
-        assert args[0][1] == ("peggy", "gmail__send", False, 3000)
+        assert args[0][1] == ("myagent", "gmail__send", False, 3000)
 
     @pytest.mark.asyncio
     async def test_skips_when_no_agent(self):
@@ -204,7 +204,7 @@ class TestRecordToolUsage:
             from core.mcp_gateway.server import _record_tool_usage
 
             # Should not raise
-            await _record_tool_usage("peggy", "tool", True, 50)
+            await _record_tool_usage("myagent", "tool", True, 50)
 
 
 # --- Phase 2: search_tools + execute_discovered_tool ---

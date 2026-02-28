@@ -198,8 +198,8 @@ class ContextBuilder:
         identity section.
 
         Args:
-            name: Agent internal name (e.g., "peggy")
-            display_name: Agent display name (e.g., "Peggy")
+            name: Agent internal name (e.g., "myagent")
+            display_name: Agent display name (e.g., "My Agent")
             system_prompt: Custom system prompt/personality. If None, uses default.
         """
         self._agent_name = name

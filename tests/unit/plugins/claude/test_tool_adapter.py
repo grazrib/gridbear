@@ -20,7 +20,7 @@ def _mock_response(data: dict, status: int = 200):
 def _adapter():
     """Create a ToolAdapter with mocked session."""
     ta = ToolAdapter(gateway_url="http://test-gateway:8080")
-    ta._agent_id = "peggy"
+    ta._agent_id = "myagent"
     ta._token = "test-token"
     ta._headers = {"Authorization": "Bearer test-token"}
     ta._session = MagicMock()

@@ -162,7 +162,7 @@ class TestClaudeApiBackendRun:
     async def test_no_tools_skips_tool_setup(self, backend):
         b, _, _ = backend
         with patch.object(b, "_setup_tools") as mock_setup:
-            result = await b.run(prompt="Test", no_tools=True, agent_id="peggy")
+            result = await b.run(prompt="Test", no_tools=True, agent_id="myagent")
             mock_setup.assert_not_called()
         assert result.is_error is False
 
@@ -277,7 +277,7 @@ class TestClaudeApiBackendToolCalls:
             ]
         )
 
-        result = await b.run(prompt="Search Odoo", agent_id="peggy")
+        result = await b.run(prompt="Search Odoo", agent_id="myagent")
 
         assert result.text == "Found 3 records"
         assert result.is_error is False
@@ -312,7 +312,7 @@ class TestClaudeApiBackendToolCalls:
         )
 
         tool_cb = AsyncMock()
-        await b.run(prompt="Test", agent_id="peggy", tool_callback=tool_cb)
+        await b.run(prompt="Test", agent_id="myagent", tool_callback=tool_cb)
 
         tool_cb.assert_called_once_with("tool1", {})
 
@@ -341,7 +341,7 @@ class TestClaudeApiBackendToolCalls:
             ]
         )
 
-        result = await b.run(prompt="Test", agent_id="peggy")
+        result = await b.run(prompt="Test", agent_id="myagent")
 
         assert result.is_error is True
         assert "Max tool iterations" in result.text
@@ -375,7 +375,7 @@ class TestClaudeApiBackendToolCalls:
             ]
         )
 
-        result = await b.run(prompt="Search", agent_id="peggy")
+        result = await b.run(prompt="Search", agent_id="myagent")
 
         # Gateway should NOT be called for the hallucinated tool
         b._tool_adapter.call_tool.assert_not_called()

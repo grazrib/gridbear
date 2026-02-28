@@ -87,7 +87,7 @@ class LiveKitProvider(BaseMCPProvider):
                     "LIVEKIT_API_KEY": api_key,
                     "LIVEKIT_API_SECRET": api_secret,
                     "LIVEKIT_WS_URL": ws_url,
-                    "AGENT_NAME": config.get("agent_name", "Peggy"),
+                    "AGENT_NAME": config.get("agent_name", "My Agent"),
                     "STT_LANGUAGE": config.get("stt_language", "it"),
                     "TTS_VOICE": config.get("tts_voice", "nova"),
                     "BASE_URL": config.get("base_url")

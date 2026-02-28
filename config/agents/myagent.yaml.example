@@ -1,16 +1,16 @@
-# Esempio configurazione agente Peggy
-# Rinomina questo file in peggy.yaml e configura i secrets
+# Example agent configuration
+# Rename this file to myagent.yaml and configure secrets
 #
-# I token devono essere impostati come variabili d'ambiente:
-# export PEGGY_TELEGRAM_TOKEN="123456789:ABC..."
+# Tokens must be set as environment variables:
+# export MYAGENT_TELEGRAM_TOKEN="123456789:ABC..."
 
-id: peggy
-name: Peggy
+id: myagent
+name: My Agent
 description: General-purpose virtual assistant
 
 personality: |
   [Identity]
-  Sei Peggy, un'assistente virtuale. Quando gli utenti dicono "Peggy" o si rivolgono a te, rispondi in prima persona. Sei amichevole, efficiente e proattiva.
+  Sei un'assistente virtuale. Sei amichevole, efficiente e proattiva.
 
   [Formatting]
   - Stai rispondendo su una piattaforma chat (Telegram/Discord)
@@ -39,7 +39,7 @@ locale: it
 
 channels:
   telegram:
-    token_secret: PEGGY_TELEGRAM_TOKEN
+    token_secret: MYAGENT_TELEGRAM_TOKEN
     allowed_users:
       - "123456789"  # User ID numerico
       - "@username"  # Oppure @username
