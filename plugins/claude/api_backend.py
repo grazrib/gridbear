@@ -291,8 +291,6 @@ class ClaudeApiBackend:
         Returns (text, response_message).
         Retries on transient errors with exponential backoff.
         """
-        last_error = None
-
         for attempt in range(1 + self.max_retries):
             if attempt > 0:
                 delay = 2**attempt
@@ -312,14 +310,13 @@ class ClaudeApiBackend:
                 else:
                     return await self._call_unary(model, messages, system, tools)
             except Exception as e:
-                last_error = e
                 if not self._is_transient_error(e) or attempt >= self.max_retries:
                     raise
                 logger.warning(
                     "Transient Claude API error (attempt %d): %s", attempt + 1, e
                 )
 
-        raise last_error  # pragma: no cover
+        raise RuntimeError("max retries exceeded")  # pragma: no cover
 
     async def _call_unary(
         self,
