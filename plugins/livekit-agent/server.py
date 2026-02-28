@@ -25,7 +25,7 @@ from psycopg.rows import dict_row
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")
 LIVEKIT_WS_URL = os.getenv("LIVEKIT_WS_URL", "")
-AGENT_NAME = os.getenv("AGENT_NAME", "Peggy")
+AGENT_NAME = os.getenv("AGENT_NAME", "My Agent")
 STT_LANGUAGE = os.getenv("STT_LANGUAGE", "it")
 TTS_VOICE = os.getenv("TTS_VOICE", "nova")
 BASE_URL = os.getenv("BASE_URL", "") or os.getenv("GRIDBEAR_BASE_URL", "")

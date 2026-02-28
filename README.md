@@ -106,7 +106,7 @@ docker compose up -d
 Create agent config files in `config/agents/`:
 
 ```bash
-cp config/agents/peggy.yaml.example config/agents/main.yaml
+cp config/agents/myagent.yaml.example config/agents/main.yaml
 nano config/agents/main.yaml
 ```
 
@@ -116,7 +116,7 @@ Each agent YAML defines:
 - System prompt and personality
 - MCP tool permissions
 
-See `config/agents/peggy.yaml.example` for a complete reference.
+See `config/agents/myagent.yaml.example` for a complete reference.
 
 ## Plugin Types
 

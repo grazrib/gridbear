@@ -44,7 +44,7 @@
     },
     "agent_name": {
       "type": "string",
-      "default": "Peggy",
+      "default": "My Agent",
       "description": "Agent display name in calls"
     }
   },

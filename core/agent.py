@@ -83,8 +83,8 @@ class ServiceConfig:
 class AgentConfig:
     """Configuration for an agent loaded from YAML."""
 
-    name: str  # Internal identifier (e.g., "peggy")
-    display_name: str  # Display name (e.g., "Peggy")
+    name: str  # Internal identifier (e.g., "myagent")
+    display_name: str  # Display name (e.g., "My Agent")
     description: str = ""  # Agent description
     system_prompt: str = ""  # Personality/system prompt
     locale: str = "it"  # Default response language
@@ -92,7 +92,7 @@ class AgentConfig:
     model: str = ""  # LLM model override (empty = use runner default)
     runner: str = ""  # Runner override (empty = use default runner)
     fallback_runner: str = ""  # Fallback runner if primary fails
-    avatar: str = ""  # Avatar filename (e.g., "peggy.png")
+    avatar: str = ""  # Avatar filename (e.g., "myagent.png")
     channels: list[ChannelConfig] = field(default_factory=list)
     voice: VoiceConfig = field(default_factory=VoiceConfig)
     image: ImageConfig = field(default_factory=ImageConfig)

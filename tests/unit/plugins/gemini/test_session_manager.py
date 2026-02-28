@@ -14,7 +14,7 @@ class TestGeminiSession:
         now = datetime.now()
         session = GeminiSession(
             session_id="abc",
-            agent_id="peggy",
+            agent_id="myagent",
             created_at=now,
             last_activity=now,
         )
@@ -28,31 +28,31 @@ class TestSessionManagerGetOrCreate:
 
     def test_create_new_session(self):
         mgr = SessionManager()
-        session = mgr.get_or_create(None, "peggy")
-        assert session.agent_id == "peggy"
+        session = mgr.get_or_create(None, "myagent")
+        assert session.agent_id == "myagent"
         assert session.session_id
         assert mgr.session_count == 1
 
     def test_return_existing_session(self):
         mgr = SessionManager()
-        s1 = mgr.get_or_create(None, "peggy")
-        s2 = mgr.get_or_create(s1.session_id, "peggy")
+        s1 = mgr.get_or_create(None, "myagent")
+        s2 = mgr.get_or_create(s1.session_id, "myagent")
         assert s1.session_id == s2.session_id
         assert mgr.session_count == 1
 
     def test_unknown_session_id_creates_new(self):
         mgr = SessionManager()
-        session = mgr.get_or_create("nonexistent-id", "peggy")
+        session = mgr.get_or_create("nonexistent-id", "myagent")
         assert session.session_id != "nonexistent-id"
         assert mgr.session_count == 1
 
     def test_updates_last_activity(self):
         mgr = SessionManager()
-        s1 = mgr.get_or_create(None, "peggy")
+        s1 = mgr.get_or_create(None, "myagent")
         old_activity = s1.last_activity
         # Ensure some time passes
         s1.last_activity = datetime.now() - timedelta(seconds=10)
-        s2 = mgr.get_or_create(s1.session_id, "peggy")
+        s2 = mgr.get_or_create(s1.session_id, "myagent")
         assert s2.last_activity > old_activity - timedelta(seconds=10)
 
     def test_max_sessions_raises(self):
@@ -81,7 +81,7 @@ class TestSessionManagerAppendTurn:
 
     def test_append_user_turn(self):
         mgr = SessionManager()
-        session = mgr.get_or_create(None, "peggy")
+        session = mgr.get_or_create(None, "myagent")
         mgr.append_turn(session.session_id, "user", "Hello")
         history = mgr.get_history(session.session_id)
         assert len(history) == 1
@@ -90,7 +90,7 @@ class TestSessionManagerAppendTurn:
 
     def test_append_model_turn(self):
         mgr = SessionManager()
-        session = mgr.get_or_create(None, "peggy")
+        session = mgr.get_or_create(None, "myagent")
         mgr.append_turn(session.session_id, "model", "Hi there!")
         history = mgr.get_history(session.session_id)
         assert len(history) == 1
@@ -99,7 +99,7 @@ class TestSessionManagerAppendTurn:
     def test_sliding_window(self):
         mgr = SessionManager()
         mgr.MAX_HISTORY_TURNS = 5
-        session = mgr.get_or_create(None, "peggy")
+        session = mgr.get_or_create(None, "myagent")
         for i in range(10):
             mgr.append_turn(session.session_id, "user", f"msg-{i}")
         history = mgr.get_history(session.session_id)
@@ -120,7 +120,7 @@ class TestSessionManagerUsage:
 
     def test_accumulates_tokens(self):
         mgr = SessionManager()
-        session = mgr.get_or_create(None, "peggy")
+        session = mgr.get_or_create(None, "myagent")
         sid = session.session_id
         mgr.update_usage(sid, 100, 50, 0.01)
         mgr.update_usage(sid, 200, 100, 0.02)

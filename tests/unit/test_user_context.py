@@ -94,17 +94,17 @@ class TestMcpSetUserContextEndpoint:
         request = MagicMock()
         request.state = MagicMock()
         request.state.oauth2_client = MagicMock()
-        request.state.oauth2_client.agent_name = "peggy"
+        request.state.oauth2_client.agent_name = "myagent"
         request.json = AsyncMock(return_value={"user_identity": "telegram:mario"})
 
         with patch.object(srv, "_check_bearer", return_value=None):
             resp = await mcp_set_user_context(request)
 
         assert resp.ok is True
-        assert srv._agent_user_context.get("peggy") == "telegram:mario"
+        assert srv._agent_user_context.get("myagent") == "telegram:mario"
 
         # Cleanup
-        srv._agent_user_context.pop("peggy", None)
+        srv._agent_user_context.pop("myagent", None)
 
     @pytest.mark.asyncio
     async def test_rejects_no_agent(self):
@@ -128,7 +128,7 @@ class TestMcpSetUserContextEndpoint:
         request = MagicMock()
         request.state = MagicMock()
         request.state.oauth2_client = MagicMock()
-        request.state.oauth2_client.agent_name = "peggy"
+        request.state.oauth2_client.agent_name = "myagent"
         request.json = AsyncMock(side_effect=ValueError("bad json"))
 
         with patch.object(srv, "_check_bearer", return_value=None):
@@ -175,7 +175,7 @@ class TestRunnerSetUserContext:
             ),
             patch.dict(sys.modules, {"httpx": mock_httpx}),
         ):
-            await runner._set_user_context("peggy", "telegram:mario")
+            await runner._set_user_context("myagent", "telegram:mario")
 
             mock_client_instance.post.assert_called_once_with(
                 "http://localhost:8080/mcp/user-context",
@@ -195,7 +195,7 @@ class TestRunnerSetUserContext:
             return_value=None,
         ):
             # Should complete without error
-            await runner._set_user_context("peggy", "telegram:mario")
+            await runner._set_user_context("myagent", "telegram:mario")
 
     @pytest.mark.asyncio
     async def test_skips_when_no_token(self):
@@ -213,7 +213,7 @@ class TestRunnerSetUserContext:
             return_value=mock_tm,
             create=True,
         ):
-            await runner._set_user_context("peggy", "telegram:mario")
+            await runner._set_user_context("myagent", "telegram:mario")
 
     @pytest.mark.asyncio
     async def test_handles_http_error_gracefully(self):
@@ -244,7 +244,7 @@ class TestRunnerSetUserContext:
             patch.dict(sys.modules, {"httpx": mock_httpx}),
         ):
             # Should NOT raise
-            await runner._set_user_context("peggy", "telegram:mario")
+            await runner._set_user_context("myagent", "telegram:mario")
 
 
 # ---------------------------------------------------------------------------

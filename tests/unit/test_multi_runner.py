@@ -52,21 +52,21 @@ class TestAgentConfigRunner:
     def test_from_dict_preserves_all_fields(self):
         """Runner field doesn't interfere with other fields."""
         data = {
-            "id": "peggy",
-            "name": "Peggy",
+            "id": "myagent",
+            "name": "My Agent",
             "description": "Test agent",
             "personality": "Be helpful",
             "locale": "it",
             "timezone": "Europe/Rome",
             "model": "haiku",
             "runner": "claude",
-            "avatar": "peggy.png",
+            "avatar": "myagent.png",
             "channels": {},
             "mcp_permissions": ["odoo-mcp"],
         }
         config = AgentConfig.from_dict(data)
-        assert config.name == "peggy"
-        assert config.display_name == "Peggy"
+        assert config.name == "myagent"
+        assert config.display_name == "My Agent"
         assert config.runner == "claude"
         assert config.model == "haiku"
         assert config.locale == "it"
