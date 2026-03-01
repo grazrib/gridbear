@@ -886,6 +886,11 @@ async def startup_cleanup():
         rebuild_template_loader()
         logger.info("Admin: template loader rebuilt with active theme")
 
+        # Register plugin admin routes now that ORM is ready
+        # (module-level call at import time gets empty enabled list)
+        plugin_registry.register_plugin_routes(app)
+        logger.info("Admin: plugin admin routes registered")
+
         # Initialize OAuth2 database (requires PostgreSQL)
         db = OAuth2Database()
         set_oauth2_db(db)
