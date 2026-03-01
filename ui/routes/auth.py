@@ -652,7 +652,7 @@ async def webauthn_setup(request: Request, user: dict = Depends(require_user)):
 
     # Enable webauthn if first credential
     if not user.get("webauthn_enabled"):
-        auth_db.update_user(user["id"], webauthn_enabled=1)
+        auth_db.update_user(user["id"], webauthn_enabled=True)
 
     request.session.pop("webauthn_setup_challenge", None)
 
@@ -683,7 +683,7 @@ async def delete_passkey(
 
     remaining = auth_db.count_webauthn_credentials(user["id"])
     if remaining == 0:
-        auth_db.update_user(user["id"], webauthn_enabled=0)
+        auth_db.update_user(user["id"], webauthn_enabled=False)
 
     auth_db.log_event(
         event_type="webauthn_credential_removed",
