@@ -652,7 +652,7 @@ async def webauthn_setup(request: Request, user: dict = Depends(require_user)):
 
     # Enable webauthn if first credential
     if not user.get("webauthn_enabled"):
-        auth_db.update_user(user["id"], webauthn_enabled=1)
+        auth_db.update_user(user["id"], webauthn_enabled=True)
 
     request.session.pop("webauthn_setup_challenge", None)
 
@@ -683,7 +683,7 @@ async def delete_passkey(
 
     remaining = auth_db.count_webauthn_credentials(user["id"])
     if remaining == 0:
-        auth_db.update_user(user["id"], webauthn_enabled=0)
+        auth_db.update_user(user["id"], webauthn_enabled=False)
 
     auth_db.log_event(
         event_type="webauthn_credential_removed",
@@ -866,7 +866,7 @@ async def twofa_setup(
         )
 
     encrypted_secret = totp_manager.encrypt_secret(secret, user_id)
-    auth_db.update_user(user_id, totp_secret=encrypted_secret, totp_enabled=1)
+    auth_db.update_user(user_id, totp_secret=encrypted_secret, totp_enabled=True)
 
     recovery_codes = recovery_manager.generate_codes(user_id)
 
@@ -1064,7 +1064,7 @@ async def disable_2fa(
         )
         return RedirectResponse(url="/auth/security?error=password", status_code=303)
 
-    auth_db.update_user(user["id"], totp_enabled=0, totp_secret=None)
+    auth_db.update_user(user["id"], totp_enabled=False, totp_secret=None)
     auth_db.log_event(
         event_type="2fa_disabled",
         user_id=user["id"],
