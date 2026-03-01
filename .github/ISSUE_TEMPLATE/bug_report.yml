@@ -13,7 +13,7 @@ body:
     attributes:
       label: GridBear Version
       description: What version of GridBear are you running?
-      placeholder: "e.g. 0.4.2"
+      placeholder: "e.g. 0.4.3"
     validations:
       required: true
 
