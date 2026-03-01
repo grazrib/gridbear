@@ -598,10 +598,35 @@ async def get_mcp_servers_info() -> list[dict]:
     return servers
 
 
+async def _fetch_bot_uptime() -> str:
+    """Fetch uptime from the bot's /api/health endpoint."""
+    import aiohttp
+
+    gridbear_url = os.getenv("GRIDBEAR_INTERNAL_URL", "http://gridbear:8000")
+    secret = os.getenv("INTERNAL_API_SECRET", "")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{gridbear_url}/api/health",
+                headers={"Authorization": f"Bearer {secret}"},
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    elapsed = data.get("data", {}).get("uptime_seconds", 0)
+                    days = int(elapsed // 86400)
+                    hours = int((elapsed % 86400) // 3600)
+                    if days > 0:
+                        return f"{days}d {hours}h"
+                    minutes = int((elapsed % 3600) // 60)
+                    return f"{hours}h {minutes}m"
+    except Exception:
+        pass
+    return "restarting..."
+
+
 async def get_system_info() -> dict:
     """Gather system health information."""
-    import time
-
     from core.registry import get_database
 
     info = {
@@ -629,17 +654,8 @@ async def get_system_info() -> dict:
     except Exception:
         pass
 
-    # Uptime
-    start_time = getattr(app.state, "start_time", None)
-    if start_time:
-        elapsed = time.time() - start_time
-        days = int(elapsed // 86400)
-        hours = int((elapsed % 86400) // 3600)
-        if days > 0:
-            info["uptime"] = f"{days}d {hours}h"
-        else:
-            minutes = int((elapsed % 3600) // 60)
-            info["uptime"] = f"{hours}h {minutes}m"
+    # Bot uptime (from gridbear container, not UI process)
+    info["uptime"] = await _fetch_bot_uptime()
 
     return info
 

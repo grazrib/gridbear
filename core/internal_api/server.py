@@ -9,8 +9,9 @@ Plugin-specific endpoints are discovered from plugins/{name}/api/routes.py.
 import asyncio
 import importlib.util
 import json
+import time
 
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -448,6 +449,26 @@ async def vault_list_by_prefix(
     entries = secrets_manager.list_keys_by_prefix(prefix)
     keys = [e["key_name"] for e in entries]
     return api_ok(data={"prefix": prefix, "keys": keys})
+
+
+@router.get(
+    "/health",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def health(
+    request: Request,
+    _auth: None = Depends(verify_internal_auth),
+):
+    """Return bot health status including uptime."""
+    bot_start_time = getattr(request.app.state, "bot_start_time", None)
+    elapsed = time.time() - bot_start_time if bot_start_time else 0
+    return api_ok(
+        data={
+            "status": "ok",
+            "uptime_seconds": elapsed,
+        }
+    )
 
 
 async def _single_event(event: dict):

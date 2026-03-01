@@ -305,8 +305,8 @@ async def restart_gridbear(request: Request, _: dict = Depends(require_login)):
     with open(restart_file, "w") as f:
         json.dump(request_data, f, indent=2)
 
-    # Redirect immediately - the service will restart
-    return RedirectResponse(url="/agents/?restart=requested", status_code=303)
+    # Redirect to dashboard — user can see uptime reset to confirm restart
+    return RedirectResponse(url="/?restart=requested", status_code=303)
 
 
 def _get_runner_models() -> dict[str, list[tuple[str, str]]]:
