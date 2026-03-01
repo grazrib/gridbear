@@ -440,7 +440,9 @@ app.include_router(
     notifications.router, prefix="/notifications", tags=["notifications"]
 )
 
-app.include_router(plugins.router, prefix="/plugins", tags=["plugins"])
+# NOTE: plugins.router is registered in the startup handler AFTER
+# plugin-specific admin routes, so /plugins/ms365 etc. take priority
+# over the generic /plugins/{plugin_name} catch-all.
 
 app.include_router(secrets_routes.router)
 app.include_router(settings_routes.router)
@@ -872,7 +874,10 @@ async def startup_cleanup():
         logger.info("Admin: template loader rebuilt with active theme")
 
         # Register plugin admin routes (requires ORM/DB — cannot run at import time)
+        # Plugin-specific routes FIRST so they take priority over the
+        # generic /plugins/{plugin_name} catch-all.
         plugin_registry.register_plugin_routes(app)
+        app.include_router(plugins.router, prefix="/plugins", tags=["plugins"])
         logger.info("Admin: plugin admin routes registered")
 
         # Initialize OAuth2 database (requires PostgreSQL)
