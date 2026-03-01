@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-03-01
+
+### Fixed
+
+- Plugin admin pages: custom pages (ms365, github, etc.) were shadowed by the generic config catch-all due to route registration order
+- Dashboard uptime: now shows actual bot uptime instead of UI container process time
+- Codecov CI: updated `file` → `files` parameter for Codecov action v5
+- Plugin admin routes: register after ORM init to prevent startup errors
+
+### Added
+
+- Plugin isolation pre-commit hook: prevents core/ui from importing plugins directly
+- Plugin isolation also enforces no stray plugin templates in `ui/templates/plugins/`
+
+### Changed
+
+- Plugin-specific templates moved from `ui/templates/plugins/` to self-contained plugin directories (`plugins/<name>/admin/templates/`)
+
 ## [0.4.3] - 2026-03-01
 
 ### Fixed
