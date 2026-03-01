@@ -1,5 +1,4 @@
 import atexit
-import json
 import os
 import signal
 from pathlib import Path
@@ -327,33 +326,6 @@ def _get_plugin_health(plugins: dict) -> dict[str, str]:
                     except Exception:
                         pass
         health[plugin_name] = "warn" if missing else "on"
-
-    # Claude special case: check CLI credentials expiry and auto-refresh
-    if health.get("claude") == "on":
-        try:
-            import time
-
-            raw = secrets_manager.get_plain(
-                "CLAUDE_CLI_CREDENTIALS", fallback_env=False
-            )
-            if raw:
-                creds = json.loads(raw)
-                expires_at = creds.get("expiresAt", 0)
-                if expires_at and expires_at < time.time() * 1000:
-                    # Token expired — attempt auto-refresh before warning
-                    try:
-                        from plugins.claude.api.routes import (
-                            _refresh_oauth_token,
-                        )
-
-                        refreshed = _refresh_oauth_token(creds)
-                        if not refreshed:
-                            # Refresh failed — manual intervention needed
-                            health["claude"] = "warn"
-                    except Exception:
-                        health["claude"] = "warn"
-        except Exception:
-            pass
 
     # MCP plugins: overlay gateway connection state (worse status wins)
     try:
