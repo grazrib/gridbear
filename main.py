@@ -7,6 +7,7 @@ import asyncio
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 
 from config.logging_config import logger
@@ -1180,6 +1181,7 @@ async def main():
         from core.internal_api.server import create_app as create_internal_app
 
         internal_app = create_internal_app(plugin_manager=plugin_manager)
+        internal_app.state.bot_start_time = time.time()
         api_config = uvicorn.Config(
             internal_app, host="0.0.0.0", port=8000, log_level="warning"
         )
