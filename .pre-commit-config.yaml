@@ -28,6 +28,13 @@ repos:
         stages: [commit-msg]
         always_run: true
 
+      - id: plugin-isolation
+        name: Check plugin isolation
+        entry: bash scripts/check_plugin_isolation.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: pytest-quick
         name: pytest (quick)
         entry: pytest tests/unit -x -q --tb=no
