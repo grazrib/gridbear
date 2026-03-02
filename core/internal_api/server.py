@@ -7,9 +7,12 @@ Plugin-specific endpoints are discovered from plugins/{name}/api/routes.py.
 """
 
 import asyncio
+import importlib.machinery
 import importlib.util
 import json
+import sys
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import StreamingResponse
@@ -476,6 +479,47 @@ async def _single_event(event: dict):
     yield json.dumps(event) + "\n"
 
 
+def _import_plugin_module(plugin_path: Path, routes_path: Path):
+    """Import a plugin sub-module with proper package context.
+
+    Ensures parent packages exist in sys.modules so that relative imports
+    (e.g. ``from ..models import Foo``) work correctly.
+    """
+    try:
+        rel = routes_path.relative_to(plugin_path.parent.parent)
+    except ValueError:
+        rel = routes_path.relative_to(Path.cwd())
+    module_name = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
+
+    parts = module_name.split(".")
+    for i in range(1, len(parts)):
+        parent = ".".join(parts[:i])
+        if parent not in sys.modules:
+            parent_path = Path.cwd() / Path(*parts[:i])
+            init_file = parent_path / "__init__.py"
+            if init_file.exists():
+                spec = importlib.util.spec_from_file_location(
+                    parent,
+                    str(init_file),
+                    submodule_search_locations=[str(parent_path)],
+                )
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[parent] = mod
+                spec.loader.exec_module(mod)
+            else:
+                mod = importlib.util.module_from_spec(
+                    importlib.machinery.ModuleSpec(
+                        parent,
+                        None,
+                        is_package=True,
+                    )
+                )
+                mod.__path__ = [str(parent_path)]
+                sys.modules[parent] = mod
+
+    return importlib.import_module(module_name)
+
+
 def _discover_plugin_api_routes(app: FastAPI, plugin_manager) -> None:
     """Discover and mount api/routes.py from enabled plugins.
 
@@ -483,26 +527,22 @@ def _discover_plugin_api_routes(app: FastAPI, plugin_manager) -> None:
     gets mounted at /api/{plugin_name}/.
     """
 
-    plugins_dir = plugin_manager.plugins_dir
+    path_resolver = plugin_manager._path_resolver
 
     # _manifests stores all loaded plugin names (including skip_instantiate channels)
     enabled_plugins = list(plugin_manager._manifests.keys())
 
     for plugin_name in enabled_plugins:
-        plugin_dir = plugins_dir / plugin_name
+        plugin_dir = path_resolver.resolve(plugin_name)
+        if plugin_dir is None:
+            continue
         routes_path = plugin_dir / "api" / "routes.py"
 
         if not routes_path.exists():
             continue
 
         try:
-            safe_name = plugin_name.replace("-", "_")
-            spec = importlib.util.spec_from_file_location(
-                f"{safe_name}_api",
-                routes_path,
-            )
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = _import_plugin_module(plugin_dir, routes_path)
 
             if hasattr(module, "router"):
                 # Call init() if the plugin provides it
