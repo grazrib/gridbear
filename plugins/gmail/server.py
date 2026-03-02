@@ -194,6 +194,21 @@ class GmailMCPServer:
                 },
             },
             {
+                "name": "mark_as_read",
+                "description": f"Mark one or more emails as read in {email}.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "messageIds": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of message IDs to mark as read",
+                        },
+                    },
+                    "required": ["messageIds"],
+                },
+            },
+            {
                 "name": "list_calendar_events",
                 "description": f"List upcoming calendar events for {email}.",
                 "inputSchema": {
@@ -541,6 +556,18 @@ class GmailMCPServer:
             "attachments": attached_names,
         }
 
+    def mark_as_read(self, message_ids: list[str]) -> dict:
+        """Mark emails as read by removing the UNREAD label."""
+        results = []
+        for mid in message_ids:
+            self.gmail.users().messages().modify(
+                userId="me",
+                id=mid,
+                body={"removeLabelIds": ["UNREAD"]},
+            ).execute()
+            results.append(mid)
+        return {"markedAsRead": results, "count": len(results)}
+
     def list_calendar_events(
         self,
         max_results: int = 10,
@@ -838,6 +865,8 @@ class GmailMCPServer:
                 args.get("from_name"),
                 args.get("attachments"),
             )
+        elif name == "mark_as_read":
+            return self.mark_as_read(args["messageIds"])
         elif name == "list_calendar_events":
             return self.list_calendar_events(
                 args.get("maxResults", 10),
