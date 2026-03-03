@@ -228,6 +228,10 @@ class Agent:
         """Get channel by platform name."""
         return self._channels.get(platform)
 
+    def get_channel_names(self) -> list[str]:
+        """Return list of available channel platform names."""
+        return list(self._channels.keys())
+
     def add_service(self, name: str, service: "BaseService") -> None:
         """Add a per-agent service instance.
 
