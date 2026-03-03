@@ -97,10 +97,10 @@ temp/
 *.backup
 
 # Generated PWA icons
-admin/static/icons/
+ui/static/icons/
 
 # Uploaded avatars
-admin/static/avatars/
+ui/static/avatars/
 
 # Serena IDE config
 .serena/
