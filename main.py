@@ -1157,6 +1157,9 @@ async def main():
         logger.error(f"Failed to provision MCP gateway tokens: {e}")
         logger.warning("Agents will run without MCP gateway access")
 
+    # Fire lifecycle hooks — let plugins self-wire after agents are loaded
+    await plugin_manager.hooks.execute(HookName.ON_STARTUP, {})
+
     def signal_handler():
         logger.info("Shutdown signal received")
         stop_event.set()
