@@ -2,7 +2,7 @@
 name = "gridbear"
 dynamic = ["version"]
 description = "Plugin-based multi-channel AI assistant framework"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     # Core framework
     "python-dotenv>=1.0.0",
@@ -19,7 +19,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     # Auth & security
     "bcrypt>=4.1.0",
-    "cryptography>=41.0.0",
+    "cryptography>=46.0.5",
     # PostgreSQL
     "psycopg[binary]>=3.1",
     "psycopg_pool>=3.1",
@@ -81,8 +81,11 @@ cli = [
 i18n = [
     "babel>=2.14",
 ]
+mistral = [
+    "mistral-vibe>=0.1.0",
+]
 all = [
-    "gridbear[telegram,discord,memory,tts,google,ms365,livekit,remote-dev,pdf,executor,openai,2fa,cli,i18n]",
+    "gridbear[telegram,discord,memory,tts,google,ms365,livekit,remote-dev,pdf,executor,openai,2fa,cli,i18n,mistral]",
 ]
 dev = [
     "pytest>=7.0",
@@ -138,7 +141,7 @@ select = ["E", "F", "I", "W"]
 ignore = ["E402", "E501"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = false
 warn_unused_ignores = true
 ignore_missing_imports = true

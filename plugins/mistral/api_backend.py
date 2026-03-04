@@ -20,6 +20,7 @@ from plugins.mistral.tool_adapter import ToolAdapter
 from ui.secrets_manager import secrets_manager
 
 MISTRAL_API_BASE = "https://api.mistral.ai/v1"
+CODESTRAL_API_BASE = "https://codestral.mistral.ai/v1"
 
 # Transient error substrings that warrant retry
 _TRANSIENT_ERRORS = (
@@ -54,16 +55,18 @@ class MistralApiBackend:
     tool loop, streaming, retry with exponential backoff.
     """
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, base_url: str = "", api_key_name: str = ""):
         self.config = config
         self.model = config.get(
             "model", os.getenv("MISTRAL_MODEL", "mistral-large-latest")
         )
-        self.timeout = config.get("timeout", 120)
-        self.max_output_tokens = config.get("max_output_tokens", 8192)
-        self.max_tool_iterations = config.get("max_tool_iterations", 20)
-        self.max_retries = config.get("max_retries", 2)
-        self.max_tools = config.get("max_tools", 0)  # 0 = unlimited
+        self.timeout = int(config.get("timeout", 120))
+        self.max_output_tokens = int(config.get("max_output_tokens", 8192))
+        self.max_tool_iterations = int(config.get("max_tool_iterations", 20))
+        self.max_retries = int(config.get("max_retries", 2))
+        self.max_tools = int(config.get("max_tools", 0))  # 0 = unlimited
+        self._base_url = base_url or MISTRAL_API_BASE
+        self._api_key_name = api_key_name or "MISTRAL_API_KEY"
 
         self._client: httpx.AsyncClient | None = None
         self._api_key: str | None = None
@@ -73,13 +76,15 @@ class MistralApiBackend:
 
     async def initialize(self) -> None:
         """Initialize the httpx client and session cleanup."""
-        self._api_key = secrets_manager.get_plain("MISTRAL_API_KEY")
+        self._api_key = secrets_manager.get_plain(self._api_key_name)
         if not self._api_key:
-            logger.error("MISTRAL_API_KEY not set — Mistral API backend disabled")
+            logger.error(
+                "%s not set — Mistral API backend disabled", self._api_key_name
+            )
             return
 
         self._client = httpx.AsyncClient(
-            base_url=MISTRAL_API_BASE,
+            base_url=self._base_url,
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
@@ -88,8 +93,9 @@ class MistralApiBackend:
         )
         await self._sessions.start_cleanup_loop()
         logger.info(
-            "Mistral API backend initialized (model=%s, timeout=%ds)",
+            "Mistral API backend initialized (model=%s, base=%s, timeout=%ds)",
             self.model,
+            self._base_url,
             self.timeout,
         )
 

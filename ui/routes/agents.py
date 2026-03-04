@@ -578,8 +578,7 @@ async def save_agent_config(
                 ch_config["allowed_users"] = [u.strip() for u in allowed if u.strip()]
             channels[ch_name] = ch_config
 
-    if channels:
-        config["channels"] = channels
+    config["channels"] = channels
 
     # Voice
     if voice_provider:

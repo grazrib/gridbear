@@ -15,6 +15,7 @@ services:
       - ./config:/app/config
       - claude_state:/home/gridbear/.claude
       - codex_state:/home/gridbear/.codex
+      - vibe_state:/home/gridbear/.vibe
       # GridBear plugins
       - ./plugins:/app/plugins:rw
       # Premium plugins (optional, mounted read-only)
@@ -127,3 +128,4 @@ volumes:
   postgres_data:
   claude_state:
   codex_state:
+  vibe_state:

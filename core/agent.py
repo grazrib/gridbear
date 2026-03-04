@@ -310,7 +310,11 @@ class Agent:
                 logger.error(f"Agent {self.name}: failed to start {platform}: {e}")
                 failed_channels.append(platform)
 
-        if not started_channels:
+        if not started_channels and not self._channels:
+            # No channels configured — CLI/API-only agent
+            self.state = AgentState.RUNNING
+            logger.info(f"Agent {self.name}: no channels configured (CLI/API-only)")
+        elif not started_channels:
             self.state = AgentState.FAILED
             logger.error(f"Agent {self.name}: all channels failed to start")
         elif failed_channels:
