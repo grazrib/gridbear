@@ -61,7 +61,9 @@ jobs:
             ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
       - name: Install dependencies
-        run: pip install -e ".[dev,all]"
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,all]"
 
       - name: Run tests
         run: pytest tests/unit -v --cov=ui --cov=core --cov-report=xml --cov-report=term
@@ -90,7 +92,9 @@ jobs:
           key: ${{ runner.os }}-pip-mypy-${{ hashFiles('pyproject.toml') }}
 
       - name: Install dependencies
-        run: pip install -e ".[dev,all]"
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,all]"
 
       - name: Run mypy
         run: mypy ui/ core/ --ignore-missing-imports
@@ -112,7 +116,9 @@ jobs:
           key: ${{ runner.os }}-pip-security-${{ hashFiles('pyproject.toml') }}
 
       - name: Install dependencies
-        run: pip install ".[dev,all]" pip-audit
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install ".[dev,all]" pip-audit
 
       - name: Dependency vulnerability scan
         run: pip-audit --desc
