@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Create non-root user with UID 1000 (matches typical host user)
 RUN groupadd -g 1000 gridbear && \
