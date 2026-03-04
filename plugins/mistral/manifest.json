@@ -1,0 +1,45 @@
+{
+  "name": "mistral",
+  "version": "0.0.1",
+  "type": "runner",
+  "description": "Mistral AI runner with Vibe CLI and Chat API backends",
+  "entry_point": "runner.py",
+  "class_name": "MistralRunner",
+  "config_schema": {
+    "mistral_api_key": {
+      "type": "secret",
+      "env": "MISTRAL_API_KEY",
+      "description": "Mistral API Key",
+      "required": false
+    },
+    "backend": {
+      "type": "string",
+      "enum": ["cli", "api"],
+      "default": "api",
+      "description": "Backend: 'cli' (Vibe CLI) or 'api' (Chat Completions)"
+    },
+    "model": {
+      "type": "string",
+      "default": "mistral-large-latest",
+      "description": "Default model (selection via models registry, not restricted by enum)"
+    },
+    "timeout": { "type": "integer", "default": 120 },
+    "max_price": { "type": "number", "default": 1.0, "description": "Max price per CLI invocation in USD (safety cap)" },
+    "max_retries": { "type": "integer", "default": 2 },
+    "max_output_tokens": { "type": "integer", "default": 8192 },
+    "max_tool_iterations": { "type": "integer", "default": 20 },
+    "max_tools": { "type": "integer", "default": 0 },
+    "notify_tool_use": { "type": "boolean", "default": true }
+  },
+  "dependencies": [],
+  "cli_meta": {
+    "cli_name": "Vibe CLI",
+    "auth_actions": [
+      {"type": "token", "label": "API Key"}
+    ],
+    "token_endpoint": "api-key",
+    "token_hint": "Get your API key from <a href='https://console.mistral.ai/codestral/vibe' target='_blank'>Mistral Console</a>",
+    "token_placeholder": "..."
+  },
+  "models_refreshable": true
+}
