@@ -1,0 +1,103 @@
+{% extends "plugins/plugin_base.html" %}
+
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Local LLM runner — connection status and model management</p>{% endblock %}
+
+{% block plugin_content_before %}
+    <!-- Connection Status -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent flex items-center justify-between">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-heartbeat text-nordic-500"></i>
+                Connection Status
+            </h3>
+            <a href="/plugins/ollama"
+               class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-void-500 hover:text-void-700 dark:text-void-400 dark:hover:text-void-200 hover:bg-void-100 dark:hover:bg-void-800 transition-all">
+                <i class="fas fa-sync-alt"></i>
+                Refresh
+            </a>
+        </div>
+        <div class="p-5">
+            {% if health.connected and health.model_available %}
+            <!-- Connected + model OK -->
+            <div class="p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3">
+                <i class="fas fa-check-circle text-nordic-500 text-xl"></i>
+                <div>
+                    <p class="font-semibold text-nordic-600 dark:text-nordic-400">
+                        Connected to {{ health.host }}
+                        {% if health.version %}<span class="font-normal text-sm">(v{{ health.version }})</span>{% endif %}
+                    </p>
+                    <p class="text-sm text-void-500 dark:text-void-400">
+                        {{ health.models|length }} model{{ 's' if health.models|length != 1 }} installed — default model <code class="text-nordic-500">{{ health.configured_model }}</code> available
+                    </p>
+                </div>
+            </div>
+            {% elif health.connected and not health.model_available %}
+            <!-- Connected but model missing -->
+            <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-3">
+                <i class="fas fa-exclamation-triangle text-amber-500 text-xl"></i>
+                <div>
+                    <p class="font-semibold text-amber-600 dark:text-amber-400">
+                        Connected to {{ health.host }}
+                        {% if health.version %}<span class="font-normal text-sm">(v{{ health.version }})</span>{% endif %}
+                    </p>
+                    <p class="text-sm text-void-500 dark:text-void-400">
+                        Model <code class="text-amber-500 font-semibold">{{ health.configured_model }}</code> is not installed.
+                        Run <code class="text-void-600 dark:text-void-300">ollama pull {{ health.configured_model }}</code> or change the default model below.
+                    </p>
+                </div>
+            </div>
+            {% else %}
+            <!-- Disconnected -->
+            <div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3">
+                <i class="fas fa-times-circle text-ember-500 text-xl"></i>
+                <div>
+                    <p class="font-semibold text-ember-600 dark:text-ember-400">Cannot connect to Ollama</p>
+                    <p class="text-sm text-void-500 dark:text-void-400">
+                        {% if health.error %}{{ health.error }}{% else %}Check that Ollama is running and accessible{% endif %}
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if health.connected and health.models %}
+    <!-- Installed Models -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-cube text-frost-500"></i>
+                Installed Models
+                <span class="ml-auto text-sm font-normal text-void-400">{{ health.models|length }} model{{ 's' if health.models|length != 1 }}</span>
+            </h3>
+        </div>
+        <div class="divide-y divide-void-200 dark:divide-void-800">
+            {% for model in health.models %}
+            <div class="px-5 py-3.5 flex items-center justify-between hover:bg-void-50 dark:hover:bg-void-800/30 transition-colors">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-frost-500/20 to-nordic-500/20 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-brain text-frost-400 text-sm"></i>
+                    </div>
+                    <div>
+                        <span class="font-mono text-sm font-medium text-void-900 dark:text-white">{{ model.name }}</span>
+                        {% if model.name == health.configured_model or model.name == health.configured_model ~ ':latest' or model.name.startswith(health.configured_model ~ ':') %}
+                        <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500 text-xs font-medium">
+                            <i class="fas fa-star text-[10px]"></i> default
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 text-sm text-void-500 dark:text-void-400">
+                    {% if model.size_gb > 0 %}
+                    <span class="tabular-nums">{{ "%.1f"|format(model.size_gb) }} GB</span>
+                    {% endif %}
+                    {% if model.modified_at %}
+                    <span class="hidden sm:inline tabular-nums">{{ model.modified_at[:10] }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}
