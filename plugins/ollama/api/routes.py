@@ -1,4 +1,8 @@
-"""Ollama runner API routes — model management and health checks."""
+"""Ollama runner API routes — model management, health checks, cloud auth."""
+
+import json
+import os
+from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -20,6 +24,10 @@ class ModelEntry(BaseModel):
 
 class SetModelsRequest(BaseModel):
     models: list[ModelEntry]
+
+
+class PullModelRequest(BaseModel):
+    name: str
 
 
 @router.get(
@@ -104,7 +112,7 @@ def _get_ollama_host() -> tuple[str, str]:
     from core.registry import get_plugin_manager
 
     pm = get_plugin_manager()
-    host = "http://ollama:11434"
+    host = os.getenv("OLLAMA_URL", "http://ollama:11434")
     model = "qwen3:8b"
     if pm:
         ollama = pm.get_service("ollama") or pm.runners.get("ollama")
@@ -184,3 +192,145 @@ async def health_check(_auth: None = Depends(verify_internal_auth)):
         result["error"] = str(e)
 
     return api_ok(data=result)
+
+
+@router.post(
+    "/pull",
+    response_model=ApiResponse,
+    response_model_exclude_none=True,
+)
+async def pull_model(
+    request: PullModelRequest,
+    _auth: None = Depends(verify_internal_auth),
+):
+    """Pull a model from Ollama registry (streams progress, returns final status)."""
+    host, _ = _get_ollama_host()
+    model_name = request.name.strip()
+    if not model_name:
+        return api_error(400, "Model name is required", "validation_error")
+
+    logger.info("Ollama pull requested: %s", model_name)
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(600, connect=10)) as client:
+            async with client.stream(
+                "POST", f"{host}/api/pull", json={"name": model_name}
+            ) as resp:
+                resp.raise_for_status()
+                last_status = {}
+                async for line in resp.aiter_lines():
+                    if line.strip():
+                        last_status = json.loads(line)
+
+        if "success" in str(last_status.get("status", "")):
+            logger.info("Ollama pull complete: %s", model_name)
+            return api_ok(model=model_name)
+        return api_error(
+            500, f"Pull ended without success: {last_status}", "pull_error"
+        )
+    except httpx.TimeoutException:
+        return api_error(504, "Pull timed out (10 minutes)", "timeout")
+    except httpx.HTTPStatusError as e:
+        msg = str(e)
+        if e.response.status_code == 404:
+            msg = f"Model '{model_name}' not found in Ollama registry"
+        return api_error(e.response.status_code, msg, "pull_error")
+    except Exception as e:
+        logger.error("Ollama pull error: %s", e)
+        return api_error(500, str(e), "internal_error")
+
+
+# ── Cloud authentication ─────────────────────────────────────────
+
+
+@router.get(
+    "/auth/status",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def auth_status(_auth: None = Depends(verify_internal_auth)):
+    """Check Ollama cloud sign-in status via inference probe on a cloud model."""
+    host, _ = _get_ollama_host()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{host}/api/tags")
+            resp.raise_for_status()
+            models = resp.json().get("models", [])
+            has_cloud = any("cloud" in m.get("name", "") for m in models)
+
+            if not has_cloud:
+                return api_ok(
+                    data={
+                        "loggedIn": True,
+                        "detail": "Connected (no cloud models pulled)",
+                    }
+                )
+
+            # /api/show doesn't require auth — use /api/chat probe instead
+            test_model = next(m["name"] for m in models if "cloud" in m.get("name", ""))
+            try:
+                chat_resp = await client.post(
+                    f"{host}/api/chat",
+                    json={
+                        "model": test_model,
+                        "messages": [{"role": "user", "content": "hi"}],
+                        "stream": False,
+                        "options": {"num_predict": 1},
+                    },
+                    timeout=15,
+                )
+                data = chat_resp.json()
+                if "unauthorized" in str(data.get("error", "")):
+                    return api_ok(
+                        data={
+                            "loggedIn": False,
+                            "detail": "Cloud auth required",
+                            "signinUrl": data.get("signin_url"),
+                        }
+                    )
+                if chat_resp.status_code == 200:
+                    return api_ok(
+                        data={
+                            "loggedIn": True,
+                            "detail": "Signed in to Ollama Cloud",
+                        }
+                    )
+                return api_ok(
+                    data={
+                        "loggedIn": False,
+                        "detail": data.get("error", "Unknown error"),
+                    }
+                )
+            except httpx.TimeoutException:
+                return api_ok(
+                    data={
+                        "loggedIn": True,
+                        "detail": "Connected (probe timed out, likely signed in)",
+                    }
+                )
+    except Exception as e:
+        return api_ok(data={"loggedIn": False, "error": str(e)})
+
+
+@router.get(
+    "/auth/key",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def auth_key(_auth: None = Depends(verify_internal_auth)):
+    """Read Ollama device public key from shared volume."""
+    keys_dir = os.getenv("OLLAMA_KEYS_DIR", "/ollama-keys")
+    pub_path = Path(keys_dir) / "id_ed25519.pub"
+    if not pub_path.is_file():
+        return api_ok(
+            data={
+                "publicKey": None,
+                "detail": "No key found — Ollama generates "
+                "it on first start. Restart the Ollama container if needed.",
+            }
+        )
+    try:
+        public_key = pub_path.read_text().strip()
+        return api_ok(data={"publicKey": public_key})
+    except Exception as e:
+        logger.error("Failed to read Ollama public key: %s", e)
+        return api_error(500, str(e), "key_read_error")

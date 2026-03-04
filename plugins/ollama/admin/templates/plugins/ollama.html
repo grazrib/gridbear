@@ -1,6 +1,95 @@
-{% extends "plugins/plugin_base.html" %}
+{% extends "plugins/config.html" %}
 
-{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Local LLM runner — connection status and model management</p>{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Local &amp; cloud LLM runner — connection status and model management</p>{% endblock %}
+
+{# Override config fields to render model as a dropdown from available Ollama models #}
+{% block plugin_config_fields %}
+{% set config_fields = [] %}
+{% set _schema_props = plugin.config_schema.get('properties', plugin.config_schema) if plugin.config_schema else {} %}
+{% for key, schema in _schema_props.items() %}
+    {% if schema is mapping and key not in ('type', 'properties', 'definitions', 'required', '$schema') and schema.get('type') != 'secret' %}
+        {% set _ = config_fields.append({'key': key, 'schema': schema}) %}
+    {% endif %}
+{% endfor %}
+
+{% if config_fields %}
+<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+    <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+            <i class="fas fa-sliders text-nordic-500"></i>
+            Configuration
+        </h3>
+        <p class="text-sm text-void-500 dark:text-void-400 mt-1">Plugin settings and options</p>
+    </div>
+    <form method="POST" action="/plugins/ollama">
+        {% include "partials/csrf_field.html" %}
+        <div class="p-5 space-y-5">
+            {% for item in config_fields %}
+            {% set key = item.key %}
+            {% set schema = item.schema %}
+            {% set current_value = plugin.current_config.get(key, schema.get('default', '')) %}
+            {% set field_type = schema.get('type', 'string') %}
+
+            <div class="space-y-2">
+                <label for="{{ key }}" class="block text-sm font-medium text-void-700 dark:text-void-200">
+                    {{ schema.get('description', key) }}
+                </label>
+
+                {% if key == 'model' and health.connected and health.models %}
+                {# Model field: dropdown from available Ollama models #}
+                <select id="{{ key }}" name="{{ key }}"
+                        class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                    {% for model in health.models %}
+                    <option value="{{ model.name }}" {% if current_value == model.name %}selected{% endif %}>
+                        {{ model.name }}{% if model.size_gb > 0 %} ({{ "%.1f"|format(model.size_gb) }} GB){% endif %}{% if 'cloud' in model.name %} — cloud{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                {% elif schema.get('enum') %}
+                <select id="{{ key }}" name="{{ key }}"
+                        class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                    {% for option in schema.enum %}
+                    <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                </select>
+
+                {% elif field_type == 'boolean' %}
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="{{ key }}" name="{{ key }}" {% if current_value %}checked{% endif %}
+                           class="sr-only peer">
+                    <div class="w-11 h-6 bg-void-200 dark:bg-void-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-nordic-500"></div>
+                    <span class="ms-3 text-sm text-void-600 dark:text-void-300">Enabled</span>
+                </label>
+
+                {% elif field_type == 'integer' %}
+                <input type="number" id="{{ key }}" name="{{ key }}"
+                       value="{{ current_value }}" placeholder="{{ schema.get('default', '') }}"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+
+                {% else %}
+                <input type="text" id="{{ key }}" name="{{ key }}"
+                       value="{{ current_value }}" placeholder="{{ schema.get('default', '') }}"
+                       class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                {% endif %}
+
+                {% if schema.get('default') is not none and field_type != 'secret' and key != 'model' %}
+                <p class="text-xs text-void-500 dark:text-void-400">Default: <code class="font-mono bg-void-100 dark:bg-void-800 px-1.5 py-0.5 rounded">{{ schema.get('default') }}</code></p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="p-5 border-t border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+            <button type="submit"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-all shadow-lg shadow-nordic-500/20">
+                <i class="fas fa-save"></i>
+                Save Configuration
+            </button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}
 
 {% block plugin_content_before %}
     <!-- Connection Status -->
@@ -18,7 +107,6 @@
         </div>
         <div class="p-5">
             {% if health.connected and health.model_available %}
-            <!-- Connected + model OK -->
             <div class="p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3">
                 <i class="fas fa-check-circle text-nordic-500 text-xl"></i>
                 <div>
@@ -27,12 +115,11 @@
                         {% if health.version %}<span class="font-normal text-sm">(v{{ health.version }})</span>{% endif %}
                     </p>
                     <p class="text-sm text-void-500 dark:text-void-400">
-                        {{ health.models|length }} model{{ 's' if health.models|length != 1 }} installed — default model <code class="text-nordic-500">{{ health.configured_model }}</code> available
+                        {{ health.models|length }} model{{ 's' if health.models|length != 1 }} available — default: <code class="text-nordic-500">{{ health.configured_model }}</code>
                     </p>
                 </div>
             </div>
             {% elif health.connected and not health.model_available %}
-            <!-- Connected but model missing -->
             <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-3">
                 <i class="fas fa-exclamation-triangle text-amber-500 text-xl"></i>
                 <div>
@@ -42,12 +129,11 @@
                     </p>
                     <p class="text-sm text-void-500 dark:text-void-400">
                         Model <code class="text-amber-500 font-semibold">{{ health.configured_model }}</code> is not installed.
-                        Run <code class="text-void-600 dark:text-void-300">ollama pull {{ health.configured_model }}</code> or change the default model below.
+                        Pull it or change the default model below.
                     </p>
                 </div>
             </div>
             {% else %}
-            <!-- Disconnected -->
             <div class="p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3">
                 <i class="fas fa-times-circle text-ember-500 text-xl"></i>
                 <div>
@@ -61,28 +147,102 @@
         </div>
     </div>
 
-    {% if health.connected and health.models %}
-    <!-- Installed Models -->
+    {% if health.connected %}
+    <!-- Cloud Authentication -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden" x-data="ollamaAuth()">
+        <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-amber-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-cloud text-amber-500"></i>
+                Cloud Authentication
+            </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">Required for cloud models (e.g. qwen3.5:397b-cloud)</p>
+        </div>
+        <div class="p-5 space-y-4">
+            <!-- Status row -->
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                        <i class="fas fa-key text-amber-500"></i>
+                    </div>
+                    <div>
+                        <span class="font-medium text-void-900 dark:text-white">Ollama Cloud</span>
+                        <template x-if="detail">
+                            <span class="text-xs text-void-400 ml-2" x-text="detail"></span>
+                        </template>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span x-show="loading" class="text-xs text-void-400"><i class="fas fa-spinner fa-spin"></i></span>
+                    <span x-show="!loading && loggedIn"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+                        <i class="fas fa-check-circle"></i> Signed in
+                    </span>
+                    <span x-show="!loading && !loggedIn"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
+                        <i class="fas fa-exclamation-triangle"></i> Not signed in
+                    </span>
+                    <button @click="checkStatus()" class="text-xs text-void-400 hover:text-void-600 dark:hover:text-void-200 ml-1" title="Refresh status">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Device public key -->
+            <div x-show="!loading" class="space-y-3">
+                <template x-if="publicKey">
+                    <div class="space-y-2">
+                        <label class="text-sm font-medium text-void-700 dark:text-void-200">Device Public Key</label>
+                        <div class="flex items-center gap-2">
+                            <code class="flex-1 text-xs font-mono bg-void-100 dark:bg-void-800 px-4 py-2.5 rounded-xl text-void-600 dark:text-void-300 truncate select-all"
+                                  x-text="publicKey"></code>
+                            <button @click="navigator.clipboard.writeText(publicKey)" title="Copy public key"
+                                    class="px-3 py-2.5 rounded-xl bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-500 transition-colors flex-shrink-0">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-void-500 dark:text-void-400" x-show="!loggedIn">
+                            Copy this key and add it on
+                            <a href="https://ollama.com/settings/keys" target="_blank" rel="noopener"
+                               class="text-nordic-500 hover:text-nordic-600 underline">ollama.com/settings/keys</a>,
+                            then refresh status.
+                        </p>
+                    </div>
+                </template>
+                <template x-if="!publicKey && keyDetail">
+                    <p class="text-sm text-void-500 dark:text-void-400" x-text="keyDetail"></p>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Available Models -->
     <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
         <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
             <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
                 <i class="fas fa-cube text-frost-500"></i>
-                Installed Models
+                Available Models
                 <span class="ml-auto text-sm font-normal text-void-400">{{ health.models|length }} model{{ 's' if health.models|length != 1 }}</span>
             </h3>
+            <p class="text-sm text-void-500 dark:text-void-400 mt-1">Models installed on Ollama</p>
         </div>
+        {% if health.models %}
         <div class="divide-y divide-void-200 dark:divide-void-800">
             {% for model in health.models %}
-            <div class="px-5 py-3.5 flex items-center justify-between hover:bg-void-50 dark:hover:bg-void-800/30 transition-colors">
+            <div class="px-5 py-3 flex items-center justify-between hover:bg-void-50 dark:hover:bg-void-800/30 transition-colors">
                 <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-frost-500/20 to-nordic-500/20 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-brain text-frost-400 text-sm"></i>
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br {% if 'cloud' in model.name %}from-amber-500/20 to-amber-600/20{% else %}from-frost-500/20 to-nordic-500/20{% endif %} flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-{% if 'cloud' in model.name %}cloud{% else %}brain{% endif %} {% if 'cloud' in model.name %}text-amber-400{% else %}text-frost-400{% endif %} text-sm"></i>
                     </div>
-                    <div>
-                        <span class="font-mono text-sm font-medium text-void-900 dark:text-white">{{ model.name }}</span>
+                    <div class="flex items-center gap-2">
+                        <code class="text-sm font-medium text-void-900 dark:text-white">{{ model.name }}</code>
                         {% if model.name == health.configured_model or model.name == health.configured_model ~ ':latest' or model.name.startswith(health.configured_model ~ ':') %}
-                        <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500 text-xs font-medium">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500 text-xs font-medium">
                             <i class="fas fa-star text-[10px]"></i> default
+                        </span>
+                        {% endif %}
+                        {% if 'cloud' in model.name %}
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium">
+                            <i class="fas fa-cloud text-[10px]"></i> cloud
                         </span>
                         {% endif %}
                     </div>
@@ -90,14 +250,144 @@
                 <div class="flex items-center gap-4 text-sm text-void-500 dark:text-void-400">
                     {% if model.size_gb > 0 %}
                     <span class="tabular-nums">{{ "%.1f"|format(model.size_gb) }} GB</span>
-                    {% endif %}
-                    {% if model.modified_at %}
-                    <span class="hidden sm:inline tabular-nums">{{ model.modified_at[:10] }}</span>
+                    {% else %}
+                    <span class="text-void-400">—</span>
                     {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
+        {% else %}
+        <div class="p-5 text-sm text-void-500 dark:text-void-400">No models installed yet. Pull one below.</div>
+        {% endif %}
+
+        <!-- Pull new model -->
+        <div class="p-5 border-t border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+            <div class="flex items-center gap-3">
+                <input type="text" id="pull-model-name" placeholder="e.g. qwen3:8b or qwen3.5:397b-cloud"
+                       class="flex-1 bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-sm text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                <button type="button" onclick="pullModel()"
+                        id="pull-btn"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium text-sm transition-all shadow-lg shadow-frost-500/20 whitespace-nowrap">
+                    <i class="fas fa-download" id="pull-icon"></i>
+                    Pull Model
+                </button>
+            </div>
+            <div id="pull-status" class="hidden mt-3"></div>
+        </div>
     </div>
     {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script>
+function setPullStatus(type, message) {
+    const status = document.getElementById('pull-status');
+    const colors = {
+        info:    'bg-frost-500/10 border-frost-500/20 text-frost-600 dark:text-frost-400',
+        success: 'bg-nordic-500/10 border-nordic-500/20 text-nordic-600 dark:text-nordic-400',
+        error:   'bg-ember-500/10 border-ember-500/20 text-ember-600 dark:text-ember-400'
+    };
+    const icons = { info: 'fa-spinner fa-spin', success: 'fa-check-circle', error: 'fa-times-circle' };
+    status.className = 'mt-3 p-3 rounded-xl border text-sm flex items-center gap-2 ' + colors[type];
+    status.replaceChildren();
+    const icon = document.createElement('i');
+    icon.className = 'fas ' + icons[type];
+    status.appendChild(icon);
+    const span = document.createElement('span');
+    span.textContent = message;
+    status.appendChild(span);
+}
+
+function setPullUI(disabled) {
+    const btn = document.getElementById('pull-btn');
+    const input = document.getElementById('pull-model-name');
+    const icon = document.getElementById('pull-icon');
+    btn.disabled = disabled;
+    input.disabled = disabled;
+    btn.classList.toggle('opacity-50', disabled);
+    btn.classList.toggle('cursor-not-allowed', disabled);
+    icon.className = disabled ? 'fas fa-spinner fa-spin' : 'fas fa-download';
+}
+
+async function pullModel() {
+    const input = document.getElementById('pull-model-name');
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+
+    setPullUI(true);
+    setPullStatus('info', 'Pulling ' + name + ' \u2014 this may take several minutes for large models\u2026');
+
+    const csrfToken = document.getElementById('csrf-token')
+        ? document.getElementById('csrf-token').value
+        : (document.querySelector('[name=csrf_token]')?.value || '');
+
+    try {
+        const resp = await fetch('/plugins/ollama/pull', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({name})
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+            setPullStatus('success', 'Successfully pulled ' + name + '. Reloading\u2026');
+            setTimeout(function() { location.reload(); }, 1500);
+        } else {
+            setPullStatus('error', data.error || 'Pull failed');
+            setPullUI(false);
+        }
+    } catch (err) {
+        setPullStatus('error', 'Network error: ' + err.message);
+        setPullUI(false);
+    }
+}
+
+document.getElementById('pull-model-name')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); pullModel(); }
+});
+
+function ollamaAuth() {
+    return {
+        loading: true,
+        loggedIn: false,
+        detail: '',
+        publicKey: null,
+        keyDetail: null,
+
+        async init() {
+            await Promise.all([this.checkStatus(), this.fetchKey()]);
+        },
+
+        async checkStatus() {
+            this.loading = true;
+            try {
+                const resp = await fetch('/plugins/ollama/auth/status');
+                const data = await resp.json();
+                if (data.ok && data.data) {
+                    this.loggedIn = !!data.data.loggedIn;
+                    this.detail = data.data.detail || '';
+                }
+            } catch (err) {
+                this.detail = 'Status check failed';
+            }
+            this.loading = false;
+        },
+
+        async fetchKey() {
+            try {
+                const resp = await fetch('/plugins/ollama/auth/key');
+                const data = await resp.json();
+                if (data.ok && data.data) {
+                    this.publicKey = data.data.publicKey || null;
+                    this.keyDetail = data.data.detail || null;
+                }
+            } catch (err) {
+                this.keyDetail = 'Failed to read key';
+            }
+        }
+    };
+}
+</script>
 {% endblock %}

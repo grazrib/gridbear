@@ -13,13 +13,8 @@
     },
     "model": {
       "type": "string",
-      "enum": [
-        "qwen3:8b", "qwen3:0.6b", "qwen2.5:7b",
-        "llama3.1:8b", "llama3.2:3b",
-        "mistral:7b", "phi4-mini:3.8b"
-      ],
       "default": "qwen3:8b",
-      "description": "Default model (must be pulled on Ollama)"
+      "description": "Default model (selection via models registry, not restricted by enum)"
     },
     "timeout": {
       "type": "integer",
