@@ -19,7 +19,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     # Auth & security
     "bcrypt>=4.1.0",
-    "cryptography>=41.0.0",
+    "cryptography>=46.0.5",
     # PostgreSQL
     "psycopg[binary]>=3.1",
     "psycopg_pool>=3.1",
