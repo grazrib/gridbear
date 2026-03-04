@@ -117,11 +117,12 @@ jobs:
 
       - name: Install dependencies
         run: |
+          pip install --upgrade setuptools
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install ".[dev,all]" pip-audit
 
       - name: Dependency vulnerability scan
-        run: pip-audit --desc
+        run: pip-audit --desc --skip-editable
 
       - name: Secret scan
         run: |
