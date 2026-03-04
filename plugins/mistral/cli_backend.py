@@ -35,10 +35,10 @@ class MistralCliBackend:
         self.model = config.get(
             "model", os.getenv("MISTRAL_MODEL", "mistral-large-latest")
         )
-        self.timeout = config.get("timeout", 120)
-        self.max_retries = config.get("max_retries", 2)
-        self.max_tool_iterations = config.get("max_tool_iterations", 20)
-        self.max_price = config.get("max_price", 1.0)
+        self.timeout = int(config.get("timeout", 120))
+        self.max_retries = int(config.get("max_retries", 2))
+        self.max_tool_iterations = int(config.get("max_tool_iterations", 20))
+        self.max_price = float(config.get("max_price", 1.0))
         self._gateway_url = os.getenv("MCP_GATEWAY_URL", "http://gridbear-ui:8080")
         self._vibe_bin = _find_vibe_binary()
 
@@ -78,16 +78,19 @@ class MistralCliBackend:
             len(prompt),
         )
 
-        # Write MCP gateway config before launching
+        # MCP token for gateway access
         unified_id = kwargs.get("unified_id")
         if not no_tools and agent_id:
-            self._write_mcp_config(agent_id, unified_id=unified_id)
+            self._prepare_mcp_token(agent_id, unified_id=unified_id)
 
-        cmd = self._build_command(prompt=prompt, model=effective_model)
-        logger.debug("Running command: %s", " ".join(cmd))
+        cmd = self._build_command(prompt=prompt)
+        logger.debug("Running vibe: %d args, prompt_len=%d", len(cmd), len(prompt))
 
-        # Pass MCP token as env var
+        # Build env: API key + MCP token
         env = os.environ.copy()
+        api_key = self._get_api_key()
+        if api_key:
+            env["MISTRAL_API_KEY"] = api_key
         mcp_token = getattr(self, "_current_mcp_token", None)
         if mcp_token:
             env["GRIDBEAR_MCP_TOKEN"] = mcp_token
@@ -211,26 +214,20 @@ class MistralCliBackend:
             raw={},
         )
 
-    def _build_command(
-        self,
-        prompt: str,
-        model: str | None = None,
-    ) -> list[str]:
+    def _build_command(self, prompt: str) -> list[str]:
         """Build Vibe CLI command.
 
-        Uses --output json for complete JSON response at completion.
-        MCP servers are configured via ~/.vibe/config.toml (not CLI flags).
+        Uses -p TEXT (programmatic mode). Model is set via config.toml.
+        Prompt is passed as a single argv element — exec-style invocation
+        handles quoting correctly without shell interpolation.
         """
         cmd = [self._vibe_bin]
 
-        cmd.extend(["--prompt", prompt])
         cmd.extend(["--output", "json"])
         cmd.extend(["--max-turns", str(self.max_tool_iterations)])
         cmd.extend(["--max-price", f"{self.max_price:.2f}"])
-        cmd.append("--auto-approve")
-
-        if model:
-            cmd.extend(["--model", model])
+        # -p must be last: argparse nargs='?' grabs the next token
+        cmd.extend(["-p", prompt])
 
         return cmd
 
@@ -258,7 +255,29 @@ class MistralCliBackend:
             )
             return stdout, None
 
-        # Extract text — try common fields
+        # --output json returns an array of message objects
+        if isinstance(data, list):
+            # Extract last assistant message text
+            parts = []
+            usage = None
+            for msg in data:
+                if not isinstance(msg, dict):
+                    continue
+                role = msg.get("role", "")
+                if role == "assistant":
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and content:
+                        parts.append(content)
+                    elif isinstance(content, list):
+                        # Content blocks: [{"type": "text", "text": "..."}]
+                        for block in content:
+                            if isinstance(block, dict) and block.get("text"):
+                                parts.append(block["text"])
+                if msg.get("usage"):
+                    usage = msg["usage"]
+            return "\n".join(parts) if parts else "", usage
+
+        # Single object response (legacy / future format)
         text = (
             data.get("text")
             or data.get("content")
@@ -266,7 +285,6 @@ class MistralCliBackend:
             or data.get("response", "")
         )
 
-        # Extract usage if available
         usage = data.get("usage")
         if not usage and "input_tokens" in data:
             usage = {
@@ -276,14 +294,17 @@ class MistralCliBackend:
 
         return text, usage
 
-    def _write_mcp_config(self, agent_id: str, unified_id: str | None = None) -> bool:
-        """Write Vibe-compatible MCP config for the gateway.
+    def _prepare_mcp_token(
+        self,
+        agent_id: str,
+        unified_id: str | None = None,
+    ) -> bool:
+        """Obtain MCP gateway token for Vibe CLI.
 
-        Writes ~/.vibe/config.toml with the gateway MCP server entry.
         Token is passed via GRIDBEAR_MCP_TOKEN env var at process spawn.
+        Does NOT modify ~/.vibe/config.toml (user manages their own config).
         """
         from core.mcp_token_manager import get_mcp_token_manager
-        from plugins.mistral.config_generator import write_config
 
         tm = get_mcp_token_manager()
         if not tm:
@@ -297,15 +318,21 @@ class MistralCliBackend:
         if not token:
             return False
 
-        # Write config.toml
-        write_config(
-            model=self.model,
-            gateway_url=self._gateway_url,
-        )
-
-        # Store token for env var at process spawn
         self._current_mcp_token = token
         return True
+
+    @staticmethod
+    def _get_api_key() -> str | None:
+        """Get Mistral API key from secrets manager or environment."""
+        try:
+            from ui.secrets_manager import secrets_manager
+
+            key = secrets_manager.get_plain("MISTRAL_API_KEY")
+            if key:
+                return key
+        except Exception:
+            pass
+        return os.getenv("MISTRAL_API_KEY")
 
     @staticmethod
     def _get_user_token(tm, agent_id: str, unified_id: str) -> str | None:

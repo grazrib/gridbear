@@ -51,14 +51,26 @@ class MistralRunner(BaseRunner):
         self._error_callback = callback
 
     async def initialize(self) -> None:
-        """Initialize runner — delegates to API backend or CLI backend."""
-        if self.backend == "api":
-            from .api_backend import MistralApiBackend
+        """Initialize runner — delegates to API, Codestral, or CLI backend."""
+        if self.backend in ("api", "codestral"):
+            from .api_backend import CODESTRAL_API_BASE, MistralApiBackend
 
-            self._api_backend = MistralApiBackend(self.config)
+            if self.backend == "codestral":
+                codestral_config = dict(self.config)
+                codestral_config.setdefault("model", "codestral-latest")
+                self._api_backend = MistralApiBackend(
+                    codestral_config,
+                    base_url=CODESTRAL_API_BASE,
+                    api_key_name="CODESTRAL_API_KEY",
+                )
+            else:
+                self._api_backend = MistralApiBackend(self.config)
+
             await self._api_backend.initialize()
             logger.info(
-                "Mistral runner initialized with model %s (backend=api)", self.model
+                "Mistral runner initialized with model %s (backend=%s)",
+                self.model,
+                self.backend,
             )
             return
 
@@ -123,8 +135,8 @@ class MistralRunner(BaseRunner):
         **kwargs,
     ) -> RunnerResponse:
         """Execute Mistral model and return response."""
-        # --- API backend dispatch ---
-        if self.backend == "api" and self._api_backend:
+        # --- API / Codestral backend dispatch ---
+        if self.backend in ("api", "codestral") and self._api_backend:
             return await self._api_backend.run(
                 prompt=prompt,
                 session_id=session_id,

@@ -9,14 +9,20 @@
     "mistral_api_key": {
       "type": "secret",
       "env": "MISTRAL_API_KEY",
-      "description": "Mistral API Key",
+      "description": "Mistral API Key (Le Chat / standard API)",
+      "required": false
+    },
+    "codestral_api_key": {
+      "type": "secret",
+      "env": "CODESTRAL_API_KEY",
+      "description": "Codestral API Key (free code endpoint)",
       "required": false
     },
     "backend": {
       "type": "string",
-      "enum": ["cli", "api"],
-      "default": "api",
-      "description": "Backend: 'cli' (Vibe CLI) or 'api' (Chat Completions)"
+      "enum": ["cli", "api", "codestral"],
+      "default": "codestral",
+      "description": "Backend: 'cli' (Vibe CLI, free), 'api' (Mistral API, paid), 'codestral' (Codestral, free)"
     },
     "model": {
       "type": "string",
