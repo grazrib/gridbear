@@ -424,9 +424,7 @@ def get_template_context(request: Request, **kwargs) -> dict:
 
 
 app.include_router(ws_chat.router, tags=["webchat"])  # /ws/chat (WebSocket, no prefix)
-# Register plugin portal routes BEFORE me.router so specific portal routes
-# (e.g. /me/workflows, /me/connections/whatsapp/*) take priority over catch-alls
-plugin_registry.register_portal_routes(app)
+# Plugin portal routes registered in startup event (requires ORM for get_enabled_plugins)
 app.include_router(me.router, tags=["user-portal"])  # /me/* (before auth prefix)
 app.include_router(chat_api.router, tags=["chat-api"])  # /me/chat/api/*
 app.include_router(chat_proxy.router, tags=["chat-proxy"])  # /api/proxy/chat
@@ -872,6 +870,9 @@ async def startup_cleanup():
         # Reload template loader now that DB is available (theme from SystemConfig)
         rebuild_template_loader()
         logger.info("Admin: template loader rebuilt with active theme")
+
+        # Register plugin portal routes (requires ORM/DB for get_enabled_plugins)
+        plugin_registry.register_portal_routes(app)
 
         # Register plugin admin routes (requires ORM/DB — cannot run at import time)
         # Plugin-specific routes FIRST so they take priority over the
