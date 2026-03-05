@@ -40,6 +40,8 @@ def _classify_transport(config: dict) -> str:
     if "command" in config:
         return "stdio"
     cfg_type = config.get("type", "")
+    if cfg_type == "virtual":
+        return "virtual"  # handled by LocalToolProvider, no MCP server
     if cfg_type == "sse":
         return "sse"
     if cfg_type == "http":
@@ -329,6 +331,8 @@ def _expand_server_config(
     if _is_single_server_config(server_config):
         # Single server - use provider name as server name
         transport = _classify_transport(server_config)
+        if transport == "virtual":
+            return  # handled by LocalToolProvider, no MCP server to connect
         servers[provider_name] = ServerInfo(
             server_name=provider_name,
             config=server_config,
