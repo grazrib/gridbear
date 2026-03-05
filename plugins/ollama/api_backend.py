@@ -27,8 +27,10 @@ class OllamaApiBackend:
 
     def __init__(self, config: dict):
         self.config = config
-        self.host = config.get(
-            "host", __import__("os").getenv("OLLAMA_URL", "http://localhost:11434")
+        import os
+
+        self.host = os.getenv("OLLAMA_URL") or config.get(
+            "host", "http://localhost:11434"
         )
         self.model = config.get("model", "qwen3:8b")
         self.timeout = config.get("timeout", 300)

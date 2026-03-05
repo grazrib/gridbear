@@ -4,12 +4,12 @@ import os
 
 import httpx
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from config.logging_config import logger
 from ui.jinja_env import templates
 from ui.routes.auth import require_login
-from ui.routes.plugins import get_plugin_info, get_template_context
+from ui.routes.plugins import _get_runner_context, get_plugin_info, get_template_context
 
 router = APIRouter(prefix="/plugins/ollama", tags=["ollama"])
 
@@ -76,6 +76,10 @@ async def ollama_config_page(request: Request, _: bool = Depends(require_login))
 
     health = await _fetch_health()
 
+    from ui.secrets_manager import secrets_manager
+
+    runner_ctx = _get_runner_context("ollama")
+
     return templates.TemplateResponse(
         "plugins/ollama.html",
         get_template_context(
@@ -83,5 +87,63 @@ async def ollama_config_page(request: Request, _: bool = Depends(require_login))
             plugin=plugin_info,
             plugin_name="ollama",
             health=health,
+            encryption_available=secrets_manager.is_available(),
+            **runner_ctx,
         ),
     )
+
+
+@router.get("/auth/status")
+async def ollama_auth_status(_: bool = Depends(require_login)):
+    """Proxy cloud auth status check to bot API."""
+    url = f"{GRIDBEAR_URL}/api/ollama/auth/status"
+    headers = {"Authorization": f"Bearer {INTERNAL_SECRET}"}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url, headers=headers)
+            return JSONResponse(resp.json(), status_code=resp.status_code)
+    except Exception as exc:
+        logger.error("Ollama auth status proxy error: %s", exc)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+@router.get("/auth/key")
+async def ollama_auth_key(_: bool = Depends(require_login)):
+    """Proxy public key read to bot API."""
+    url = f"{GRIDBEAR_URL}/api/ollama/auth/key"
+    headers = {"Authorization": f"Bearer {INTERNAL_SECRET}"}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url, headers=headers)
+            return JSONResponse(resp.json(), status_code=resp.status_code)
+    except Exception as exc:
+        logger.error("Ollama auth key proxy error: %s", exc)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+@router.post("/pull")
+async def ollama_pull_model(request: Request, _: bool = Depends(require_login)):
+    """Proxy model pull to the bot's Ollama API."""
+    body = await request.json()
+    model_name = (body.get("name") or "").strip()
+    if not model_name:
+        return JSONResponse(
+            {"ok": False, "error": "Model name is required"}, status_code=400
+        )
+
+    url = f"{GRIDBEAR_URL}/api/ollama/pull"
+    headers = {
+        "Authorization": f"Bearer {INTERNAL_SECRET}",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(600, connect=10)) as client:
+            resp = await client.post(url, json={"name": model_name}, headers=headers)
+            return JSONResponse(resp.json(), status_code=resp.status_code)
+    except httpx.TimeoutException:
+        return JSONResponse(
+            {"ok": False, "error": "Pull timed out (10 minutes)"}, status_code=504
+        )
+    except Exception as exc:
+        logger.error("Ollama pull proxy error: %s", exc)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)

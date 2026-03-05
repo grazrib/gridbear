@@ -22,8 +22,8 @@ class OllamaRunner(BaseRunner):
 
     def __init__(self, config: dict):
         super().__init__(config)
-        self.host = config.get(
-            "host", os.getenv("OLLAMA_URL", "http://localhost:11434")
+        self.host = os.getenv("OLLAMA_URL") or config.get(
+            "host", "http://localhost:11434"
         )
         self.model = config.get("model", "qwen3:8b")
         self.timeout = config.get("timeout", 300)
@@ -71,7 +71,9 @@ class OllamaRunner(BaseRunner):
     _DEFAULT_MODELS = [
         {"id": "qwen3:8b", "name": "Qwen3 8B (recommended)"},
         {"id": "qwen3:0.6b", "name": "Qwen3 0.6B (fastest)"},
+        {"id": "qwen3.5:397b-cloud", "name": "Qwen3.5 397B (cloud)"},
         {"id": "qwen2.5:7b", "name": "Qwen2.5 7B"},
+        {"id": "devstral-small:24b-cloud", "name": "Devstral Small 24B (cloud)"},
         {"id": "llama3.1:8b", "name": "Llama 3.1 8B"},
         {"id": "llama3.2:3b", "name": "Llama 3.2 3B"},
         {"id": "mistral:7b", "name": "Mistral 7B"},

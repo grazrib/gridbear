@@ -88,6 +88,7 @@ RUN mkdir -p /app/data/attachments /app/credentials /home/gridbear/.claude /home
     chown -R gridbear:gridbear /app /home/gridbear
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # Switch to non-root user
 USER gridbear
