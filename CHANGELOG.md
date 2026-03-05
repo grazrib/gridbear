@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-03-04
+
+### Added
+
+- Mistral runner plugin with API, CLI (Vibe), and Codestral backends
+- Codestral free endpoint with tool calling support
+- Ollama admin page: connection status, model management, model pull
+- Ollama Cloud authentication: device public key display, auth status probe
+- Docker: `PYTHONPATH=/app` for gridbear CLI console scripts
+- Docker: `GRIDBEAR_GATEWAY_URL` for in-container CLI usage
+- Docker: `vibe_state` volume for persistent Vibe CLI config
+- Agents without channels (CLI/API-only) no longer rejected at startup
+
+### Fixed
+
+- Ollama: `OLLAMA_URL` env var now takes precedence over DB config default
+- Ollama: removed unused Bearer auth (Ollama reads API key from own env)
+- CI: upgrade setuptools in security scan, skip editable install
+- CI: install PyTorch CPU-only to avoid NVIDIA deps
+
+### Changed
+
+- Python 3.11 → 3.12 (Dockerfile, CI, pyproject.toml)
+
+### Security
+
+- cryptography bumped to ≥46.0.5 (CVE-2026-26007)
+
 ## [0.4.5] - 2026-03-03
 
 ### Added
