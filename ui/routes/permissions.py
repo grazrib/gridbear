@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -9,11 +8,11 @@ from ui.jinja_env import templates
 from ui.routes.auth import require_login
 
 router = APIRouter()
-ADMIN_DIR = Path(__file__).resolve().parent.parent
 
 
 @router.get("/", response_class=HTMLResponse)
 async def permissions_page(request: Request, _: bool = Depends(require_login)):
+    from ui.auth.models import AdminUser
     from ui.utils.channels import get_available_channels, get_channel_ui_map
 
     config = ConfigManager()
@@ -30,7 +29,26 @@ async def permissions_page(request: Request, _: bool = Depends(require_login)):
             seen.update(servers)
         available_servers = sorted(seen)
 
-    # Get platform info dynamically for all available channels
+    # Build user list from AdminUser (has unified_id + display_name)
+    admin_users = AdminUser.search_sync()
+    user_display = {}
+    for u in admin_users:
+        uid = u.get("unified_id")
+        if uid:
+            user_display[uid] = u.get("display_name") or u.get("username") or uid
+
+    # Also include unified_ids from identities (users without admin accounts)
+    identities = config.get_user_identities()
+    for uid in identities:
+        if uid not in user_display:
+            user_display[uid] = uid
+
+    # Ensure all users with existing permissions appear in user_display
+    for uid in permissions:
+        if uid not in user_display:
+            user_display[uid] = uid
+
+    # Build platform badges for each unified_id
     channels = get_available_channels()
     channel_users = {}
     for ch in channels:
@@ -38,62 +56,17 @@ async def permissions_page(request: Request, _: bool = Depends(require_login)):
             u.lower() for u in config.get_channel_users(ch["name"]).get("usernames", [])
         )
 
-    # Get unified identities
-    identities = config.get_user_identities()
-
-    # Build set of usernames that are linked to identities (to exclude them)
-    linked_usernames = set()
-    for identity_data in identities.values():
-        for channel_username in identity_data.values():
-            linked_usernames.add(channel_username.lower())
-
-    # Include all authorized users, even without permissions yet
-    # But exclude platform usernames that are already linked to an identity
-    all_users = set()
-    all_users.update(identities.keys())  # Add unified identities
-
-    # Add users from permissions only if not linked to an identity
-    for u in permissions.keys():
-        if u.lower() not in linked_usernames:
-            all_users.add(u)
-
-    # Add platform users only if not linked to an identity
-    for ch_name, ch_users in channel_users.items():
-        for u in ch_users:
-            if u not in linked_usernames:
-                all_users.add(u)
-
-    # Build filtered permissions dict
-    filtered_permissions = {}
-    for user in all_users:
-        # For identities, merge permissions from all linked usernames
-        if user in identities:
-            merged = set(permissions.get(user, []))
-            for channel_username in identities[user].values():
-                merged.update(permissions.get(channel_username, []))
-            filtered_permissions[user] = list(merged)
-        else:
-            filtered_permissions[user] = permissions.get(user, [])
-
-    permissions = filtered_permissions
-
     user_platforms = {}
-    for username in permissions.keys():
+    for uid in permissions:
         platforms = []
-        username_lower = username.lower()
-        # Check direct platform authorization
-        for ch_name, ch_users in channel_users.items():
-            if username_lower in ch_users:
+        identity = identities.get(uid, {})
+        for ch_name in channel_users:
+            ch_username = identity.get(ch_name)
+            if ch_username and ch_username.lower() in channel_users[ch_name]:
                 platforms.append(ch_name)
-        # Check via identity mapping
-        if username in identities:
-            identity = identities[username]
-            for ch_name in channel_users:
-                if identity.get(ch_name):
-                    platforms.append(ch_name)
-        user_platforms[username] = list(set(platforms))  # Remove duplicates
+        user_platforms[uid] = platforms
 
-    # Get group permissions
+    # Group permissions
     memory_groups = config.get_memory_groups()
     group_permissions = config.get_all_group_permissions()
 
@@ -106,6 +79,7 @@ async def permissions_page(request: Request, _: bool = Depends(require_login)):
             "permissions": permissions,
             "available_servers": available_servers,
             "user_platforms": user_platforms,
+            "user_display": user_display,
             "channel_ui": get_channel_ui_map(),
             "memory_groups": memory_groups,
             "group_permissions": group_permissions,
@@ -116,23 +90,23 @@ async def permissions_page(request: Request, _: bool = Depends(require_login)):
 @router.post("/save")
 async def save_permissions(
     request: Request,
-    username: str = Form(...),
+    unified_id: str = Form(...),
     servers: List[str] = Form(default=[]),
     _: bool = Depends(require_login),
 ):
     config = ConfigManager()
-    config.set_user_permissions(username, servers)
+    config.set_user_permissions(unified_id, servers)
     return RedirectResponse(url="/permissions/", status_code=303)
 
 
-@router.post("/delete/{username}")
+@router.post("/delete/{unified_id:path}")
 async def delete_permissions(
     request: Request,
-    username: str,
+    unified_id: str,
     _: bool = Depends(require_login),
 ):
     config = ConfigManager()
-    config.delete_user_permissions(username)
+    config.delete_user_permissions(unified_id)
     return RedirectResponse(url="/permissions/", status_code=303)
 
 
