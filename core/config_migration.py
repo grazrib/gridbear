@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 _MARKER_KEY = "_migration_admin_config"
 _MARKER_REST_API_KEY = "_migration_rest_api_config"
 _MARKER_CLAUDE_SETTINGS_KEY = "_migration_claude_settings"
+_MARKER_MCP_PERMS_UNIFIED_ID = "_migration_mcp_perms_unified_id"
 
 
 async def migrate_admin_config_to_db(config_path: Path) -> bool:
@@ -94,14 +95,21 @@ async def migrate_admin_config_to_db(config_path: Path) -> bool:
             except Exception as exc:
                 logger.debug("Identity %s/%s skip: %s", unified_id, platform, exc)
 
-    # --- User MCP permissions ---
+    # --- User MCP permissions (stored by unified_id) ---
+    # Legacy JSON used usernames; resolve to unified_id via identity mapping
+    identity_map = {}
+    for uid, platforms in config.get("user_identities", {}).items():
+        for _platform, uname in platforms.items():
+            identity_map[uname.lower().lstrip("@")] = uid.lower()
+
     for username, servers in config.get("user_permissions", {}).items():
-        username = username.lower().lstrip("@")
+        username_lower = username.lower().lstrip("@")
+        uid = identity_map.get(username_lower, username_lower)
         for server in servers:
             try:
-                await UserMcpPermission.create(username=username, server_name=server)
+                await UserMcpPermission.create(unified_id=uid, server_name=server)
             except Exception as exc:
-                logger.debug("MCP perm %s/%s skip: %s", username, server, exc)
+                logger.debug("MCP perm %s/%s skip: %s", uid, server, exc)
 
     # --- Memory groups ---
     for group_name, members in config.get("memory_groups", {}).items():
@@ -273,4 +281,116 @@ async def migrate_claude_settings_to_db(config_path: Path) -> bool:
         logger.warning("Could not rename claude_settings.json: %s", exc)
 
     logger.info("Migrated claude_settings.json to PostgreSQL successfully")
+    return True
+
+
+async def migrate_mcp_perms_to_unified_id() -> bool:
+    """Backfill user_mcp_permissions.unified_id from old username column.
+
+    For existing rows where unified_id is NULL but username is populated,
+    resolves the unified_id via user_identities mapping (or falls back to
+    using the username value as-is).
+
+    Returns True if migration was performed, False if skipped.
+    """
+    from core.registry import get_database
+    from core.system_config import SystemConfig
+
+    marker = await SystemConfig.get_param(_MARKER_MCP_PERMS_UNIFIED_ID)
+    if marker:
+        return False
+
+    db = get_database()
+    async with db.acquire() as conn:
+        # Check if the old username column still exists
+        col_check = await conn.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = 'app' AND table_name = 'user_mcp_permissions' "
+            "AND column_name = 'username'"
+        )
+        if not await col_check.fetchone():
+            # No old column — nothing to migrate
+            await SystemConfig.set_param(_MARKER_MCP_PERMS_UNIFIED_ID, True)
+            return False
+
+        # Backfill: resolve username -> unified_id via user_identities
+        # Step 1: resolve all target unified_ids and deduplicate.
+        # Multiple platform usernames may map to the same unified_id,
+        # so we keep only the first row per (target_uid, server_name).
+        await conn.execute(
+            """
+            WITH resolved AS (
+                SELECT p.id,
+                       COALESCE(
+                           (SELECT ui.unified_id FROM app.user_identities ui
+                            WHERE LOWER(ui.username) = LOWER(p.username) LIMIT 1),
+                           p.username
+                       ) AS target_uid,
+                       p.server_name,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY
+                               COALESCE(
+                                   (SELECT ui.unified_id FROM app.user_identities ui
+                                    WHERE LOWER(ui.username) = LOWER(p.username) LIMIT 1),
+                                   p.username
+                               ),
+                               p.server_name
+                           ORDER BY p.id
+                       ) AS rn
+                FROM app.user_mcp_permissions p
+                WHERE p.unified_id IS NULL AND p.username IS NOT NULL
+            )
+            DELETE FROM app.user_mcp_permissions
+            WHERE id IN (SELECT r.id FROM resolved r WHERE r.rn > 1)
+            """
+        )
+
+        # Step 2: also delete rows that conflict with already-migrated rows
+        await conn.execute(
+            """
+            WITH resolved AS (
+                SELECT p.id,
+                       COALESCE(
+                           (SELECT ui.unified_id FROM app.user_identities ui
+                            WHERE LOWER(ui.username) = LOWER(p.username) LIMIT 1),
+                           p.username
+                       ) AS target_uid,
+                       p.server_name
+                FROM app.user_mcp_permissions p
+                WHERE p.unified_id IS NULL AND p.username IS NOT NULL
+            )
+            DELETE FROM app.user_mcp_permissions
+            WHERE id IN (
+                SELECT r.id FROM resolved r
+                WHERE EXISTS (
+                    SELECT 1 FROM app.user_mcp_permissions existing
+                    WHERE existing.unified_id = r.target_uid
+                    AND existing.server_name = r.server_name
+                    AND existing.id != r.id
+                )
+            )
+            """
+        )
+
+        # Step 3: update remaining rows
+        result = await conn.execute(
+            """
+            UPDATE app.user_mcp_permissions p
+            SET unified_id = COALESCE(
+                (SELECT ui.unified_id FROM app.user_identities ui
+                 WHERE LOWER(ui.username) = LOWER(p.username)
+                 LIMIT 1),
+                p.username
+            )
+            WHERE p.unified_id IS NULL AND p.username IS NOT NULL
+            """
+        )
+        count = result.rowcount if hasattr(result, "rowcount") else 0
+        if count:
+            logger.info(
+                "Migrated %d MCP permission rows: username -> unified_id", count
+            )
+
+    await SystemConfig.set_param(_MARKER_MCP_PERMS_UNIFIED_ID, True)
+    logger.info("MCP permissions unified_id migration complete")
     return True

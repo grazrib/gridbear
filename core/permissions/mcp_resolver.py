@@ -31,8 +31,11 @@ def resolve_permissions(
     """
     expanded: set[str] = set()
 
+    # Compute unified_id once for all lookups
+    uid = unified_id or (get_unified_user_id(platform, username) if username else None)
+
     # 1. Base permissions: agent-level, user-level, or intersection
-    user_perms = get_user_mcp_permissions(username) if username else None
+    user_perms = get_user_mcp_permissions(uid) if uid else None
 
     if agent_mcp_permissions is not None and user_perms is not None:
         # Both configured: intersection (user can only use agent tools they're allowed)
@@ -48,8 +51,7 @@ def resolve_permissions(
     # else: neither configured, expanded stays empty
 
     # 2. Group permissions (by unified_id)
-    if username:
-        uid = unified_id or get_unified_user_id(platform, username)
+    if uid:
         group_perms = get_group_permissions(uid)
         expanded.update(group_perms)
 

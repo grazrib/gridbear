@@ -87,7 +87,7 @@ def _get_gmail_accounts() -> dict[str, list[str]]:
 USER_GMAIL_ACCOUNTS = _get_gmail_accounts()
 
 
-def get_user_mcp_permissions(username: str, unified_id: str = None) -> list[str] | None:
+def get_user_mcp_permissions(unified_id: str) -> list[str] | None:
     """Get MCP servers allowed for user. None = not configured (default behavior).
 
     Supports wildcard patterns:
@@ -96,15 +96,14 @@ def get_user_mcp_permissions(username: str, unified_id: str = None) -> list[str]
     try:
         from core.config_models import UserMcpPermission
 
-        username_lower = username.lower().lstrip("@")
-        rows = UserMcpPermission.search_sync([("username", "=", username_lower)])
+        uid = unified_id.lower()
+        rows = UserMcpPermission.search_sync([("unified_id", "=", uid)])
         if not rows:
             return None
 
         permissions = [r["server_name"] for r in rows]
 
         # Expand wildcards
-        uid = (unified_id or username_lower).lower()
         gmail_accounts = _get_gmail_accounts().get(uid, [])
 
         expanded = []

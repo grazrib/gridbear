@@ -53,8 +53,16 @@ def _bootstrap_runtime():
 
     ORMRegistry.initialize(db)
     namespace["orm"] = ORMRegistry
-    # Expose Model() helper for quick ORM access
-    namespace["Model"] = ORMRegistry.get
+
+    # Expose Model() helper for quick ORM access: Model('schema.name')
+    def _get_model(dotted_name: str):
+        parts = dotted_name.split(".", 1)
+        if len(parts) != 2:
+            print("Usage: Model('schema.name'), e.g. Model('oauth2.clients')")
+            return None
+        return ORMRegistry.get_model(parts[0], parts[1])
+
+    namespace["Model"] = _get_model
 
     # Secrets manager
     try:
@@ -101,9 +109,10 @@ def _bootstrap_runtime():
     namespace["am"] = am
 
     # Convenience helpers
-    namespace["plugins"] = pm.plugins
     namespace["runners"] = pm.runners
     namespace["services"] = pm.services
+    namespace["channels"] = pm.channels
+    namespace["mcp_providers"] = pm.mcp_providers
     namespace["agents"] = am.list_agents
 
     # Async helper: run coroutines from the sync REPL
@@ -122,7 +131,7 @@ def _print_banner(namespace: dict):
     pm = namespace.get("pm")
     am = namespace.get("am")
 
-    plugin_count = len(pm.plugins) if pm else 0
+    svc_count = len(pm.services) + len(pm.runners) + len(pm.mcp_providers) if pm else 0
     agent_list = am.list_agents() if am else []
 
     print()
@@ -130,22 +139,23 @@ def _print_banner(namespace: dict):
     print("  GridBear Interactive Shell")
     print("=" * 60)
     print()
-    print(f"  Plugins:  {plugin_count} loaded")
+    print(f"  Plugins:  {svc_count} loaded")
     print(f"  Agents:   {[a['name'] for a in agent_list]}")
     print()
     print("  Available objects:")
-    print("    db        — DatabaseManager")
-    print("    pm        — PluginManager")
-    print("    am        — AgentManager")
-    print("    orm       — ORM Registry")
-    print("    Model(n)  — Get ORM model by name (e.g. Model('oauth2.clients'))")
-    print("    secrets   — SecretsManager")
-    print("    plugins   — dict of loaded plugins")
-    print("    runners   — dict of runners")
-    print("    services  — dict of services")
-    print("    agents()  — list agents")
-    print("    run(coro) — run async coroutine")
-    print("    mcp_servers() — list MCP server names")
+    print("    db             — DatabaseManager")
+    print("    pm             — PluginManager")
+    print("    am             — AgentManager")
+    print("    orm            — ORM Registry")
+    print("    Model(n)       — Get ORM model (e.g. Model('oauth2.clients'))")
+    print("    secrets        — SecretsManager")
+    print("    runners        — dict of runners")
+    print("    services       — dict of services")
+    print("    channels       — dict of channels")
+    print("    mcp_providers  — dict of MCP providers")
+    print("    agents()       — list agents")
+    print("    run(coro)      — run async coroutine")
+    print("    mcp_servers()  — list MCP server names")
     print()
     print("  Type help(obj) for docs. Ctrl+D to exit.")
     print()

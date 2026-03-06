@@ -22,18 +22,21 @@
                 <table class="w-full">
                     <thead>
                         <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
-                            <th class="px-2 sm:px-5 py-3">Username</th>
+                            <th class="px-2 sm:px-5 py-3">User</th>
                             <th class="px-2 sm:px-5 py-3">Allowed MCP Servers</th>
                             <th class="px-2 sm:px-5 py-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-void-100 dark:divide-void-800">
-                        {% for username, servers in permissions.items() %}
+                        {% for uid, servers in permissions.items() %}
                         <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
                             <td class="px-2 sm:px-5 py-4">
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="font-medium text-void-900 dark:text-white">@{{ username }}</span>
-                                    {% for platform in user_platforms.get(username, []) %}
+                                    <span class="font-medium text-void-900 dark:text-white">{{ user_display.get(uid, uid) }}</span>
+                                    {% if user_display.get(uid, uid) != uid %}
+                                    <span class="text-xs text-void-400 dark:text-void-500">{{ uid }}</span>
+                                    {% endif %}
+                                    {% for platform in user_platforms.get(uid, []) %}
                                         {% set cui = channel_ui.get(platform, {}) %}
                                         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium"
                                               style="background: {{ cui.get('color', '#6B7280') }}15; color: {{ cui.get('color', '#6B7280') }}">
@@ -55,11 +58,11 @@
                             </td>
                             <td class="px-2 sm:px-5 py-4 text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <button onclick='editPermissions("{{ username }}", {{ servers | tojson }})'
+                                    <button onclick='editPermissions("{{ uid }}", {{ servers | tojson }})'
                                             class="px-3 py-1.5 rounded-lg bg-void-100 dark:bg-void-800 hover:bg-void-200 dark:hover:bg-void-700 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
                                         Edit
                                     </button>
-                                    <form method="POST" action="/permissions/delete/{{ username }}" class="inline">
+                                    <form method="POST" action="/permissions/delete/{{ uid }}" class="inline">
                                         {% include "partials/csrf_field.html" %}
                                         <button type="submit" class="px-3 py-1.5 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 text-sm font-medium transition-colors">
                                             <i class="fas fa-trash"></i>
@@ -182,9 +185,14 @@
                 {% include "partials/csrf_field.html" %}
 
                 <div>
-                    <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-2">Username</label>
-                    <input type="text" id="username" name="username" placeholder="@username" required
-                           class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white placeholder-void-400 dark:placeholder-void-500 focus:outline-none focus:border-nordic-500/50 transition-all">
+                    <label class="block text-sm font-medium text-void-700 dark:text-void-200 mb-2">User</label>
+                    <select id="unified_id" name="unified_id" required
+                            class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                        <option value="">-- Select user --</option>
+                        {% for uid, display in user_display.items()|sort(attribute='1') %}
+                        <option value="{{ uid }}">{{ display }}{% if display != uid %} ({{ uid }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
                 </div>
 
                 <div>
@@ -288,8 +296,8 @@ function flashForm(form) {
     setTimeout(() => form.classList.remove('ring-2', 'ring-nordic-500'), 2000);
 }
 
-function editPermissions(username, servers) {
-    document.getElementById('username').value = username;
+function editPermissions(unifiedId, servers) {
+    document.getElementById('unified_id').value = unifiedId;
     const checkboxes = document.querySelectorAll('#servers-checkboxes input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = false);
     servers.forEach(server => {

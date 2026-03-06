@@ -24,7 +24,6 @@ from config.logging_config import logger
 from config.settings import (
     get_unified_user_id,
     get_user_locale,
-    get_user_mcp_permissions,
 )
 from core.i18n import make_translator, set_language
 from core.interfaces.channel import BaseChannel, Message, UserInfo
@@ -280,12 +279,6 @@ class TelegramChannel(BaseChannel):
         """Cache username for scheduled tasks."""
         if username:
             self._user_usernames[user_id] = username.lower()
-
-    def _get_mcp_permissions(self, username: str | None) -> list[str] | None:
-        """Get MCP permissions for username."""
-        if username:
-            return get_user_mcp_permissions(username)
-        return None
 
     def _get_unified_id(self, username: str | None) -> str | None:
         """Get unified ID for username."""

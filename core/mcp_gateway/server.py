@@ -1016,10 +1016,13 @@ _EXECUTE_DISCOVERED_TOOL = {
     "name": "execute_discovered_tool",
     "description": (
         "Execute a tool that was previously found via search_tools. "
-        "IMPORTANT: You MUST call search_tools first before using this tool. "
-        "This tool will fail if the tool_name was not returned by a prior "
-        "search_tools call in this conversation. "
-        "Pass the exact tool name from search_tools results and its arguments."
+        "You MUST call search_tools first before using this tool. "
+        "Pass the exact tool_name from search_tools results AND its required "
+        "arguments in the 'arguments' object. "
+        "CRITICAL: The 'arguments' field MUST contain ALL required parameters "
+        "from the tool's inputSchema. For example, if a tool requires "
+        '\'messageId\', you must pass {"arguments": {"messageId": "..."}}. '
+        "Calling with empty arguments will fail."
     ),
     "inputSchema": {
         "type": "object",
@@ -1030,15 +1033,19 @@ _EXECUTE_DISCOVERED_TOOL = {
             },
             "arguments": {
                 "type": "object",
-                "description": "Arguments to pass to the tool",
+                "description": (
+                    "Tool arguments. MUST include all required parameters "
+                    "from the tool's inputSchema returned by search_tools. "
+                    "Use exact property names as shown in the schema."
+                ),
             },
         },
-        "required": ["tool_name"],
+        "required": ["tool_name", "arguments"],
     },
 }
 
-# Per-session discovered tools: session_id -> set of tool names
-_discovered_tools: dict[str, set[str]] = {}
+# Per-session discovered tools: session_id -> {tool_name: inputSchema}
+_discovered_tools: dict[str, dict[str, dict]] = {}
 
 
 async def _handle_search_tools(
@@ -1128,11 +1135,11 @@ async def _handle_search_tools(
     scored.sort(key=lambda x: x[0], reverse=True)
     top = scored[:limit]
 
-    # Update discovered tools for this session
+    # Update discovered tools for this session (store inputSchema for arg normalization)
     if session_id not in _discovered_tools:
-        _discovered_tools[session_id] = set()
+        _discovered_tools[session_id] = {}
     for _, tool, _ in top:
-        _discovered_tools[session_id].add(tool["name"])
+        _discovered_tools[session_id][tool["name"]] = tool.get("inputSchema", {})
 
     # Build response
     if not top:
@@ -1163,6 +1170,41 @@ async def _handle_search_tools(
     return [{"type": "text", "text": json.dumps(results, indent=2)}]
 
 
+def _normalize_tool_args(args: dict, schema: dict) -> dict:
+    """Normalize argument keys to match the tool's inputSchema.
+
+    LLMs may convert camelCase property names to snake_case (e.g. messageId
+    → message_id). This maps them back to the original schema property names
+    so the MCP server receives the keys it expects.
+    """
+    properties = schema.get("properties", {})
+    if not properties:
+        return args
+
+    # Build reverse mapping: snake_case → original camelCase name
+    key_map: dict[str, str] = {}
+    for prop_name in properties:
+        snake = _camel_to_snake(prop_name)
+        if snake != prop_name:
+            key_map[snake] = prop_name
+
+    if not key_map:
+        return args
+
+    normalized = {}
+    for key, value in args.items():
+        normalized[key_map.get(key, key)] = value
+    return normalized
+
+
+def _camel_to_snake(name: str) -> str:
+    """Convert camelCase to snake_case."""
+    import re
+
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+
+
 async def _handle_execute_discovered(
     arguments: dict,
     agent_name: str | None,
@@ -1174,11 +1216,18 @@ async def _handle_execute_discovered(
     tool_name = arguments.get("tool_name", "").strip()
     tool_args = arguments.get("arguments", {})
 
+    logger.debug(
+        "execute_discovered_tool: tool=%s, raw_args_keys=%s, raw_args=%s",
+        tool_name,
+        list(tool_args.keys()) if tool_args else [],
+        {k: repr(v)[:80] for k, v in tool_args.items()} if tool_args else {},
+    )
+
     if not tool_name:
         return [{"type": "text", "text": "Error: tool_name is required."}]
 
     # Verify the tool was discovered in this session
-    session_discovered = _discovered_tools.get(session_id, set())
+    session_discovered = _discovered_tools.get(session_id, {})
     if tool_name not in session_discovered:
         return [
             {
@@ -1189,6 +1238,31 @@ async def _handle_execute_discovered(
                 ),
             }
         ]
+
+    # Validate required arguments before dispatching to prevent
+    # backend server crashes and circuit breaker cascades
+    tool_schema = session_discovered.get(tool_name)
+    if tool_schema:
+        required = tool_schema.get("required", [])
+        if required and not tool_args:
+            props = tool_schema.get("properties", {})
+            param_hints = ", ".join(
+                f"{p} ({props[p].get('description', '')})" if p in props else p
+                for p in required
+            )
+            return [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Error: '{tool_name}' requires arguments: {required}. "
+                        f"You MUST include them in the 'arguments' object. "
+                        f"Parameters: {param_hints}"
+                    ),
+                }
+            ]
+        # Normalize argument keys: LLMs may convert camelCase to snake_case
+        if tool_args:
+            tool_args = _normalize_tool_args(tool_args, tool_schema)
 
     # Delegate to the standard dispatch (permissions already checked during search)
     t0 = time.monotonic()

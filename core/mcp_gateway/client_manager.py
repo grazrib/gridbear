@@ -29,6 +29,65 @@ def _sanitize_name(name: str) -> str:
     return _MCP_NAME_RE.sub("_", name)
 
 
+# camelCase → snake_case pattern
+_CAMEL_RE1 = re.compile(r"(.)([A-Z][a-z]+)")
+_CAMEL_RE2 = re.compile(r"([a-z0-9])([A-Z])")
+
+
+def _normalize_tool_args(args: dict, tool_name: str, tools: list[dict]) -> dict:
+    """Normalize argument keys to match the tool's inputSchema.
+
+    LLMs may convert camelCase property names to snake_case when generating
+    tool arguments (e.g. messageId → message_id).  This maps them back to
+    the original schema property names so the MCP server receives the keys
+    it expects.  Works for any runner (Claude, Mistral, Gemini, etc.).
+    """
+    if not args:
+        return args
+
+    # Find matching tool schema
+    schema = None
+    for tool in tools:
+        if tool.get("name") == tool_name:
+            schema = tool.get("inputSchema", {})
+            break
+
+    if not schema:
+        return args
+
+    properties = schema.get("properties", {})
+    if not properties:
+        return args
+
+    # Build reverse mapping: snake_case → original camelCase name
+    key_map: dict[str, str] = {}
+    for prop_name in properties:
+        snake = _CAMEL_RE2.sub(r"\1_\2", _CAMEL_RE1.sub(r"\1_\2", prop_name)).lower()
+        if snake != prop_name:
+            key_map[snake] = prop_name
+
+    if not key_map:
+        return args
+
+    # Only remap keys that need it
+    normalized = {}
+    changed = False
+    for key, value in args.items():
+        new_key = key_map.get(key, key)
+        if new_key != key:
+            changed = True
+        normalized[new_key] = value
+
+    if changed:
+        logger.debug(
+            "Normalized tool args for %s: %s",
+            tool_name,
+            {k: v for k, v in zip(args.keys(), normalized.keys()) if k != v},
+        )
+
+    return normalized if changed else args
+
+
 # Idle timeout: disconnect servers not used for this many seconds
 IDLE_TIMEOUT = int(os.getenv("MCP_IDLE_TIMEOUT", "300"))
 
@@ -599,7 +658,27 @@ class MCPClientManager:
             conn.last_used = time.time()
 
             try:
-                result = await conn.session.call_tool(tool_name, arguments)
+                # Normalize argument keys: LLMs may convert camelCase to
+                # snake_case (e.g. messageId → message_id).  Map back to the
+                # original property names from the tool's inputSchema.
+                normalized_args = _normalize_tool_args(arguments, tool_name, conn.tools)
+                if normalized_args != arguments:
+                    logger.info(
+                        "MCP Gateway: normalized args for %s/%s: %s → %s",
+                        server_name,
+                        tool_name,
+                        list(arguments.keys()),
+                        list(normalized_args.keys()),
+                    )
+                else:
+                    logger.debug(
+                        "MCP Gateway: args for %s/%s (no normalization needed): %s",
+                        server_name,
+                        tool_name,
+                        list(arguments.keys()),
+                    )
+
+                result = await conn.session.call_tool(tool_name, normalized_args)
                 if result.isError:
                     logger.warning(
                         "MCP Gateway: tool %s/%s returned isError=True, content=%s",

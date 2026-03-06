@@ -203,33 +203,33 @@ class ConfigManager:
 
     # ── User MCP permissions ────────────────────────────────────
 
-    def get_user_permissions(self, username: str) -> list[str] | None:
+    def get_user_permissions(self, unified_id: str) -> list[str] | None:
         """Get MCP servers allowed for user. None = not configured (use default)."""
-        username = username.lower().lstrip("@")
-        rows = UserMcpPermission.search_sync([("username", "=", username)])
+        unified_id = unified_id.lower()
+        rows = UserMcpPermission.search_sync([("unified_id", "=", unified_id)])
         if not rows:
             return None
         return [r["server_name"] for r in rows]
 
     def get_all_user_permissions(self) -> dict[str, list[str]]:
-        """Get all user permissions."""
+        """Get all user permissions keyed by unified_id."""
         rows = UserMcpPermission.search_sync()
         result: dict[str, list[str]] = {}
         for r in rows:
-            result.setdefault(r["username"], []).append(r["server_name"])
+            result.setdefault(r["unified_id"], []).append(r["server_name"])
         return result
 
-    def set_user_permissions(self, username: str, servers: list[str]):
+    def set_user_permissions(self, unified_id: str, servers: list[str]):
         """Set MCP servers allowed for user (replace all)."""
-        username = username.lower().lstrip("@")
-        UserMcpPermission.delete_multi_sync([("username", "=", username)])
+        unified_id = unified_id.lower()
+        UserMcpPermission.delete_multi_sync([("unified_id", "=", unified_id)])
         for server in servers:
-            UserMcpPermission.create_sync(username=username, server_name=server)
+            UserMcpPermission.create_sync(unified_id=unified_id, server_name=server)
 
-    def delete_user_permissions(self, username: str):
+    def delete_user_permissions(self, unified_id: str):
         """Remove user permissions (reverts to default)."""
-        username = username.lower().lstrip("@")
-        UserMcpPermission.delete_multi_sync([("username", "=", username)])
+        unified_id = unified_id.lower()
+        UserMcpPermission.delete_multi_sync([("unified_id", "=", unified_id)])
 
     def get_available_mcp_servers(self) -> list[str]:
         """Get list of all configured MCP servers from plugin registry."""

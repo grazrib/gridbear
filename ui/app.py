@@ -858,6 +858,7 @@ async def startup_cleanup():
         from core.config_migration import (
             migrate_admin_config_to_db,
             migrate_claude_settings_to_db,
+            migrate_mcp_perms_to_unified_id,
             migrate_rest_api_config_to_db,
         )
 
@@ -866,6 +867,7 @@ async def startup_cleanup():
         await migrate_claude_settings_to_db(
             BASE_DIR / "config" / "claude_settings.json"
         )
+        await migrate_mcp_perms_to_unified_id()
 
         # Reload template loader now that DB is available (theme from SystemConfig)
         rebuild_template_loader()
