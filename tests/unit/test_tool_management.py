@@ -402,7 +402,7 @@ class TestExecuteDiscoveredTool:
         )
 
         # Simulate prior search discovered this tool
-        _discovered_tools["sess-ok"] = {"odoo_mcp__search_read"}
+        _discovered_tools["sess-ok"] = {"odoo_mcp__search_read": {}}
 
         mock_dispatch = AsyncMock(
             return_value=[{"type": "text", "text": "result data"}]
