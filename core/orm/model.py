@@ -15,16 +15,22 @@ Example::
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
 from core.orm.exceptions import (
     MultipleRecordsError,
     RecordNotFoundError,
+    TenantAccessError,
+    TenantContextError,
+    TenantSafetyError,
     ValidationError,
 )
-from core.orm.fields import DateTime, Field, TsVector
+from core.orm.fields import DateTime, Field, ForeignKey, TsVector
 from core.orm.query import domain_to_sql, kwargs_to_domain, parse_order
+
+_logger = logging.getLogger(__name__)
 
 # Global reference set by Registry.initialize()
 _db = None
@@ -75,12 +81,29 @@ class ModelMeta(type):
         if name == "Model" and not bases:
             return cls
 
+        # Inherit _tenant_field from parent if not declared
+        if "_tenant_field" not in namespace:
+            for base in bases:
+                if hasattr(base, "_tenant_field") and base._tenant_field is not None:
+                    cls._tenant_field = base._tenant_field
+                    break
+
         # Collect declared fields
         fields_dict: dict[str, Field] = {}
         for attr_name, attr_value in list(namespace.items()):
             if isinstance(attr_value, Field):
                 attr_value.name = attr_name
                 fields_dict[attr_name] = attr_value
+
+        # Auto-inject tenant FK if _tenant_field is set and not already declared
+        tenant_field = getattr(cls, "_tenant_field", None)
+        if tenant_field and tenant_field not in fields_dict:
+            fk = ForeignKey(
+                "app.companies", on_delete="RESTRICT", required=True, index=True
+            )
+            fk.name = tenant_field
+            fields_dict[tenant_field] = fk
+            setattr(cls, tenant_field, fk)
 
         cls._fields = fields_dict
         cls._field_names = set(fields_dict.keys())
@@ -113,6 +136,7 @@ class Model(metaclass=ModelMeta):
     _indexes: list[tuple[str, str, str]] = []
     _dataclass: type | None = None
     _primary_key: str = "id"
+    _tenant_field: str | None = None
 
     @classmethod
     def _fq_table(cls) -> str:
@@ -163,6 +187,7 @@ class Model(metaclass=ModelMeta):
     async def create(cls, *, _tx=None, **values) -> dict:
         """Insert a new record. Returns the created row as dict (always dict, even with _dataclass)."""
         cls._validate_kwargs(values)
+        cls._inject_tenant_on_create(values)
 
         # Apply python_to_sql conversions
         sql_values = {}
@@ -208,7 +233,7 @@ class Model(metaclass=ModelMeta):
         """
         cls._validate_kwargs(kwargs, allow_pk=True)
         domain = kwargs_to_domain(kwargs)
-        where, params = domain_to_sql(domain, cls._valid_field_names())
+        where, params = domain_to_sql(domain, cls)
 
         query = f"SELECT * FROM {cls._fq_table()} WHERE {where}"
         rows = await cls._execute_all(query, tuple(params), _tx)
@@ -240,7 +265,7 @@ class Model(metaclass=ModelMeta):
 
         Returns list of dicts (or dataclasses if _dataclass set).
         """
-        where, params = domain_to_sql(domain or [], cls._valid_field_names())
+        where, params = domain_to_sql(domain or [], cls)
         order_sql = parse_order(order, cls._valid_field_names()) if order else ""
 
         query = f"SELECT * FROM {cls._fq_table()} WHERE {where} {order_sql}"
@@ -264,7 +289,14 @@ class Model(metaclass=ModelMeta):
         pk = cls._primary_key
         query = f'UPDATE {cls._fq_table()} SET {", ".join(set_parts)} WHERE "{pk}" = %s'
         params.append(record_id)
-        return await cls._execute_rowcount(query, tuple(params), _tx)
+        tenant_sql, tenant_params = cls._tenant_where_clause()
+        if tenant_sql:
+            query += f" AND {tenant_sql}"
+            params.extend(tenant_params)
+        rowcount = await cls._execute_rowcount(query, tuple(params), _tx)
+        if rowcount == 0 and tenant_sql:
+            await cls._check_tenant_access(record_id, _tx)
+        return rowcount
 
     @classmethod
     async def write_multi(cls, domain: list, *, _tx=None, **values) -> int:
@@ -275,7 +307,7 @@ class Model(metaclass=ModelMeta):
         if not set_parts:
             return 0
 
-        where, where_params = domain_to_sql(domain, cls._valid_field_names())
+        where, where_params = domain_to_sql(domain, cls)
         query = f"UPDATE {cls._fq_table()} SET {', '.join(set_parts)} WHERE {where}"
         return await cls._execute_rowcount(query, tuple(set_params + where_params), _tx)
 
@@ -284,12 +316,20 @@ class Model(metaclass=ModelMeta):
         """Delete a single record by primary key. Returns rows deleted."""
         pk = cls._primary_key
         query = f'DELETE FROM {cls._fq_table()} WHERE "{pk}" = %s'
-        return await cls._execute_rowcount(query, (record_id,), _tx)
+        params: list = [record_id]
+        tenant_sql, tenant_params = cls._tenant_where_clause()
+        if tenant_sql:
+            query += f" AND {tenant_sql}"
+            params.extend(tenant_params)
+        rowcount = await cls._execute_rowcount(query, tuple(params), _tx)
+        if rowcount == 0 and tenant_sql:
+            await cls._check_tenant_access(record_id, _tx)
+        return rowcount
 
     @classmethod
     async def delete_multi(cls, domain: list, *, _tx=None) -> int:
         """Delete records matching domain. Returns number of rows deleted."""
-        where, params = domain_to_sql(domain, cls._valid_field_names())
+        where, params = domain_to_sql(domain, cls)
         query = f"DELETE FROM {cls._fq_table()} WHERE {where}"
         return await cls._execute_rowcount(query, tuple(params), _tx)
 
@@ -298,7 +338,7 @@ class Model(metaclass=ModelMeta):
         """Check if at least one record exists. Accepts domain or kwargs."""
         if kwargs:
             domain = kwargs_to_domain(kwargs)
-        where, params = domain_to_sql(domain or [], cls._valid_field_names())
+        where, params = domain_to_sql(domain or [], cls)
         query = f"SELECT 1 FROM {cls._fq_table()} WHERE {where} LIMIT 1"
         rows = await cls._execute_all(query, tuple(params), _tx)
         return len(rows) > 0
@@ -308,22 +348,36 @@ class Model(metaclass=ModelMeta):
         """Count records. Accepts domain or kwargs."""
         if kwargs:
             domain = kwargs_to_domain(kwargs)
-        where, params = domain_to_sql(domain or [], cls._valid_field_names())
+        where, params = domain_to_sql(domain or [], cls)
         query = f"SELECT COUNT(*) as cnt FROM {cls._fq_table()} WHERE {where}"
         rows = await cls._execute_all(query, tuple(params), _tx)
         return rows[0]["cnt"] if rows else 0
 
     @classmethod
     async def raw_search(
-        cls, query: str, params: tuple = (), *, _tx=None
+        cls,
+        query: str,
+        params: tuple = (),
+        *,
+        _tx=None,
+        _bypass_tenant: bool = False,
     ) -> list[dict]:
         """Execute raw SQL with {table} placeholder. Returns list of dicts."""
+        cls._check_raw_tenant_safety(query, _bypass_tenant)
         query = query.replace("{table}", cls._fq_table())
         return await cls._execute_all(query, params, _tx)
 
     @classmethod
-    async def raw_execute(cls, query: str, params: tuple = (), *, _tx=None) -> int:
+    async def raw_execute(
+        cls,
+        query: str,
+        params: tuple = (),
+        *,
+        _tx=None,
+        _bypass_tenant: bool = False,
+    ) -> int:
         """Execute raw DML with {table} placeholder. Returns rowcount."""
+        cls._check_raw_tenant_safety(query, _bypass_tenant)
         query = query.replace("{table}", cls._fq_table())
         return await cls._execute_rowcount(query, params, _tx)
 
@@ -349,9 +403,15 @@ class Model(metaclass=ModelMeta):
         Returns the upserted row as dict.
         """
         cls._validate_kwargs(values, allow_pk=True)
+        cls._inject_tenant_on_create(values)
 
         if _conflict_fields is None:
             _conflict_fields = (cls._primary_key,)
+
+        # Auto-add tenant field to conflict fields for tenant-aware models
+        tenant_field = cls._tenant_field
+        if tenant_field and tenant_field not in _conflict_fields:
+            _conflict_fields = (tenant_field,) + _conflict_fields
 
         # Apply python_to_sql conversions
         sql_values: dict = {}
@@ -415,6 +475,7 @@ class Model(metaclass=ModelMeta):
     def create_sync(cls, **values) -> dict:
         """Synchronous create."""
         cls._validate_kwargs(values)
+        cls._inject_tenant_on_create(values)
 
         sql_values = {}
         for k, v in values.items():
@@ -447,7 +508,7 @@ class Model(metaclass=ModelMeta):
         """Synchronous get."""
         cls._validate_kwargs(kwargs, allow_pk=True)
         domain = kwargs_to_domain(kwargs)
-        where, params = domain_to_sql(domain, cls._valid_field_names())
+        where, params = domain_to_sql(domain, cls)
 
         query = f"SELECT * FROM {cls._fq_table()} WHERE {where}"
 
@@ -478,7 +539,7 @@ class Model(metaclass=ModelMeta):
         offset: int = 0,
     ) -> list[dict | Any]:
         """Synchronous search."""
-        where, params = domain_to_sql(domain or [], cls._valid_field_names())
+        where, params = domain_to_sql(domain or [], cls)
         order_sql = parse_order(order, cls._valid_field_names()) if order else ""
 
         query = f"SELECT * FROM {cls._fq_table()} WHERE {where} {order_sql}"
@@ -505,24 +566,38 @@ class Model(metaclass=ModelMeta):
         pk = cls._primary_key
         query = f'UPDATE {cls._fq_table()} SET {", ".join(set_parts)} WHERE "{pk}" = %s'
         params.append(record_id)
+        tenant_sql, tenant_params = cls._tenant_where_clause()
+        if tenant_sql:
+            query += f" AND {tenant_sql}"
+            params.extend(tenant_params)
 
         db = get_database()
         with db.acquire_sync() as conn:
             result = conn.execute(query, tuple(params))
             conn.commit()
-            return result.rowcount
+            rowcount = result.rowcount
+        if rowcount == 0 and tenant_sql:
+            cls._check_tenant_access_sync(record_id)
+        return rowcount
 
     @classmethod
     def delete_sync(cls, record_id) -> int:
         """Synchronous delete."""
         pk = cls._primary_key
+        query = f'DELETE FROM {cls._fq_table()} WHERE "{pk}" = %s'
+        params: list = [record_id]
+        tenant_sql, tenant_params = cls._tenant_where_clause()
+        if tenant_sql:
+            query += f" AND {tenant_sql}"
+            params.extend(tenant_params)
         db = get_database()
         with db.acquire_sync() as conn:
-            result = conn.execute(
-                f'DELETE FROM {cls._fq_table()} WHERE "{pk}" = %s', (record_id,)
-            )
+            result = conn.execute(query, tuple(params))
             conn.commit()
-            return result.rowcount
+            rowcount = result.rowcount
+        if rowcount == 0 and tenant_sql:
+            cls._check_tenant_access_sync(record_id)
+        return rowcount
 
     @classmethod
     def write_multi_sync(cls, domain: list, **values) -> int:
@@ -531,7 +606,7 @@ class Model(metaclass=ModelMeta):
         set_parts, set_params = cls._build_set_clause(values)
         if not set_parts:
             return 0
-        where, where_params = domain_to_sql(domain, cls._valid_field_names())
+        where, where_params = domain_to_sql(domain, cls)
         query = f"UPDATE {cls._fq_table()} SET {', '.join(set_parts)} WHERE {where}"
         db = get_database()
         with db.acquire_sync() as conn:
@@ -542,7 +617,7 @@ class Model(metaclass=ModelMeta):
     @classmethod
     def delete_multi_sync(cls, domain: list) -> int:
         """Synchronous unlink_multi."""
-        where, params = domain_to_sql(domain, cls._valid_field_names())
+        where, params = domain_to_sql(domain, cls)
         query = f"DELETE FROM {cls._fq_table()} WHERE {where}"
         db = get_database()
         with db.acquire_sync() as conn:
@@ -555,7 +630,7 @@ class Model(metaclass=ModelMeta):
         """Synchronous count."""
         if kwargs:
             domain = kwargs_to_domain(kwargs)
-        where, params = domain_to_sql(domain or [], cls._valid_field_names())
+        where, params = domain_to_sql(domain or [], cls)
         query = f"SELECT COUNT(*) as cnt FROM {cls._fq_table()} WHERE {where}"
         db = get_database()
         with db.acquire_sync() as conn:
@@ -567,7 +642,7 @@ class Model(metaclass=ModelMeta):
         """Synchronous exists."""
         if kwargs:
             domain = kwargs_to_domain(kwargs)
-        where, params = domain_to_sql(domain or [], cls._valid_field_names())
+        where, params = domain_to_sql(domain or [], cls)
         query = f"SELECT 1 FROM {cls._fq_table()} WHERE {where} LIMIT 1"
         db = get_database()
         with db.acquire_sync() as conn:
@@ -575,16 +650,22 @@ class Model(metaclass=ModelMeta):
         return len(rows) > 0
 
     @classmethod
-    def raw_search_sync(cls, query: str, params: tuple = ()) -> list[dict]:
+    def raw_search_sync(
+        cls, query: str, params: tuple = (), *, _bypass_tenant: bool = False
+    ) -> list[dict]:
         """Synchronous raw_search with {table} placeholder."""
+        cls._check_raw_tenant_safety(query, _bypass_tenant)
         query = query.replace("{table}", cls._fq_table())
         db = get_database()
         with db.acquire_sync() as conn:
             return conn.execute(query, params).fetchall()
 
     @classmethod
-    def raw_execute_sync(cls, query: str, params: tuple = ()) -> int:
+    def raw_execute_sync(
+        cls, query: str, params: tuple = (), *, _bypass_tenant: bool = False
+    ) -> int:
         """Synchronous raw_execute with {table} placeholder."""
+        cls._check_raw_tenant_safety(query, _bypass_tenant)
         query = query.replace("{table}", cls._fq_table())
         db = get_database()
         with db.acquire_sync() as conn:
@@ -602,9 +683,15 @@ class Model(metaclass=ModelMeta):
     ) -> dict:
         """Synchronous upsert."""
         cls._validate_kwargs(values, allow_pk=True)
+        cls._inject_tenant_on_create(values)
 
         if _conflict_fields is None:
             _conflict_fields = (cls._primary_key,)
+
+        # Auto-add tenant field to conflict fields for tenant-aware models
+        tenant_field = cls._tenant_field
+        if tenant_field and tenant_field not in _conflict_fields:
+            _conflict_fields = (tenant_field,) + _conflict_fields
 
         sql_values: dict = {}
         for k, v in values.items():
@@ -688,6 +775,100 @@ class Model(metaclass=ModelMeta):
                 set_parts.append(f'"{fname}" = NOW()')
 
         return set_parts, params
+
+    # ── Tenant helpers ───────────────────────────────────────────
+
+    @classmethod
+    def _inject_tenant_on_create(cls, values: dict) -> None:
+        """Inject tenant company_id into create values if model is tenant-aware."""
+        tenant_field = cls._tenant_field
+        if not tenant_field:
+            return
+        if tenant_field in values:
+            return  # explicitly provided
+
+        from core.tenant import SUPERADMIN_BYPASS, get_tenant
+
+        tenant_id = get_tenant()
+        if tenant_id is None:
+            raise TenantContextError(
+                f"No tenant context set for tenant-aware model "
+                f"{cls._schema}.{cls._name}. Call set_tenant() before creating."
+            )
+        if tenant_id == SUPERADMIN_BYPASS:
+            raise TenantContextError(
+                f"SUPERADMIN_BYPASS cannot auto-inject {tenant_field} on create. "
+                f"Provide {tenant_field} explicitly."
+            )
+        values[tenant_field] = tenant_id
+
+    @classmethod
+    def _tenant_where_clause(cls) -> tuple[str, list]:
+        """Return (sql_fragment, params) for tenant filtering on write/delete.
+
+        Returns ("", []) if model is not tenant-aware or bypass is active.
+        """
+        tenant_field = cls._tenant_field
+        if not tenant_field:
+            return "", []
+
+        from core.tenant import SUPERADMIN_BYPASS, get_tenant
+
+        tenant_id = get_tenant()
+        if tenant_id is None:
+            raise TenantContextError(
+                f"No tenant context set for tenant-aware model "
+                f"{cls._schema}.{cls._name}. Call set_tenant() before writing."
+            )
+        if tenant_id == SUPERADMIN_BYPASS:
+            return "", []
+        return f'"{tenant_field}" = %s', [tenant_id]
+
+    @classmethod
+    async def _check_tenant_access(cls, record_id, tx=None) -> None:
+        """After a write/delete returns 0 rows, check if record exists in another tenant."""
+        pk = cls._primary_key
+        query = f'SELECT 1 FROM {cls._fq_table()} WHERE "{pk}" = %s LIMIT 1'
+        rows = await cls._execute_all(query, (record_id,), tx)
+        if rows:
+            raise TenantAccessError(
+                f"Record {cls._schema}.{cls._name}(id={record_id}) "
+                f"belongs to another tenant."
+            )
+
+    @classmethod
+    def _check_tenant_access_sync(cls, record_id) -> None:
+        """Sync variant of _check_tenant_access."""
+        pk = cls._primary_key
+        query = f'SELECT 1 FROM {cls._fq_table()} WHERE "{pk}" = %s LIMIT 1'
+        db = get_database()
+        with db.acquire_sync() as conn:
+            rows = conn.execute(query, (record_id,)).fetchall()
+        if rows:
+            raise TenantAccessError(
+                f"Record {cls._schema}.{cls._name}(id={record_id}) "
+                f"belongs to another tenant."
+            )
+
+    @classmethod
+    def _check_raw_tenant_safety(cls, query: str, bypass: bool) -> None:
+        """Raise TenantSafetyError if raw query on tenant-aware model lacks safety."""
+        tenant_field = cls._tenant_field
+        if not tenant_field:
+            return
+        if bypass:
+            _logger.warning(
+                "Raw query on %s.%s with _bypass_tenant=True",
+                cls._schema,
+                cls._name,
+            )
+            return
+        if tenant_field not in query:
+            raise TenantSafetyError(
+                f"Raw query on tenant-aware model {cls._schema}.{cls._name} "
+                f"must include '{tenant_field}' in the query or use "
+                f"_bypass_tenant=True."
+            )
 
     @classmethod
     async def _execute_one(cls, query: str, params: tuple, tx=None) -> dict | None:

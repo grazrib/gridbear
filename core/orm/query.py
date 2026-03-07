@@ -12,9 +12,12 @@ Multiple top-level tuples are implicitly ANDed:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from core.orm.exceptions import ValidationError
+from core.orm.exceptions import TenantContextError, ValidationError
+
+if TYPE_CHECKING:
+    from core.orm.model import Model
 
 _VALID_OPERATORS = frozenset(
     {
@@ -49,21 +52,41 @@ _OP_SQL = {
 
 def domain_to_sql(
     domain: list,
-    valid_fields: set[str],
+    model_class: type[Model],
 ) -> tuple[str, list[Any]]:
     """Parse a domain expression into a SQL WHERE clause.
 
     Multiple top-level leaves are implicitly ANDed:
         [("a", "=", 1), ("b", "=", 2)]  →  "a" = %s AND "b" = %s
 
+    If the model has ``_tenant_field`` set, the current tenant context is
+    checked and a filter is automatically prepended (fail-closed).
+
     Args:
         domain: Odoo-style domain list.
-        valid_fields: Allowed field names (validated against model).
+        model_class: The ORM Model class (used for field validation + tenant logic).
 
     Returns:
         (where_clause, params) — clause WITHOUT the "WHERE" keyword.
         Empty domain returns ("TRUE", []).
     """
+    valid_fields = model_class._valid_field_names()
+
+    # Tenant injection
+    tenant_field = getattr(model_class, "_tenant_field", None)
+    if tenant_field:
+        from core.tenant import SUPERADMIN_BYPASS, get_tenant
+
+        tenant_id = get_tenant()
+        if tenant_id is None:
+            raise TenantContextError(
+                f"No tenant context set for tenant-aware model "
+                f"{model_class._schema}.{model_class._name}. "
+                f"Call set_tenant() before querying."
+            )
+        if tenant_id != SUPERADMIN_BYPASS:
+            domain = [(tenant_field, "=", tenant_id)] + list(domain or [])
+
     if not domain:
         return "TRUE", []
 

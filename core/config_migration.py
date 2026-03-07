@@ -21,6 +21,7 @@ _MARKER_KEY = "_migration_admin_config"
 _MARKER_REST_API_KEY = "_migration_rest_api_config"
 _MARKER_CLAUDE_SETTINGS_KEY = "_migration_claude_settings"
 _MARKER_MCP_PERMS_UNIFIED_ID = "_migration_mcp_perms_unified_id"
+_MARKER_DEFAULT_COMPANY = "_migration_default_company"
 
 
 async def migrate_admin_config_to_db(config_path: Path) -> bool:
@@ -393,4 +394,71 @@ async def migrate_mcp_perms_to_unified_id() -> bool:
 
     await SystemConfig.set_param(_MARKER_MCP_PERMS_UNIFIED_ID, True)
     logger.info("MCP permissions unified_id migration complete")
+    return True
+
+
+async def migrate_create_default_company() -> bool:
+    """Create the default company and assign all existing users to it.
+
+    Steps:
+      1. Create default company (id=1, slug="default")
+      2. Insert CompanyUser for each existing app.users row
+
+    Returns True if migration was performed, False if skipped.
+    """
+    from core.registry import get_database
+    from core.system_config import SystemConfig
+
+    marker = await SystemConfig.get_param(_MARKER_DEFAULT_COMPANY)
+    if marker:
+        return False
+
+    db = get_database()
+    async with db.acquire() as conn:
+        # Check if companies table exists (ORM should have created it)
+        tbl_check = await conn.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = 'app' AND table_name = 'companies'"
+        )
+        if not await tbl_check.fetchone():
+            logger.warning("app.companies table not found — skipping company migration")
+            await SystemConfig.set_param(_MARKER_DEFAULT_COMPANY, True)
+            return False
+
+        # 1. Create default company with OVERRIDING SYSTEM VALUE to force id=1
+        await conn.execute(
+            """
+            INSERT INTO app.companies (id, name, slug, active, locale, timezone, plan)
+            OVERRIDING SYSTEM VALUE
+            VALUES (1, 'Default', 'default', TRUE, 'en', 'UTC', 'free')
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
+
+        # Reset the sequence to avoid id collision on next insert
+        await conn.execute(
+            "SELECT setval(pg_get_serial_sequence('app.companies', 'id'), "
+            "GREATEST((SELECT MAX(id) FROM app.companies), 1))"
+        )
+
+        # 2. Insert CompanyUser for each existing user
+        result = await conn.execute(
+            """
+            INSERT INTO app.company_users (company_id, user_id, role, is_default)
+            SELECT 1, u.id,
+                   CASE WHEN u.is_superadmin THEN 'owner' ELSE 'admin' END,
+                   TRUE
+            FROM app.users u
+            WHERE NOT EXISTS (
+                SELECT 1 FROM app.company_users cu
+                WHERE cu.company_id = 1 AND cu.user_id = u.id
+            )
+            """
+        )
+        count = result.rowcount if hasattr(result, "rowcount") else 0
+        if count:
+            logger.info("Assigned %d users to default company", count)
+
+    await SystemConfig.set_param(_MARKER_DEFAULT_COMPANY, True)
+    logger.info("Default company migration complete")
     return True
