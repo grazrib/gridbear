@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from ui.auth.database import auth_db
 from ui.config_manager import ConfigManager
@@ -178,8 +178,8 @@ async def update_portal_user(
     auth_db.update_user(
         user_id,
         display_name=display_name.strip() or None,
-        is_superadmin=1 if is_superadmin == "1" else 0,
-        is_active=1 if is_active == "1" else 0,
+        is_superadmin=is_superadmin == "1",
+        is_active=is_active == "1",
     )
     return RedirectResponse(url="/users", status_code=303)
 
@@ -214,6 +214,56 @@ async def delete_portal_user(
 
     auth_db.delete_user(user_id)
     return RedirectResponse(url="/users", status_code=303)
+
+
+@router.post("/portal/{user_id}/generate-invite")
+async def generate_user_invite(
+    request: Request,
+    user_id: int,
+    _: bool = Depends(require_login),
+):
+    """Generate an invite token and return the link (JSON)."""
+    from core.models.user import User
+    from ui.auth.invite import generate_token
+
+    user = User.get_sync(id=user_id)
+    if not user:
+        return JSONResponse({"error": "User not found"}, status_code=404)
+
+    raw_token = generate_token(user_id, purpose="invite")
+    base_url = str(request.base_url).rstrip("/")
+    token_url = f"{base_url}/auth/setup-password?token={raw_token}"
+    has_email = bool(user.get("email"))
+
+    return JSONResponse(
+        {
+            "token_url": token_url,
+            "username": user["username"],
+            "has_email": has_email,
+        }
+    )
+
+
+@router.post("/portal/{user_id}/send-invite-email")
+async def send_invite_email_route(
+    request: Request,
+    user_id: int,
+    _: bool = Depends(require_login),
+):
+    """Send the invite email for an already-generated token."""
+    from core.models.user import User
+    from ui.auth.invite import generate_token, send_invite_email
+
+    user = User.get_sync(id=user_id)
+    if not user:
+        return JSONResponse({"error": "User not found"}, status_code=404)
+
+    raw_token = generate_token(user_id, purpose="invite")
+    base_url = str(request.base_url).rstrip("/")
+    token_url = f"{base_url}/auth/setup-password?token={raw_token}"
+
+    sent = await send_invite_email(user, token_url)
+    return JSONResponse({"sent": sent})
 
 
 # --- Generic platform routes (MUST be last to avoid matching /identity/*, /portal/*) ---

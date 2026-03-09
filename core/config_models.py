@@ -105,6 +105,21 @@ class UserServiceAccount(Model):
     ]
 
 
+class PasswordToken(Model):
+    """Tokens for user invites and password resets."""
+
+    _schema = "app"
+    _name = "password_tokens"
+    _tenant_field = None
+
+    user_id = fields.ForeignKey(User, on_delete="CASCADE", required=True, index=True)
+    token_hash = fields.Text(required=True)
+    purpose = fields.Text(required=True)  # "invite" or "reset"
+    expires_at = fields.DateTime(required=True)
+    used_at = fields.DateTime()
+    created_at = fields.DateTime(auto_now_add=True)
+
+
 class OAuthToken(Model):
     """Temporary tokens for OAuth2 authorization flows (TTL ~1 hour)."""
 

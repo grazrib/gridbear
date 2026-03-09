@@ -41,7 +41,7 @@
                 </tr>
             </thead>
                 {% for user in users %}
-                <tbody x-data="{ editing: false }" class="divide-y divide-void-100 dark:divide-void-800">
+                <tbody x-data="{ editing: false, inviteOpen: false, inviteUrl: '', inviteSending: false, inviteSent: false, inviteHasEmail: false }" class="divide-y divide-void-100 dark:divide-void-800">
                 <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
                     <td class="px-2 sm:px-5 py-3">
                         <span class="font-mono text-sm text-void-900 dark:text-white">{{ user.username }}</span>
@@ -94,6 +94,18 @@
                     <td class="px-2 sm:px-5 py-3 text-xs text-void-500 hidden lg:table-cell">{{ user.last_login or 'Never' }}</td>
                     <td class="px-2 sm:px-5 py-3 text-right">
                         <div class="flex items-center justify-end gap-1">
+                            <button @click="
+                                fetch('/users/portal/{{ user.id }}/generate-invite', {
+                                    method: 'POST',
+                                    headers: {'X-CSRF-Token': document.querySelector('[name=csrf_token]').value}
+                                })
+                                .then(r => r.json())
+                                .then(d => { inviteUrl = d.token_url; inviteHasEmail = d.has_email; inviteSent = false; inviteOpen = true; })
+                                "
+                                    class="p-1.5 rounded-lg hover:bg-frost-500/10 text-void-400 hover:text-frost-500 transition-colors"
+                                    title="Send invite">
+                                <i class="fas fa-envelope text-xs"></i>
+                            </button>
                             <button @click="editing = !editing"
                                     class="p-1.5 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-colors"
                                     title="Edit">
@@ -221,6 +233,65 @@
                                 <i class="fas fa-key"></i> Reset
                             </button>
                         </form>
+                    </td>
+                </tr>
+                <!-- Invite modal (fixed overlay, no x-teleport needed) -->
+                <tr x-show="inviteOpen" x-cloak style="display: none;">
+                    <td colspan="9" class="p-0">
+                        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                             @click.self="inviteOpen = false" @keydown.escape.window="inviteOpen = false">
+                            <div class="bg-white dark:bg-void-900 rounded-2xl border border-void-200 dark:border-void-700 shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+                                <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+                                    <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                                        <i class="fas fa-envelope text-frost-500"></i>
+                                        Invite {{ user.username }}
+                                    </h3>
+                                </div>
+                                <div class="p-5 space-y-4">
+                                    <div>
+                                        <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Setup link</label>
+                                        <div class="flex gap-2">
+                                            <input type="text" :value="inviteUrl" readonly
+                                                   class="flex-1 bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-xs text-void-700 dark:text-void-300 font-mono select-all">
+                                            <button @click="navigator.clipboard.writeText(inviteUrl)"
+                                                    class="px-3 py-2 rounded-lg bg-void-200 dark:bg-void-700 hover:bg-void-300 dark:hover:bg-void-600 text-void-700 dark:text-void-200 text-xs font-medium transition-colors"
+                                                    title="Copy to clipboard">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div x-show="inviteHasEmail">
+                                            <button @click="
+                                                inviteSending = true;
+                                                fetch('/users/portal/{{ user.id }}/send-invite-email', {
+                                                    method: 'POST',
+                                                    headers: {'X-CSRF-Token': document.querySelector('[name=csrf_token]').value}
+                                                })
+                                                .then(r => r.json())
+                                                .then(d => { inviteSending = false; inviteSent = d.sent; })
+                                                .catch(() => { inviteSending = false; })
+                                                "
+                                                :disabled="inviteSending || inviteSent"
+                                                class="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors flex items-center gap-2"
+                                                :class="inviteSent ? 'bg-green-500' : 'bg-nordic-500 hover:bg-nordic-600'">
+                                                <i x-show="inviteSending" class="fas fa-spinner fa-spin text-xs"></i>
+                                                <i x-show="inviteSent" class="fas fa-check text-xs"></i>
+                                                <i x-show="!inviteSending && !inviteSent" class="fas fa-paper-plane text-xs"></i>
+                                                <span x-text="inviteSent ? 'Email sent' : (inviteSending ? 'Sending...' : 'Send via email')"></span>
+                                            </button>
+                                        </div>
+                                        <div x-show="!inviteHasEmail">
+                                            <span class="text-xs text-void-400 italic">No email address — share the link manually</span>
+                                        </div>
+                                        <button @click="inviteOpen = false"
+                                                class="px-4 py-2 rounded-lg bg-void-200 dark:bg-void-700 hover:bg-void-300 dark:hover:bg-void-600 text-void-700 dark:text-void-200 text-sm font-medium transition-colors">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </td>
                 </tr>
                 </tbody>

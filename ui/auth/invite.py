@@ -12,7 +12,8 @@ from pathlib import Path
 import bcrypt
 import yaml
 
-from core.config_models import PasswordToken, User
+from core.config_models import PasswordToken
+from core.models.user import User
 
 AGENTS_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "agents"
 

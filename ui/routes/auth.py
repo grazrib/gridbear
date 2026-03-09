@@ -1180,3 +1180,95 @@ async def revoke_all_sessions(request: Request, user: dict = Depends(require_use
     )
 
     return RedirectResponse(url="/auth/security", status_code=303)
+
+
+# --- Password setup (invite / reset token) ---
+
+
+@router.get("/setup-password", response_class=HTMLResponse)
+async def setup_password_page(request: Request):
+    """Display password setup form for invite/reset tokens."""
+    from ui.auth.invite import validate_token
+
+    raw_token = request.query_params.get("token", "")
+    if not raw_token:
+        return templates.TemplateResponse(
+            "auth/setup_password.html",
+            {"request": request, "error": "Missing token.", "token": ""},
+        )
+
+    token_data = validate_token(raw_token)
+    if not token_data:
+        return templates.TemplateResponse(
+            "auth/setup_password.html",
+            {"request": request, "error": "Invalid or expired link.", "token": ""},
+        )
+
+    return templates.TemplateResponse(
+        "auth/setup_password.html",
+        {
+            "request": request,
+            "token": raw_token,
+            "username": token_data["unified_id"],
+            "display_name": token_data.get("display_name"),
+            "error": None,
+            "success": None,
+        },
+    )
+
+
+@router.post("/setup-password")
+async def setup_password(
+    request: Request,
+    token: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+):
+    """Process password setup from invite/reset token."""
+    from ui.auth.invite import consume_token, validate_token
+
+    token_data = validate_token(token)
+    if not token_data:
+        return templates.TemplateResponse(
+            "auth/setup_password.html",
+            {"request": request, "error": "Invalid or expired link.", "token": ""},
+        )
+
+    if password != password_confirm:
+        return templates.TemplateResponse(
+            "auth/setup_password.html",
+            {
+                "request": request,
+                "error": "Passwords do not match.",
+                "token": token,
+                "username": token_data["unified_id"],
+                "display_name": token_data.get("display_name"),
+                "success": None,
+            },
+        )
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return templates.TemplateResponse(
+            "auth/setup_password.html",
+            {
+                "request": request,
+                "error": f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
+                "token": token,
+                "username": token_data["unified_id"],
+                "display_name": token_data.get("display_name"),
+                "success": None,
+            },
+        )
+
+    auth_db.update_user(token_data["user_id"], password_hash=hash_password(password))
+    consume_token(token_data["token_id"])
+
+    return templates.TemplateResponse(
+        "auth/setup_password.html",
+        {
+            "request": request,
+            "success": "Password set successfully! You can now log in.",
+            "error": None,
+            "token": "",
+        },
+    )
