@@ -31,7 +31,6 @@ pre-commit install --hook-type pre-push
 
 # Copy config templates
 cp .env.example .env
-cp config/plugins.json.example config/plugins.json
 # Edit .env with your settings (at minimum: POSTGRES_PASSWORD)
 
 # Start infrastructure
