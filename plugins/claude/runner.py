@@ -360,6 +360,10 @@ class ClaudeRunner(BaseRunner):
         # Fall back to subprocess mode
         feedback_task = None
 
+        # Tell MCP gateway which user is making this request
+        if unified_id:
+            await self._set_user_context(agent_id or "", unified_id)
+
         try:
             cmd = self._build_command(
                 prompt,
@@ -762,5 +766,9 @@ class ClaudeRunner(BaseRunner):
                 )
                 if resp.status_code != 200:
                     logger.warning("Set user context failed: HTTP %d", resp.status_code)
+                else:
+                    logger.debug(
+                        "Set user context: agent=%s user=%s", agent_id, unified_id
+                    )
         except Exception as e:
             logger.warning("Set user context failed: %s", e)
