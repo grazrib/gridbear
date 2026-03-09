@@ -28,6 +28,7 @@ from ui.routes import (
     auth,
     chat_api,
     chat_proxy,
+    companies,
     me,
     memory,
     notifications,
@@ -245,8 +246,65 @@ async def add_plugin_context(request: Request, call_next):
 
     path = request.url.path
 
+    # Tenant defaults (so templates never crash on missing attributes)
+    request.state.active_company_id = None
+    request.state.active_company_name = None
+    request.state.user_companies = []
+
     # Make current user available to all templates via request.state
     request.state.current_user = get_current_user(request)
+
+    # ── Tenant context ──────────────────────────────────────────────
+    user = request.state.current_user
+    if user:
+        try:
+            from core.models.company import Company
+            from core.models.company_user import CompanyUser
+            from core.tenant import SUPERADMIN_BYPASS, clear_tenant, set_tenant
+
+            cu_rows = CompanyUser.search_sync(
+                [("user_id", "=", user["id"])],
+            )
+            if cu_rows:
+                # Resolve company names for the switcher dropdown
+                company_ids = [row["company_id"] for row in cu_rows]
+                companies = Company.search_sync(
+                    [("id", "in", company_ids)],
+                )
+                name_map = {c["id"]: c["name"] for c in companies}
+
+                company_list = []
+                default_company_id = None
+                for row in cu_rows:
+                    cid = row["company_id"]
+                    entry = dict(row)
+                    entry["company_name"] = name_map.get(cid, f"Company #{cid}")
+                    company_list.append(entry)
+                    if row.get("is_default"):
+                        default_company_id = cid
+
+                # Fallback to first company if no explicit default
+                if default_company_id is None:
+                    default_company_id = company_ids[0]
+
+                active_company_id = default_company_id
+
+                # Superadmin session override (company switcher)
+                if user.get("is_superadmin"):
+                    session_override = request.session.get("active_company_id")
+                    if session_override is not None:
+                        active_company_id = int(session_override)
+
+                set_tenant(active_company_id, tuple(company_ids))
+                request.state.active_company_id = active_company_id
+                request.state.user_companies = company_list
+                request.state.active_company_name = name_map.get(active_company_id)
+            elif user.get("is_superadmin"):
+                # Superadmin with no company assignment: bypass mode
+                set_tenant(SUPERADMIN_BYPASS)
+        except Exception as exc:
+            # Graceful degradation: tables may not exist yet during bootstrap
+            logger.debug("Tenant context setup: %s", exc)
 
     # Enforce role-based access: non-admin users can only access public paths
     public_prefixes = (
@@ -261,13 +319,29 @@ async def add_plugin_context(request: Request, call_next):
     is_public = any(path.startswith(p) for p in public_prefixes) or path == "/mcp"
 
     if not is_public:
-        user = request.state.current_user
         if user and not user.get("is_superadmin"):
+            try:
+                from core.tenant import clear_tenant
+
+                clear_tenant()
+            except Exception:
+                pass
             return RedirectResponse(url="/me", status_code=303)
 
     request.state.plugins = get_enabled_plugins_by_type()
     request.state.plugin_menus = plugin_registry.discover_plugin_menus()
-    response = await call_next(request)
+
+    try:
+        response = await call_next(request)
+    finally:
+        # Clear tenant context to prevent leakage between requests
+        try:
+            from core.tenant import clear_tenant
+
+            clear_tenant()
+        except Exception:
+            pass
+
     # BaseHTTPMiddleware can cause Content-Length mismatch on large responses;
     # let the server recalculate it from the actual body
     if "content-length" in response.headers:
@@ -432,6 +506,7 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(agents.router, prefix="/agents", tags=["agents"])
 app.include_router(tools.router, prefix="/tools", tags=["tools"])
 app.include_router(users.router, prefix="/users", tags=["users"])
+app.include_router(companies.router, prefix="/companies", tags=["companies"])
 app.include_router(permissions.router, prefix="/permissions", tags=["permissions"])
 app.include_router(memory.router, prefix="/memory", tags=["memory"])
 app.include_router(
@@ -860,6 +935,8 @@ async def startup_cleanup():
             migrate_claude_settings_to_db,
             migrate_mcp_perms_to_unified_id,
             migrate_rest_api_config_to_db,
+            migrate_unify_users,
+            migrate_user_platforms,
         )
 
         await migrate_admin_config_to_db(BASE_DIR / "config" / "admin_config.json")
@@ -868,6 +945,8 @@ async def startup_cleanup():
             BASE_DIR / "config" / "claude_settings.json"
         )
         await migrate_mcp_perms_to_unified_id()
+        await migrate_unify_users()
+        await migrate_user_platforms()
 
         # Reload template loader now that DB is available (theme from SystemConfig)
         rebuild_template_loader()

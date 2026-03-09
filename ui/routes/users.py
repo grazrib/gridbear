@@ -32,6 +32,9 @@ def get_template_context(request: Request, **kwargs) -> dict:
         "enabled_mcp": plugins.get("mcp", []),
         "enabled_runners": plugins.get("runners", []),
         "plugin_menus": plugin_menus,
+        "active_company_id": getattr(request.state, "active_company_id", None),
+        "user_companies": getattr(request.state, "user_companies", []),
+        "active_company_name": getattr(request.state, "active_company_name", None),
         **kwargs,
     }
 
@@ -44,23 +47,28 @@ def _get_valid_channel_names() -> set[str]:
 @router.get("/", response_class=HTMLResponse)
 async def users_page(request: Request, _: bool = Depends(require_login)):
     config = ConfigManager()
-    portal_users = auth_db.get_all_users()
+    users = auth_db.get_all_users()
 
-    # Build channels list with their users
+    # Build channels list with their authorized users
     channels = get_available_channels()
     for ch in channels:
         ch["users"] = config.get_channel_users(ch["name"])
+
+    # Merge platform identities into each user (locale is already on User)
+    user_identities = config.get_user_identities()
+    for u in users:
+        uid = u["username"]
+        u["platforms"] = user_identities.get(uid, {})
+        if not u.get("locale"):
+            u["locale"] = "en"
 
     return templates.TemplateResponse(
         "users.html",
         get_template_context(
             request,
             channels=channels,
-            user_identities=config.get_user_identities(),
-            user_locales=config.get_user_locales(),
+            users=users,
             available_locales=config.get_available_locales(),
-            portal_users=portal_users,
-            all_unified_ids=config.get_all_unified_ids(),
         ),
     )
 
@@ -132,19 +140,17 @@ async def create_portal_user(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    unified_id: str = Form(default=""),
     display_name: str = Form(default=""),
     is_superadmin: str = Form(default=""),
     _: bool = Depends(require_login),
 ):
-    """Create a new portal user."""
+    """Create a new user."""
     from ui.routes.auth import hash_password
 
     username = username.strip().lower()
     if not username or len(password) < MIN_PASSWORD_LENGTH:
         return RedirectResponse(url="/users?error=invalid_input", status_code=303)
 
-    # Check if username already exists
     existing = auth_db.get_user_by_username(username)
     if existing:
         return RedirectResponse(url="/users?error=username_exists", status_code=303)
@@ -152,7 +158,6 @@ async def create_portal_user(
     auth_db.create_user(
         username=username,
         password_hash=hash_password(password),
-        unified_id=unified_id.strip() or None,
         display_name=display_name.strip() or None,
         is_superadmin=is_superadmin == "1",
     )
@@ -164,16 +169,14 @@ async def create_portal_user(
 async def update_portal_user(
     request: Request,
     user_id: int,
-    unified_id: str = Form(default=""),
     display_name: str = Form(default=""),
     is_superadmin: str = Form(default=""),
     is_active: str = Form(default=""),
     _: bool = Depends(require_login),
 ):
-    """Update a portal user."""
+    """Update a user."""
     auth_db.update_user(
         user_id,
-        unified_id=unified_id.strip() or None,
         display_name=display_name.strip() or None,
         is_superadmin=1 if is_superadmin == "1" else 0,
         is_active=1 if is_active == "1" else 0,

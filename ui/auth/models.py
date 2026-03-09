@@ -12,31 +12,12 @@ Declarative models for authentication system:
 
 from __future__ import annotations
 
+from core.models.user import User
 from core.orm import Model, fields
 
-
-class AdminUser(Model):
-    """Admin user account."""
-
-    _schema = "admin"
-    _name = "users"
-
-    username = fields.Text(required=True, unique=True)
-    email = fields.Text()
-    password_hash = fields.Text(required=True)
-    totp_secret = fields.Text()
-    totp_enabled = fields.Boolean(default=False)
-    is_active = fields.Boolean(default=True)
-    is_superadmin = fields.Boolean(default=False)
-    unified_id = fields.Text(index=True)
-    display_name = fields.Text()
-    avatar_url = fields.Text()
-    locale = fields.Text(default="en")
-    webauthn_enabled = fields.Boolean(default=False)
-    created_at = fields.DateTime(auto_now_add=True)
-    last_login = fields.DateTime()
-    failed_login_attempts = fields.Integer(default=0)
-    lockout_until = fields.DateTime()
+# Backward-compat alias — all auth code references AdminUser without mass rename.
+# AdminUser now points to app.users (the canonical User model).
+AdminUser = User
 
 
 class RecoveryCode(Model):

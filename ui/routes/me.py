@@ -83,7 +83,7 @@ async def _notify_expired_tokens(connections: list[dict], user: dict) -> None:
     from ui.services.notifications import NotificationService
 
     ns = NotificationService.get()
-    unified_id = user.get("unified_id", "")
+    uid = user.get("username", "")
     for conn in expired:
         await ns.create(
             category="oauth_expired",
@@ -91,7 +91,7 @@ async def _notify_expired_tokens(connections: list[dict], user: dict) -> None:
             title=f"Token scaduto: {conn['name']}",
             message="Il token OAuth2 è scaduto. Rinnova la connessione.",
             source=conn.get("plugin_name"),
-            user_id=unified_id,
+            user_id=uid,
             action_url="/me/connections",
         )
 
@@ -101,7 +101,7 @@ async def _try_refresh_expired_tokens(connections: list[dict], user: dict) -> No
 
     Mutates connection dicts in-place: sets token_expired=False on success.
     """
-    unified_id = user.get("unified_id") or user.get("username")
+    unified_id = user["username"]
     if not unified_id:
         return
 
@@ -221,7 +221,7 @@ def _get_service_connections(user: dict) -> list[dict]:
     resolver = get_path_resolver()
     connections = []
 
-    unified_id = user.get("unified_id") or user.get("username")
+    unified_id = user["username"]
     all_manifests = resolver.discover_all() if resolver else {}
 
     for plugin_name in get_enabled_plugins():
@@ -630,7 +630,7 @@ async def connection_connect_post(
 ):
     """Store credentials from connection form."""
     form = await request.form()
-    unified_id = user.get("unified_id") or user.get("username")
+    unified_id = user["username"]
 
     from ui.secrets_manager import secrets_manager
 
@@ -742,7 +742,7 @@ async def connection_oauth_callback(
                             token_data["expires_at"] = (
                                 time.time() + token_data["expires_in"]
                             )
-                        unified_id = user.get("unified_id") or user.get("username")
+                        unified_id = user["username"]
                         from ui.secrets_manager import secrets_manager
 
                         secrets_manager.set(
@@ -781,7 +781,7 @@ async def connection_disconnect(
     user: dict = Depends(require_user),
 ):
     """Remove stored credentials for a connection."""
-    unified_id = user.get("unified_id") or user.get("username")
+    unified_id = user["username"]
     from ui.secrets_manager import secrets_manager
 
     # Standard 1:1 disconnect
@@ -805,7 +805,7 @@ async def tools_page(request: Request, user: dict = Depends(require_user)):
     client_manager = get_client_manager()
     if client_manager:
         try:
-            unified_id = user.get("unified_id") or user.get("username")
+            unified_id = user["username"]
             all_tools = await client_manager.list_all_tools(unified_id=unified_id)
             prefs = get_auth_db().get_user_tool_prefs(unified_id)
 
@@ -858,7 +858,7 @@ async def tools_toggle(request: Request, user: dict = Depends(require_user)):
     if not tool_name:
         return api_error(400, "Missing tool_name", "validation_error")
 
-    uid = user.get("unified_id") or user.get("username")
+    uid = user["username"]
     get_auth_db().set_user_tool_pref(uid, tool_name, enabled)
 
     return api_ok()

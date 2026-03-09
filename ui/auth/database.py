@@ -16,30 +16,15 @@ logger = logging.getLogger(__name__)
 
 PG_SCHEMA = """
 -- Migration: 001_admin_auth
+-- NOTE: admin.users no longer created here — the canonical user table
+-- is app.users, managed by the ORM (core/models/user.py).
+-- Auth-related tables stay in admin schema but FK to app.users.
 CREATE SCHEMA IF NOT EXISTS admin;
+CREATE SCHEMA IF NOT EXISTS app;
 
-CREATE TABLE IF NOT EXISTS admin.users (
-    id SERIAL PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    email TEXT,
-    password_hash TEXT NOT NULL,
-    totp_secret TEXT,
-    totp_enabled BOOLEAN DEFAULT FALSE,
-    is_active BOOLEAN DEFAULT TRUE,
-    is_superadmin BOOLEAN DEFAULT FALSE,
-    unified_id TEXT,
-    display_name TEXT,
-    avatar_url TEXT,
-    locale TEXT DEFAULT 'en',
-    webauthn_enabled BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    last_login TIMESTAMPTZ,
-    failed_login_attempts INTEGER DEFAULT 0,
-    lockout_until TIMESTAMPTZ
-);
 CREATE TABLE IF NOT EXISTS admin.recovery_codes (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES admin.users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
     code_hash TEXT NOT NULL,
     used_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -47,7 +32,7 @@ CREATE TABLE IF NOT EXISTS admin.recovery_codes (
 CREATE TABLE IF NOT EXISTS admin.sessions (
     id SERIAL PRIMARY KEY,
     session_token TEXT UNIQUE NOT NULL,
-    user_id INTEGER NOT NULL REFERENCES admin.users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
     ip_address TEXT,
     user_agent TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -66,7 +51,7 @@ CREATE TABLE IF NOT EXISTS admin.audit_log (
 );
 CREATE TABLE IF NOT EXISTS admin.webauthn_credentials (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES admin.users(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL,
     credential_id BYTEA NOT NULL UNIQUE,
     public_key BYTEA NOT NULL,
     sign_count INTEGER DEFAULT 0,
@@ -82,7 +67,6 @@ CREATE TABLE IF NOT EXISTS admin.user_tool_preferences (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(unified_id, tool_name)
 );
-CREATE INDEX IF NOT EXISTS idx_users_unified_id ON admin.users(unified_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON admin.sessions(session_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON admin.sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON admin.sessions(expires_at);
@@ -154,7 +138,6 @@ class AuthDatabase:
         password_hash: str,
         email: Optional[str] = None,
         is_superadmin: bool = False,
-        unified_id: Optional[str] = None,
         display_name: Optional[str] = None,
         locale: str = "en",
     ) -> int:
@@ -166,11 +149,23 @@ class AuthDatabase:
             password_hash=password_hash,
             email=email,
             is_superadmin=is_superadmin,
-            unified_id=unified_id,
             display_name=display_name,
             locale=locale,
+            company_id=1,
         )
-        return row["id"]
+        user_id = row["id"]
+
+        # Auto-assign new user to default company (id=1)
+        try:
+            from core.models.company_user import CompanyUser
+
+            CompanyUser.create_sync(
+                company_id=1, user_id=user_id, role="member", is_default=True
+            )
+        except Exception as exc:
+            logger.debug("Auto-assign to default company: %s", exc)
+
+        return user_id
 
     def get_user_by_username(self, username: str) -> Optional[dict]:
         """Get user by username."""
@@ -187,16 +182,6 @@ class AuthDatabase:
         from ui.auth.models import AdminUser
 
         results = AdminUser.search_sync([("id", "=", user_id)], limit=1)
-        return dict(results[0]) if results else None
-
-    def get_user_by_unified_id(self, unified_id: str) -> Optional[dict]:
-        """Get user by unified_id."""
-        from ui.auth.models import AdminUser
-
-        results = AdminUser.search_sync(
-            [("unified_id", "=", unified_id), ("is_active", "=", True)],
-            limit=1,
-        )
         return dict(results[0]) if results else None
 
     def get_all_users(self) -> list[dict]:
@@ -225,7 +210,6 @@ class AuthDatabase:
             "totp_enabled",
             "is_active",
             "is_superadmin",
-            "unified_id",
             "display_name",
             "avatar_url",
             "locale",

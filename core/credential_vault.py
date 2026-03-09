@@ -23,37 +23,34 @@ def _user_prefix(user_id: str) -> str:
 
 
 def resolve_user_id(raw_id: str) -> str:
-    """Resolve any user identifier to the unified_id used for vault keys.
+    """Resolve any user identifier to the username used for vault keys.
 
     Tries in order:
-    1. Direct match on unified_id key in user_identities config
-    2. Match on any platform username value in user_identities
-    3. Match on portal user username → their unified_id
-    4. Fallback: return raw_id stripped of @ and lowered
+    1. Direct match on User.username
+    2. Match on platform_username in UserPlatform → User.username
+    3. Fallback: return raw_id stripped of @ and lowered
     """
     raw_id = raw_id.strip().lstrip("@").lower()
 
     try:
-        from core.config_models import UserIdentity
+        from core.models.user import User
 
-        # 1. Direct match on unified_id
-        if UserIdentity.exists_sync(unified_id=raw_id):
+        # 1. Direct match on username
+        if User.exists_sync(username=raw_id):
             return raw_id
-
-        # 2. Match on any platform username
-        rows = UserIdentity.search_sync([("username", "=", raw_id)])
-        if rows:
-            return rows[0]["unified_id"]
     except Exception:
         pass
 
-    # 3. Check portal users
+    # 2. Match on platform username
     try:
-        from ui.auth.database import get_auth_db
+        from core.config_models import UserPlatform
+        from core.models.user import User
 
-        user = get_auth_db().get_user_by_username(raw_id)
-        if user and user.get("unified_id"):
-            return user["unified_id"]
+        rows = UserPlatform.search_sync([("platform_username", "=", raw_id)])
+        if rows:
+            user = User.get_sync(id=rows[0]["user_id"])
+            if user:
+                return user["username"]
     except Exception:
         pass
 

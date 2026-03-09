@@ -4,155 +4,35 @@
 {% block title %}Users - GridBear{% endblock %}
 {% block page_title %}User Management{% endblock %}
 {% block breadcrumb_active %}Users{% endblock %}
-{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage authorized users and unified identities</p>{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage user accounts, platform identities and channel authorization</p>{% endblock %}
 
 {% block content %}
-<!-- Platform Users -->
+<!-- Platform Users (channel authorization) -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
     {% for ch in channels %}
     {{ channel_users_card(ch, ch.users, request) }}
     {% endfor %}
 </div>
 
-<!-- Unified Identities -->
+<!-- Users -->
 <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
     <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
         <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
-            <i class="fas fa-fingerprint text-nordic-500"></i>
-            Unified Identities
+            <i class="fas fa-users text-nordic-500"></i>
+            Users
         </h3>
-        <span class="text-xs text-void-500 dark:text-void-400">Cross-platform linking for shared memory</span>
+        <span class="text-xs text-void-500 dark:text-void-400">Login accounts &amp; platform identities</span>
     </div>
 
-    {% if user_identities %}
-    <div class="overflow-x-auto">
-        <table class="w-full">
-            <thead>
-                <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
-                    <th class="px-2 sm:px-5 py-3">Unified ID</th>
-                    {% for ch in channels %}
-                    <th class="px-2 sm:px-5 py-3 {% if not loop.first %}hidden md:table-cell{% endif %}">{{ ch.display_name }}</th>
-                    {% endfor %}
-                    <th class="px-2 sm:px-5 py-3">Language</th>
-                    <th class="px-2 sm:px-5 py-3 text-right hidden sm:table-cell">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-void-100 dark:divide-void-800">
-                {% for unified_id, platforms in user_identities.items() %}
-                <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
-                    <td class="px-2 sm:px-5 py-4">
-                        <strong class="text-void-900 dark:text-white font-mono">{{ unified_id }}</strong>
-                    </td>
-                    {% for ch in channels %}
-                    <td class="px-2 sm:px-5 py-4 {% if not loop.first %}hidden md:table-cell{% endif %}">
-                        {% if platforms.get(ch.name) %}
-                        <div class="flex items-center gap-2">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium"
-                                  style="background: {{ ch.color }}15; color: {{ ch.color }}">{{ platforms[ch.name] if ch.name == 'whatsapp' else '@' ~ platforms[ch.name] }}</span>
-                            <form method="POST" action="/users/identity/{{ unified_id }}/remove-platform" class="inline">
-                                {% include "partials/csrf_field.html" %}
-                                <input type="hidden" name="platform" value="{{ ch.name }}">
-                                <button type="submit" class="p-1 rounded hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-colors">
-                                    <i class="fas fa-times text-xs"></i>
-                                </button>
-                            </form>
-                        </div>
-                        {% else %}
-                        <span class="text-void-300 dark:text-void-600">-</span>
-                        {% endif %}
-                    </td>
-                    {% endfor %}
-                    <td class="px-2 sm:px-5 py-4">
-                        <form method="POST" action="/users/identity/{{ unified_id }}/set-locale" class="inline">
-                            {% include "partials/csrf_field.html" %}
-                            <select name="locale" onchange="this.form.submit()"
-                                    class="bg-void-50 dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
-                                {% for loc in available_locales %}
-                                <option value="{{ loc }}" {% if user_locales.get(unified_id, 'en') == loc %}selected{% endif %}>
-                                    {{ loc.upper() }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </form>
-                    </td>
-                    <td class="px-2 sm:px-5 py-4 text-right hidden sm:table-cell">
-                        <form method="POST" action="/users/identity/{{ unified_id }}/delete" class="inline">
-                            {% include "partials/csrf_field.html" %}
-                            <button type="submit" class="px-3 py-1.5 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 text-sm font-medium transition-colors"
-                                    onclick="return confirm('Delete identity {{ unified_id }}?')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="px-5 py-12 text-center">
-        <i class="fas fa-fingerprint text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
-        <p class="text-void-500 dark:text-void-400">No unified identities configured</p>
-    </div>
-    {% endif %}
-
-    <div class="p-5 border-t border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
-        <h4 class="font-medium text-void-900 dark:text-white mb-4 flex items-center gap-2">
-            <i class="fas fa-plus-circle text-nordic-500"></i>
-            Add/Edit Identity
-        </h4>
-        <form method="POST" action="/users/identity/add" class="grid grid-cols-2 sm:grid-cols-{{ 2 + channels|length + 1 }} gap-3">
-            {% include "partials/csrf_field.html" %}
-            <div>
-                <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Unified ID</label>
-                <input type="text" name="unified_id" required
-                       class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
-                       placeholder="mario">
-            </div>
-            {% for ch in channels %}
-            <div>
-                <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">{{ ch.display_name }}</label>
-                <input type="text" name="{{ ch.name }}"
-                       class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
-                       placeholder="{% if ch.name == 'whatsapp' %}393401234567{% elif ch.name == 'telegram' %}@telegram{% else %}{{ ch.name }}{% endif %}">
-            </div>
-            {% endfor %}
-            <div>
-                <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Language</label>
-                <select name="locale"
-                        class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
-                    {% for loc in available_locales %}
-                    <option value="{{ loc }}" {% if loc == 'en' %}selected{% endif %}>{{ loc.upper() }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="flex items-end">
-                <button type="submit" class="w-full px-4 py-2 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors flex items-center justify-center gap-1">
-                    <i class="fas fa-save"></i> Save
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Portal Users (admin_auth.db) -->
-<div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden mb-6">
-    <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
-        <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
-            <i class="fas fa-users text-frost-500"></i>
-            Portal Users
-        </h3>
-        <span class="text-xs text-void-500 dark:text-void-400">Login accounts for Admin &amp; User Portal</span>
-    </div>
-
-    {% if portal_users %}
+    {% if users %}
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead>
                 <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
                     <th class="px-2 sm:px-5 py-3">Username</th>
                     <th class="px-2 sm:px-5 py-3 hidden sm:table-cell">Display Name</th>
-                    <th class="px-2 sm:px-5 py-3 hidden md:table-cell">Unified ID</th>
+                    <th class="px-2 sm:px-5 py-3 hidden md:table-cell">Platforms</th>
+                    <th class="px-2 sm:px-5 py-3 hidden md:table-cell">Language</th>
                     <th class="px-2 sm:px-5 py-3">Role</th>
                     <th class="px-2 sm:px-5 py-3 hidden md:table-cell">Status</th>
                     <th class="px-2 sm:px-5 py-3 hidden lg:table-cell">2FA</th>
@@ -160,55 +40,71 @@
                     <th class="px-2 sm:px-5 py-3 text-right">Actions</th>
                 </tr>
             </thead>
-                {% for pu in portal_users %}
+                {% for user in users %}
                 <tbody x-data="{ editing: false }" class="divide-y divide-void-100 dark:divide-void-800">
                 <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
                     <td class="px-2 sm:px-5 py-3">
-                        <span class="font-mono text-sm text-void-900 dark:text-white">{{ pu.username }}</span>
+                        <span class="font-mono text-sm text-void-900 dark:text-white">{{ user.username }}</span>
                     </td>
                     <td class="px-2 sm:px-5 py-3 hidden sm:table-cell">
-                        <span x-show="!editing" class="text-sm text-void-600 dark:text-void-300">{{ pu.display_name or '-' }}</span>
+                        <span class="text-sm text-void-600 dark:text-void-300">{{ user.display_name or '-' }}</span>
                     </td>
                     <td class="px-2 sm:px-5 py-3 hidden md:table-cell">
-                        <span x-show="!editing" class="text-sm font-mono text-void-600 dark:text-void-300">{{ pu.unified_id or '-' }}</span>
+                        {% if user.platforms %}
+                        <div class="flex flex-wrap gap-1">
+                            {% for ch in channels %}
+                                {% if user.platforms.get(ch.name) %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium"
+                                      style="background: {{ ch.color }}15; color: {{ ch.color }}"
+                                      title="{{ ch.display_name }}">
+                                    <i class="{{ ch.icon }} mr-1 text-[10px]"></i>
+                                    {{ user.platforms[ch.name] if ch.name == 'whatsapp' else '@' ~ user.platforms[ch.name] }}
+                                </span>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <span class="text-void-300 dark:text-void-600">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-2 sm:px-5 py-3 hidden md:table-cell">
+                        <span class="text-sm text-void-600 dark:text-void-300">{{ user.locale|upper }}</span>
                     </td>
                     <td class="px-2 sm:px-5 py-3">
-                        {% if pu.is_superadmin %}
+                        {% if user.is_superadmin %}
                         <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">Admin</span>
                         {% else %}
                         <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-frost-500/10 text-frost-600 dark:text-frost-400 text-xs font-medium">User</span>
                         {% endif %}
                     </td>
                     <td class="px-2 sm:px-5 py-3 hidden md:table-cell">
-                        {% if pu.is_active %}
+                        {% if user.is_active %}
                         <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium">Active</span>
                         {% else %}
                         <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium">Disabled</span>
                         {% endif %}
                     </td>
                     <td class="px-2 sm:px-5 py-3 hidden lg:table-cell">
-                        {% if pu.totp_enabled %}
+                        {% if user.totp_enabled %}
                         <i class="fas fa-shield-alt text-green-500" title="2FA enabled"></i>
                         {% else %}
                         <i class="fas fa-shield-alt text-void-300 dark:text-void-600" title="No 2FA"></i>
                         {% endif %}
                     </td>
-                    <td class="px-2 sm:px-5 py-3 text-xs text-void-500 hidden lg:table-cell">{{ pu.last_login or 'Never' }}</td>
+                    <td class="px-2 sm:px-5 py-3 text-xs text-void-500 hidden lg:table-cell">{{ user.last_login or 'Never' }}</td>
                     <td class="px-2 sm:px-5 py-3 text-right">
                         <div class="flex items-center justify-end gap-1">
-                            <!-- Edit inline form -->
                             <button @click="editing = !editing"
                                     class="p-1.5 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-colors"
                                     title="Edit">
                                 <i class="fas fa-pen text-xs"></i>
                             </button>
-                            <!-- Delete -->
-                            <form method="POST" action="/users/portal/{{ pu.id }}/delete" class="inline">
+                            <form method="POST" action="/users/portal/{{ user.id }}/delete" class="inline">
                                 {% include "partials/csrf_field.html" %}
                                 <button type="submit"
                                         class="p-1.5 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-colors"
                                         title="Delete"
-                                        onclick="return confirm('Delete user {{ pu.username }}?')">
+                                        onclick="return confirm('Delete user {{ user.username }}?')">
                                     <i class="fas fa-trash text-xs"></i>
                                 </button>
                             </form>
@@ -217,38 +113,29 @@
                 </tr>
                 <!-- Inline edit row -->
                 <tr x-show="editing" x-cloak class="bg-void-50 dark:bg-void-800/30">
-                    <td colspan="8" class="px-5 py-3">
-                        <form method="POST" action="/users/portal/{{ pu.id }}/update" class="flex flex-wrap items-end gap-3">
+                    <td colspan="9" class="px-5 py-3">
+                        <!-- User settings -->
+                        <form method="POST" action="/users/portal/{{ user.id }}/update" class="flex flex-wrap items-end gap-3 mb-3">
                             {% include "partials/csrf_field.html" %}
                             <div>
                                 <label class="block text-[10px] font-medium text-void-500 mb-1">Display Name</label>
-                                <input type="text" name="display_name" value="{{ pu.display_name or '' }}"
+                                <input type="text" name="display_name" value="{{ user.display_name or '' }}"
                                        class="w-32 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
-                            </div>
-                            <div>
-                                <label class="block text-[10px] font-medium text-void-500 mb-1">Unified ID</label>
-                                <select name="unified_id"
-                                        class="w-28 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm font-mono text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
-                                    <option value="">-</option>
-                                    {% for uid in all_unified_ids %}
-                                    <option value="{{ uid }}" {% if pu.unified_id == uid %}selected{% endif %}>{{ uid }}</option>
-                                    {% endfor %}
-                                </select>
                             </div>
                             <div>
                                 <label class="block text-[10px] font-medium text-void-500 mb-1">Admin</label>
                                 <select name="is_superadmin"
                                         class="w-20 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
-                                    <option value="0" {% if not pu.is_superadmin %}selected{% endif %}>No</option>
-                                    <option value="1" {% if pu.is_superadmin %}selected{% endif %}>Yes</option>
+                                    <option value="0" {% if not user.is_superadmin %}selected{% endif %}>No</option>
+                                    <option value="1" {% if user.is_superadmin %}selected{% endif %}>Yes</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-[10px] font-medium text-void-500 mb-1">Active</label>
                                 <select name="is_active"
                                         class="w-20 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
-                                    <option value="1" {% if pu.is_active %}selected{% endif %}>Yes</option>
-                                    <option value="0" {% if not pu.is_active %}selected{% endif %}>No</option>
+                                    <option value="1" {% if user.is_active %}selected{% endif %}>Yes</option>
+                                    <option value="0" {% if not user.is_active %}selected{% endif %}>No</option>
                                 </select>
                             </div>
                             <button type="submit"
@@ -256,8 +143,72 @@
                                 <i class="fas fa-save"></i> Save
                             </button>
                         </form>
+
+                        <!-- Platform identities -->
+                        <div class="mb-3">
+                            <label class="block text-[10px] font-medium text-void-500 mb-2">Platform Identities</label>
+                            {% if user.platforms %}
+                            <div class="flex flex-wrap gap-2 mb-2">
+                                {% for ch in channels %}
+                                    {% if user.platforms.get(ch.name) %}
+                                    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border"
+                                         style="background: {{ ch.color }}08; border-color: {{ ch.color }}30; color: {{ ch.color }}">
+                                        <i class="{{ ch.icon }} text-[10px]"></i>
+                                        {{ user.platforms[ch.name] if ch.name == 'whatsapp' else '@' ~ user.platforms[ch.name] }}
+                                        <form method="POST" action="/users/identity/{{ user.username }}/remove-platform" class="inline">
+                                            {% include "partials/csrf_field.html" %}
+                                            <input type="hidden" name="platform" value="{{ ch.name }}">
+                                            <button type="submit" class="ml-0.5 p-0.5 rounded hover:bg-red-500/20 text-current hover:text-red-500 transition-colors">
+                                                <i class="fas fa-times text-[10px]"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <form method="POST" action="/users/identity/add" class="flex flex-wrap items-end gap-2">
+                                {% include "partials/csrf_field.html" %}
+                                <input type="hidden" name="unified_id" value="{{ user.username }}">
+                                {% for ch in channels %}
+                                {% if not user.platforms.get(ch.name) %}
+                                <div>
+                                    <label class="block text-[10px] font-medium text-void-500 mb-1">{{ ch.display_name }}</label>
+                                    <input type="text" name="{{ ch.name }}"
+                                           class="w-28 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50"
+                                           placeholder="{% if ch.name == 'whatsapp' %}393...{% else %}username{% endif %}">
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                                <button type="submit"
+                                        class="px-3 py-1.5 rounded-lg bg-void-200 dark:bg-void-700 hover:bg-void-300 dark:hover:bg-void-600 text-void-700 dark:text-void-200 text-xs font-medium transition-colors">
+                                    <i class="fas fa-link"></i> Link
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Language -->
+                        <div class="flex items-end gap-2 mb-3">
+                            <form method="POST" action="/users/identity/{{ user.username }}/set-locale" class="flex items-end gap-2">
+                                {% include "partials/csrf_field.html" %}
+                                <div>
+                                    <label class="block text-[10px] font-medium text-void-500 mb-1">Language</label>
+                                    <select name="locale"
+                                            class="w-20 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                                        {% for loc in available_locales %}
+                                        <option value="{{ loc }}" {% if user.locale == loc %}selected{% endif %}>{{ loc.upper() }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <button type="submit"
+                                        class="px-3 py-1.5 rounded-lg bg-void-200 dark:bg-void-700 hover:bg-void-300 dark:hover:bg-void-600 text-void-700 dark:text-void-200 text-xs font-medium transition-colors">
+                                    <i class="fas fa-globe"></i> Set
+                                </button>
+                            </form>
+                        </div>
+
                         <!-- Reset password -->
-                        <form method="POST" action="/users/portal/{{ pu.id }}/reset-password" class="mt-2 flex items-end gap-2">
+                        <form method="POST" action="/users/portal/{{ user.id }}/reset-password" class="flex items-end gap-2">
                             {% include "partials/csrf_field.html" %}
                             <div>
                                 <label class="block text-[10px] font-medium text-void-500 mb-1">New Password</label>
@@ -279,16 +230,16 @@
     {% else %}
     <div class="px-5 py-12 text-center">
         <i class="fas fa-users text-4xl text-void-300 dark:text-void-600 mb-3 block"></i>
-        <p class="text-void-500 dark:text-void-400">No portal users yet</p>
+        <p class="text-void-500 dark:text-void-400">No users yet</p>
     </div>
     {% endif %}
 
     <div class="p-5 border-t border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
         <h4 class="font-medium text-void-900 dark:text-white mb-4 flex items-center gap-2">
-            <i class="fas fa-user-plus text-frost-500"></i>
-            Create Portal User
+            <i class="fas fa-user-plus text-nordic-500"></i>
+            Create User
         </h4>
-        <form method="POST" action="/users/portal/create" class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+        <form method="POST" action="/users/portal/create" class="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {% include "partials/csrf_field.html" %}
             <div>
                 <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Username *</label>
@@ -301,16 +252,6 @@
                 <input type="password" name="password" required minlength="8"
                        class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
                        placeholder="min 8 chars">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Unified ID</label>
-                <select name="unified_id"
-                        class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm font-mono text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
-                    <option value="">-</option>
-                    {% for uid in all_unified_ids %}
-                    <option value="{{ uid }}">{{ uid }}</option>
-                    {% endfor %}
-                </select>
             </div>
             <div>
                 <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Display Name</label>
@@ -344,11 +285,11 @@
     <ul class="text-sm space-y-2 text-void-300">
         <li class="flex items-start gap-2">
             <i class="fas fa-exclamation-circle text-ember-400 mt-0.5"></i>
-            <span>If no users are authorized, <strong class="text-white">everyone</strong> can use the bot</span>
+            <span>If no users are authorized on a channel, <strong class="text-white">everyone</strong> can use the bot</span>
         </li>
         <li class="flex items-start gap-2">
             <i class="fas fa-hashtag text-frost-400 mt-0.5"></i>
-            <span>You can use either numeric ID or username</span>
+            <span>You can use either numeric ID or username for channel authorization</span>
         </li>
         {% for ch in channels %}
         <li class="flex items-start gap-2">
@@ -357,12 +298,8 @@
         </li>
         {% endfor %}
         <li class="flex items-start gap-2">
-            <i class="fas fa-fingerprint text-nordic-400 mt-0.5"></i>
-            <span><strong class="text-white">Unified Identities</strong>: link accounts from different platforms to share memory</span>
-        </li>
-        <li class="flex items-start gap-2">
-            <i class="fas fa-users text-frost-400 mt-0.5"></i>
-            <span><strong class="text-white">Portal Users</strong>: login accounts for the web portal. Set <strong class="text-white">Unified ID</strong> to link with platform identities and enable per-user service connections</span>
+            <i class="fas fa-users text-nordic-400 mt-0.5"></i>
+            <span><strong class="text-white">Users</strong>: login accounts with platform identities linked for cross-platform memory sharing and service connections</span>
         </li>
     </ul>
 </div>

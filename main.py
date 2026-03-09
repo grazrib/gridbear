@@ -1059,6 +1059,8 @@ async def main():
                 migrate_create_default_company,
                 migrate_mcp_perms_to_unified_id,
                 migrate_rest_api_config_to_db,
+                migrate_unify_users,
+                migrate_user_platforms,
             )
 
             await migrate_admin_config_to_db(BASE_DIR / "config" / "admin_config.json")
@@ -1068,6 +1070,8 @@ async def main():
             )
             await migrate_mcp_perms_to_unified_id()
             await migrate_create_default_company()
+            await migrate_unify_users()
+            await migrate_user_platforms()
         except Exception as e:
             logger.error(f"PostgreSQL initialization failed: {e}")
             raise

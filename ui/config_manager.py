@@ -14,11 +14,11 @@ from core.config_models import (
     GroupMcpPermission,
     MemoryGroup,
     OAuthToken,
-    UserIdentity,
     UserMcpPermission,
-    UserProfile,
+    UserPlatform,
     UserServiceAccount,
 )
+from core.models.user import User
 from core.system_config import SystemConfig
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -239,58 +239,91 @@ class ConfigManager:
 
     # ── User identities (cross-platform linking) ────────────────
 
+    def _resolve_user_id(self, username: str) -> int | None:
+        """Resolve username to User.id."""
+        user = User.get_sync(username=username.lower())
+        return user["id"] if user else None
+
+    def _resolve_username(self, user_id: int) -> str | None:
+        """Resolve User.id to username."""
+        user = User.get_sync(id=user_id)
+        return user["username"] if user else None
+
     def get_user_identities(self) -> dict[str, dict[str, str]]:
-        """Get all user identities: {unified_id: {platform: username}}."""
-        rows = UserIdentity.search_sync()
+        """Get all user identities: {username: {platform: platform_username}}."""
+        rows = UserPlatform.search_sync()
+        # Build user_id → username cache
+        user_ids = {r["user_id"] for r in rows}
+        id_to_username: dict[int, str] = {}
+        for uid in user_ids:
+            uname = self._resolve_username(uid)
+            if uname:
+                id_to_username[uid] = uname
+
         result: dict[str, dict[str, str]] = {}
         for r in rows:
-            result.setdefault(r["unified_id"], {})[r["platform"]] = r["username"]
+            username = id_to_username.get(r["user_id"])
+            if username:
+                result.setdefault(username, {})[r["platform"]] = r["platform_username"]
         return result
 
     def get_all_unified_ids(self) -> list[str]:
-        """Get list of all unified user IDs."""
-        rows = UserIdentity.search_sync()
-        return list({r["unified_id"] for r in rows})
+        """Get list of all usernames that have platform links."""
+        rows = UserPlatform.search_sync()
+        user_ids = {r["user_id"] for r in rows}
+        usernames = []
+        for uid in user_ids:
+            uname = self._resolve_username(uid)
+            if uname:
+                usernames.append(uname)
+        return usernames
 
     def get_unified_user_id(self, platform: str, username: str) -> str | None:
-        """Get unified user ID from platform and username."""
+        """Get unified user ID (username) from platform and platform_username."""
         username = username.lower().lstrip("@")
         platform = platform.lower()
-        row = UserIdentity.get_sync(platform=platform, username=username)
-        return row["unified_id"] if row else None
+        row = UserPlatform.get_sync(platform=platform, platform_username=username)
+        if row:
+            return self._resolve_username(row["user_id"])
+        return None
 
     def get_channel_username(self, unified_id: str, channel: str) -> str | None:
         """Get channel-specific username from unified ID."""
-        row = UserIdentity.get_sync(
-            unified_id=unified_id.lower(), platform=channel.lower()
-        )
-        return row["username"] if row else None
+        user_id = self._resolve_user_id(unified_id)
+        if not user_id:
+            return None
+        row = UserPlatform.get_sync(user_id=user_id, platform=channel.lower())
+        return row["platform_username"] if row else None
 
     def add_user_identity(self, unified_id: str, platform: str, username: str):
-        """Link a platform username to a unified identity."""
-        unified_id = unified_id.lower()
+        """Link a platform username to a user."""
+        user_id = self._resolve_user_id(unified_id)
+        if not user_id:
+            return
         platform = platform.lower()
         username = username.lower().lstrip("@")
 
-        UserIdentity.create_or_update_sync(
-            _conflict_fields=("unified_id", "platform"),
-            _update_fields=["username"],
-            unified_id=unified_id,
+        UserPlatform.create_or_update_sync(
+            _conflict_fields=("user_id", "platform"),
+            _update_fields=["platform_username"],
+            user_id=user_id,
             platform=platform,
-            username=username,
+            platform_username=username,
         )
 
     def remove_user_identity(self, unified_id: str, platform: str = None):
         """Remove user identity or specific platform link."""
-        unified_id = unified_id.lower()
+        user_id = self._resolve_user_id(unified_id)
+        if not user_id:
+            return
 
         if platform:
             platform = platform.lower()
-            UserIdentity.delete_multi_sync(
-                [("unified_id", "=", unified_id), ("platform", "=", platform)]
+            UserPlatform.delete_multi_sync(
+                [("user_id", "=", user_id), ("platform", "=", platform)]
             )
         else:
-            UserIdentity.delete_multi_sync([("unified_id", "=", unified_id)])
+            UserPlatform.delete_multi_sync([("user_id", "=", user_id)])
 
     # ── Memory groups ───────────────────────────────────────────
 
@@ -406,35 +439,29 @@ class ConfigManager:
     # ── User locales ────────────────────────────────────────────
 
     def get_user_locales(self) -> dict[str, str]:
-        """Get all user locale preferences: {unified_id: locale}."""
-        rows = UserProfile.search_sync()
-        return {r["unified_id"]: r["locale"] for r in rows}
+        """Get all user locale preferences: {username: locale}."""
+        rows = User.search_sync()
+        return {r["username"]: r.get("locale", "en") for r in rows if r["username"]}
 
     def get_user_locale(self, unified_id: str) -> str:
         """Get user's locale preference. Returns 'en' as default."""
-        unified_id = unified_id.lower()
-        row = UserProfile.get_sync(unified_id=unified_id)
+        row = User.get_sync(username=unified_id.lower())
         if row:
-            return row["locale"] or "en"
+            return row.get("locale") or "en"
         return "en"
 
     def set_user_locale(self, unified_id: str, locale: str):
         """Set user's locale preference."""
-        unified_id = unified_id.lower()
         locale = locale.lower().strip()
-        UserProfile.create_or_update_sync(
-            _conflict_fields=("unified_id",),
-            _update_fields=["locale"],
-            unified_id=unified_id,
-            locale=locale,
-        )
+        row = User.get_sync(username=unified_id.lower())
+        if row:
+            User.write_sync(row["id"], locale=locale)
 
     def delete_user_locale(self, unified_id: str):
         """Remove user locale (reverts to default 'en')."""
-        unified_id = unified_id.lower()
-        row = UserProfile.get_sync(unified_id=unified_id)
+        row = User.get_sync(username=unified_id.lower())
         if row:
-            UserProfile.delete_sync(row["id"])
+            User.write_sync(row["id"], locale="en")
 
     def get_available_locales(self) -> list[str]:
         """Get list of available locales based on translation files."""

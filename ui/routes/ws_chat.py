@@ -55,11 +55,11 @@ async def _stream_from_gridbear(
     attachments: list[str] | None = None,
 ) -> str:
     """Send message to GridBear internal API and stream NDJSON events to WebSocket."""
-    unified_id = user.get("unified_id") or user.get("username")
+    uid = user["username"]
 
     payload = {
         "text": text,
-        "user_id": unified_id,
+        "user_id": uid,
         "username": user.get("username", ""),
         "display_name": user.get("display_name", ""),
         "agent_name": agent_name,
@@ -148,13 +148,13 @@ async def ws_chat(websocket: WebSocket):
 
     agent_name = websocket.query_params.get("agent", "")
     conversation_id = websocket.query_params.get("conversation_id", "") or None
-    unified_id = user.get("unified_id") or user.get("username")
+    uid = user["username"]
 
     # Validate conversation ownership if provided
     if conversation_id:
         from ui.routes.chat_api import validate_conversation_ownership
 
-        if not validate_conversation_ownership(conversation_id, unified_id):
+        if not validate_conversation_ownership(conversation_id, uid):
             await websocket.send_json(
                 {"type": "error", "text": "Conversazione non valida"}
             )
@@ -162,7 +162,7 @@ async def ws_chat(websocket: WebSocket):
             return
 
     logger.info(
-        f"WebChat: user {unified_id} connected to agent {agent_name or 'default'}"
+        f"WebChat: user {uid} connected to agent {agent_name or 'default'}"
         + (f" conv={conversation_id[:8]}..." if conversation_id else "")
     )
 
@@ -233,4 +233,4 @@ async def ws_chat(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebChat: connection error: {e}")
     finally:
-        logger.info(f"WebChat: user {unified_id} disconnected")
+        logger.info(f"WebChat: user {uid} disconnected")

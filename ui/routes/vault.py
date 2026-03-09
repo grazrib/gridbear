@@ -23,7 +23,7 @@ router = APIRouter(prefix="/me/vault", tags=["vault"])
 
 
 def _uid(user: dict) -> str:
-    return user.get("unified_id") or user.get("username")
+    return user["username"]
 
 
 @router.get("", response_class=HTMLResponse)

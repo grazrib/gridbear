@@ -29,13 +29,13 @@ async def permissions_page(request: Request, _: bool = Depends(require_login)):
             seen.update(servers)
         available_servers = sorted(seen)
 
-    # Build user list from AdminUser (has unified_id + display_name)
+    # Build user list from AdminUser (username + display_name)
     admin_users = AdminUser.search_sync()
     user_display = {}
     for u in admin_users:
-        uid = u.get("unified_id")
+        uid = u.get("username")
         if uid:
-            user_display[uid] = u.get("display_name") or u.get("username") or uid
+            user_display[uid] = u.get("display_name") or uid
 
     # Also include unified_ids from identities (users without admin accounts)
     identities = config.get_user_identities()
