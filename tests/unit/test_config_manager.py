@@ -29,6 +29,12 @@ class _InMemoryStore:
                 return dict(r)
         return None
 
+    def write_sync(self, record_id, **values) -> int:
+        if record_id in self._rows:
+            self._rows[record_id].update(values)
+            return 1
+        return 0
+
     def delete_sync(self, record_id) -> int:
         if record_id in self._rows:
             del self._rows[record_id]
@@ -87,6 +93,7 @@ def _make_model_mock(store: _InMemoryStore) -> MagicMock:
     m.create_sync = store.create_sync
     m.search_sync = store.search_sync
     m.get_sync = store.get_sync
+    m.write_sync = store.write_sync
     m.delete_sync = store.delete_sync
     m.delete_multi_sync = store.delete_multi_sync
     m.exists_sync = store.exists_sync
@@ -100,12 +107,12 @@ def mock_orm_models():
     """Patch all ORM models used by ConfigManager with in-memory stores."""
     stores = {
         "ChannelAuthorizedUser": _InMemoryStore(),
-        "UserIdentity": _InMemoryStore(),
+        "UserPlatform": _InMemoryStore(),
+        "User": _InMemoryStore(),
         "UserMcpPermission": _InMemoryStore(),
         "MemoryGroup": _InMemoryStore(),
         "GroupMcpPermission": _InMemoryStore(),
         "UserServiceAccount": _InMemoryStore(),
-        "UserProfile": _InMemoryStore(),
         "OAuthToken": _InMemoryStore(),
     }
     mocks = {name: _make_model_mock(store) for name, store in stores.items()}
@@ -130,16 +137,21 @@ def mock_orm_models():
         patch(
             "ui.config_manager.ChannelAuthorizedUser", mocks["ChannelAuthorizedUser"]
         ),
-        patch("ui.config_manager.UserIdentity", mocks["UserIdentity"]),
+        patch("ui.config_manager.UserPlatform", mocks["UserPlatform"]),
+        patch("ui.config_manager.User", mocks["User"]),
         patch("ui.config_manager.UserMcpPermission", mocks["UserMcpPermission"]),
         patch("ui.config_manager.MemoryGroup", mocks["MemoryGroup"]),
         patch("ui.config_manager.GroupMcpPermission", mocks["GroupMcpPermission"]),
         patch("ui.config_manager.UserServiceAccount", mocks["UserServiceAccount"]),
-        patch("ui.config_manager.UserProfile", mocks["UserProfile"]),
         patch("ui.config_manager.OAuthToken", mocks["OAuthToken"]),
         patch("ui.config_manager.SystemConfig", sys_config),
     ):
         yield {"stores": stores, "mocks": mocks, "sys_config": sys_config}
+
+
+def _create_user(mock_data, username, locale="en"):
+    """Helper: create a User in the mock store."""
+    return mock_data["stores"]["User"].create_sync(username=username, locale=locale)
 
 
 class TestConfigManagerInit:
@@ -225,11 +237,12 @@ class TestChannelUsers:
 
 
 class TestUserIdentities:
-    """Tests for cross-platform user identities."""
+    """Tests for cross-platform user identities (UserPlatform-based)."""
 
-    def test_add_user_identity(self):
+    def test_add_user_identity(self, mock_orm_models):
         from ui.config_manager import ConfigManager
 
+        _create_user(mock_orm_models, "mario")
         config = ConfigManager()
         config.add_user_identity("mario", "telegram", "@MarioRossi")
 
@@ -237,9 +250,10 @@ class TestUserIdentities:
         assert "mario" in identities
         assert identities["mario"]["telegram"] == "mariorossi"
 
-    def test_get_unified_user_id(self):
+    def test_get_unified_user_id(self, mock_orm_models):
         from ui.config_manager import ConfigManager
 
+        _create_user(mock_orm_models, "luigi")
         config = ConfigManager()
         config.add_user_identity("luigi", "discord", "luigi123")
 
@@ -253,9 +267,10 @@ class TestUserIdentities:
         unified_id = config.get_unified_user_id("telegram", "nonexistent")
         assert unified_id is None
 
-    def test_remove_user_identity_platform(self):
+    def test_remove_user_identity_platform(self, mock_orm_models):
         from ui.config_manager import ConfigManager
 
+        _create_user(mock_orm_models, "test")
         config = ConfigManager()
         config.add_user_identity("test", "telegram", "tguser")
         config.add_user_identity("test", "discord", "dcuser")
@@ -265,15 +280,45 @@ class TestUserIdentities:
         assert "telegram" not in identities["test"]
         assert "discord" in identities["test"]
 
-    def test_remove_user_identity_completely(self):
+    def test_remove_user_identity_completely(self, mock_orm_models):
         from ui.config_manager import ConfigManager
 
+        _create_user(mock_orm_models, "test")
         config = ConfigManager()
         config.add_user_identity("test", "telegram", "tguser")
         config.remove_user_identity("test")
 
         identities = config.get_user_identities()
         assert "test" not in identities
+
+    def test_get_channel_username(self, mock_orm_models):
+        from ui.config_manager import ConfigManager
+
+        _create_user(mock_orm_models, "mario")
+        config = ConfigManager()
+        config.add_user_identity("mario", "telegram", "mariorossi")
+
+        uname = config.get_channel_username("mario", "telegram")
+        assert uname == "mariorossi"
+
+    def test_get_channel_username_not_found(self, mock_orm_models):
+        from ui.config_manager import ConfigManager
+
+        _create_user(mock_orm_models, "mario")
+        config = ConfigManager()
+
+        uname = config.get_channel_username("mario", "discord")
+        assert uname is None
+
+    def test_add_identity_nonexistent_user(self, mock_orm_models):
+        """Adding identity for non-existent user is a no-op."""
+        from ui.config_manager import ConfigManager
+
+        config = ConfigManager()
+        config.add_user_identity("ghost", "telegram", "ghostuser")
+
+        identities = config.get_user_identities()
+        assert "ghost" not in identities
 
 
 class TestUserPermissions:
@@ -364,11 +409,12 @@ class TestMemoryGroups:
 
 
 class TestUserLocales:
-    """Tests for user locale preferences."""
+    """Tests for user locale preferences (stored on User.locale)."""
 
-    def test_set_user_locale(self):
+    def test_set_user_locale(self, mock_orm_models):
         from ui.config_manager import ConfigManager
 
+        _create_user(mock_orm_models, "testuser")
         config = ConfigManager()
         config.set_user_locale("testuser", "IT")
 
@@ -382,15 +428,26 @@ class TestUserLocales:
         locale = config.get_user_locale("unknownuser")
         assert locale == "en"
 
-    def test_delete_user_locale(self):
+    def test_delete_user_locale(self, mock_orm_models):
         from ui.config_manager import ConfigManager
 
+        _create_user(mock_orm_models, "testuser", locale="it")
         config = ConfigManager()
-        config.set_user_locale("testuser", "it")
         config.delete_user_locale("testuser")
 
         locale = config.get_user_locale("testuser")
         assert locale == "en"
+
+    def test_get_user_locales_all(self, mock_orm_models):
+        from ui.config_manager import ConfigManager
+
+        _create_user(mock_orm_models, "mario", locale="it")
+        _create_user(mock_orm_models, "luigi", locale="de")
+        config = ConfigManager()
+
+        locales = config.get_user_locales()
+        assert locales["mario"] == "it"
+        assert locales["luigi"] == "de"
 
 
 class TestGmailAccounts:

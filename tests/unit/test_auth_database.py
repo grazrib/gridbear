@@ -37,9 +37,10 @@ def pg_db():
     )
     dm._sync_pool.open()
 
-    # Bootstrap: ensure admin schema and _migrations table exist
+    # Bootstrap: ensure admin + app schemas and _migrations table exist
     with dm.acquire_sync() as conn:
         conn.execute("CREATE SCHEMA IF NOT EXISTS admin")
+        conn.execute("CREATE SCHEMA IF NOT EXISTS app")
         conn.execute(
             """CREATE TABLE IF NOT EXISTS public._migrations (
                 id SERIAL PRIMARY KEY,
@@ -59,7 +60,7 @@ def pg_db():
             "admin.audit_log",
             "admin.sessions",
             "admin.recovery_codes",
-            "admin.users",
+            "app.users",
         ):
             try:
                 conn.execute(f"TRUNCATE {table} CASCADE")
@@ -84,7 +85,7 @@ def tmp_auth_db(pg_db):
     with pg_db.acquire_sync() as conn:
         row = conn.execute(
             "SELECT 1 FROM information_schema.tables "
-            "WHERE table_schema = 'admin' AND table_name = 'users'"
+            "WHERE table_schema = 'app' AND table_name = 'users'"
         ).fetchone()
         if row:
             conn.execute("TRUNCATE admin.audit_log CASCADE")
@@ -92,7 +93,7 @@ def tmp_auth_db(pg_db):
             conn.execute("TRUNCATE admin.user_tool_preferences CASCADE")
             conn.execute("TRUNCATE admin.sessions CASCADE")
             conn.execute("TRUNCATE admin.recovery_codes CASCADE")
-            conn.execute("TRUNCATE admin.users CASCADE")
+            conn.execute("TRUNCATE app.users CASCADE")
         conn.commit()
 
     # Patch get_database so AuthDatabase.__init__ uses our test pool
@@ -108,22 +109,30 @@ class TestAuthDatabaseInit:
     """Tests for AuthDatabase initialization."""
 
     def test_creates_tables(self, tmp_auth_db):
-        """Should create all required tables in the admin schema."""
+        """Should create all required tables in admin + app schemas."""
         db = tmp_auth_db
 
         with db._db.acquire_sync() as conn:
-            rows = conn.execute(
+            admin_rows = conn.execute(
                 "SELECT table_name FROM information_schema.tables "
                 "WHERE table_schema = 'admin' ORDER BY table_name"
             ).fetchall()
-            tables = [row["table_name"] for row in rows]
+            admin_tables = [row["table_name"] for row in admin_rows]
 
-        assert "users" in tables
-        assert "recovery_codes" in tables
-        assert "sessions" in tables
-        assert "audit_log" in tables
-        assert "webauthn_credentials" in tables
-        assert "user_tool_preferences" in tables
+            app_rows = conn.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'app' AND table_name = 'users'"
+            ).fetchall()
+            app_tables = [row["table_name"] for row in app_rows]
+
+        # Users are now in app schema (managed by ORM)
+        assert "users" in app_tables
+        # Auth tables remain in admin schema
+        assert "recovery_codes" in admin_tables
+        assert "sessions" in admin_tables
+        assert "audit_log" in admin_tables
+        assert "webauthn_credentials" in admin_tables
+        assert "user_tool_preferences" in admin_tables
 
 
 class TestUserOperations:

@@ -12,7 +12,8 @@ from pathlib import Path
 import bcrypt
 import yaml
 
-from core.config_models import PasswordToken, User
+from core.config_models import PasswordToken
+from core.models.user import User
 
 AGENTS_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "agents"
 
@@ -87,7 +88,7 @@ def validate_token(raw_token: str) -> dict | None:
                         "token_id": token_row["id"],
                         "user_id": token_row["user_id"],
                         "purpose": token_row["purpose"],
-                        "unified_id": user["unified_id"],
+                        "unified_id": user["username"],
                         "display_name": user.get("display_name"),
                     }
         except (ValueError, TypeError):
@@ -138,7 +139,7 @@ async def send_invite_email(user: dict, token_url: str) -> bool:
     if not email:
         logger.info(
             "No email address for user %s, skipping email delivery",
-            user.get("unified_id"),
+            user.get("username"),
         )
         return False
 
@@ -174,7 +175,7 @@ async def send_invite_email(user: dict, token_url: str) -> bool:
         sanitized = _sanitize_name(server_name)
         tool_name = f"{sanitized}__send_email"
 
-        display_name = user.get("display_name") or user.get("unified_id", "")
+        display_name = user.get("display_name") or user.get("username", "")
         subject = "GridBear — Set up your password"
         body = (
             f"Hi {display_name},\n\n"

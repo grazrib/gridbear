@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Companies - GridBear{% endblock %}
+{% block page_title %}Companies{% endblock %}
+{% block breadcrumb_active %}Companies{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1">Manage tenant companies and their settings</p>{% endblock %}
+
+{% block content_alerts %}
+{% if success %}
+<div class="rounded-xl bg-nordic-500/10 border border-nordic-500/20 p-4 mb-4 flex items-center gap-3">
+    <i class="fas fa-check-circle text-nordic-500"></i>
+    <span class="text-sm text-nordic-700 dark:text-nordic-300">
+        {% if success == 'created' %}Company created.
+        {% elif success == 'deleted' %}Company deactivated.
+        {% else %}Done.{% endif %}
+    </span>
+</div>
+{% endif %}
+{% if error %}
+<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 mb-4 flex items-center gap-3">
+    <i class="fas fa-exclamation-circle text-red-500"></i>
+    <span class="text-sm text-red-700 dark:text-red-300">
+        {% if error == 'name_required' %}Company name is required.
+        {% elif error == 'slug_required' %}Slug could not be generated.
+        {% elif error == 'creation_failed' %}Failed to create company.
+        {% elif error == 'cannot_delete_default' %}Cannot deactivate the default company.
+        {% elif error == 'delete_failed' %}Failed to deactivate company.
+        {% elif error == 'not_found' %}Company not found.
+        {% else %}An error occurred.{% endif %}
+    </span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-lg font-semibold text-void-900 dark:text-white">All Companies</h2>
+            <p class="text-sm text-void-500 dark:text-void-400">{{ companies|length }} compan{{ 'y' if companies|length == 1 else 'ies' }}</p>
+        </div>
+    </div>
+
+    <!-- Company Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for c in companies %}
+        <a href="/companies/{{ c.id }}"
+           class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 p-5 hover:border-nordic-500/30 transition-all group">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-nordic-500/20 to-frost-500/20 flex items-center justify-center">
+                        <i class="fas fa-building text-nordic-500"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-void-900 dark:text-white group-hover:text-nordic-500 transition-colors">{{ c.name }}</h3>
+                        <p class="text-xs text-void-500 dark:text-void-400 font-mono">{{ c.slug }}</p>
+                    </div>
+                </div>
+                {% if not c.active %}
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-500/10 text-red-600 dark:text-red-400">Inactive</span>
+                {% endif %}
+            </div>
+            <div class="flex items-center gap-4 text-sm text-void-500 dark:text-void-400">
+                <span class="flex items-center gap-1.5">
+                    <i class="fas fa-users text-xs"></i>
+                    {{ c.member_count }} member{{ 's' if c.member_count != 1 }}
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <i class="fas fa-globe text-xs"></i>
+                    {{ c.locale }}
+                </span>
+            </div>
+        </a>
+        {% endfor %}
+
+        <!-- Create New Company Card -->
+        <div x-data="{ open: false }" class="rounded-2xl border-2 border-dashed border-void-200 dark:border-void-700 p-5 flex flex-col items-center justify-center min-h-[140px]">
+            <button @click="open = !open"
+                    class="flex flex-col items-center gap-2 text-void-400 dark:text-void-500 hover:text-nordic-500 transition-colors"
+                    :class="open && 'hidden'">
+                <i class="fas fa-plus-circle text-2xl"></i>
+                <span class="text-sm font-medium">Create Company</span>
+            </button>
+            <form x-show="open" x-cloak method="POST" action="/companies/create" class="w-full space-y-3">
+                {% include "partials/csrf_field.html" %}
+                <div>
+                    <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Name</label>
+                    <input type="text" name="name" required
+                           class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
+                           placeholder="Acme Inc.">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Slug (auto-generated if empty)</label>
+                    <input type="text" name="slug"
+                           class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
+                           placeholder="acme-inc">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 px-4 py-2 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                        <i class="fas fa-plus mr-1"></i> Create
+                    </button>
+                    <button type="button" @click="open = false" class="px-4 py-2 rounded-lg bg-void-100 dark:bg-void-800 text-void-600 dark:text-void-300 text-sm font-medium hover:bg-void-200 dark:hover:bg-void-700 transition-colors">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

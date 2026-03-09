@@ -16,7 +16,7 @@ router = APIRouter()
 
 def _user_info(user: dict) -> tuple[str, bool]:
     """Extract user identifier and admin flag from the auth user dict."""
-    uid = user.get("unified_id") or user.get("username") or str(user.get("id", ""))
+    uid = user.get("username") or str(user.get("id", ""))
     is_admin = user.get("is_superadmin", False)
     return uid, is_admin
 

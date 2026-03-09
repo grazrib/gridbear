@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}{{ company.name }} - GridBear{% endblock %}
+{% block page_title %}{{ company.name }}{% endblock %}
+{% block breadcrumb_active %}{{ company.name }}{% endblock %}
+{% block page_description %}<p class="text-void-500 dark:text-void-400 mt-1"><a href="/companies/" class="hover:text-nordic-500 transition-colors"><i class="fas fa-arrow-left mr-1"></i>Companies</a></p>{% endblock %}
+
+{% block content_alerts %}
+{% if success %}
+<div class="rounded-xl bg-nordic-500/10 border border-nordic-500/20 p-4 mb-4 flex items-center gap-3">
+    <i class="fas fa-check-circle text-nordic-500"></i>
+    <span class="text-sm text-nordic-700 dark:text-nordic-300">
+        {% if success == 'updated' %}Company updated.
+        {% elif success == 'member_added' %}Member added.
+        {% elif success == 'member_removed' %}Member removed.
+        {% elif success == 'role_updated' %}Member role updated.
+        {% else %}Done.{% endif %}
+    </span>
+</div>
+{% endif %}
+{% if error %}
+<div class="rounded-xl bg-red-500/10 border border-red-500/20 p-4 mb-4 flex items-center gap-3">
+    <i class="fas fa-exclamation-circle text-red-500"></i>
+    <span class="text-sm text-red-700 dark:text-red-300">
+        {% if error == 'update_failed' %}Failed to update company.
+        {% elif error == 'add_member_failed' %}Failed to add member.
+        {% elif error == 'remove_member_failed' %}Failed to remove member.
+        {% elif error == 'role_update_failed' %}Failed to update role.
+        {% else %}An error occurred.{% endif %}
+    </span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Settings Form -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-cog text-nordic-500"></i>
+                Company Settings
+            </h3>
+            {% if not company.active %}
+            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-500/10 text-red-600 dark:text-red-400">Inactive</span>
+            {% endif %}
+        </div>
+
+        <form method="POST" action="/companies/{{ company.id }}/update" class="p-5">
+            {% include "partials/csrf_field.html" %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Name</label>
+                    <input type="text" name="name" value="{{ company.name }}" required
+                           class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Slug</label>
+                    <input type="text" name="slug" value="{{ company.slug }}"
+                           class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white font-mono focus:outline-none focus:border-nordic-500/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Locale</label>
+                    <select name="locale"
+                            class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                        {% for loc in available_locales %}
+                        <option value="{{ loc }}" {% if (company.locale or 'en') == loc %}selected{% endif %}>{{ loc.upper() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Timezone</label>
+                    <select name="timezone"
+                            class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                        {% for tz in [
+                            'UTC',
+                            'Europe/Rome', 'Europe/London', 'Europe/Paris', 'Europe/Berlin',
+                            'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Lisbon',
+                            'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+                            'America/Sao_Paulo', 'America/Toronto',
+                            'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Seoul', 'Asia/Dubai', 'Asia/Kolkata',
+                            'Australia/Sydney', 'Pacific/Auckland'
+                        ] %}
+                        <option value="{{ tz }}" {% if (company.timezone or 'UTC') == tz %}selected{% endif %}>{{ tz }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button type="submit" class="px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors">
+                    <i class="fas fa-save mr-1"></i> Save Changes
+                </button>
+                {% if company.id != 1 %}
+                <form method="POST" action="/companies/{{ company.id }}/delete" class="inline"
+                      onsubmit="return confirm('Deactivate this company? Members will lose access.')">
+                    {% include "partials/csrf_field.html" %}
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-sm font-medium transition-colors">
+                        <i class="fas fa-ban mr-1"></i> Deactivate
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Members Table -->
+    <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+        <div class="flex items-center justify-between p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+            <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                <i class="fas fa-users text-frost-500"></i>
+                Members
+            </h3>
+            <span class="text-xs text-void-500 dark:text-void-400">{{ members|length }} member{{ 's' if members|length != 1 }}</span>
+        </div>
+
+        {% if members %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                        <th class="px-5 py-3">User</th>
+                        <th class="px-5 py-3">Role</th>
+                        <th class="px-5 py-3 hidden md:table-cell">Default</th>
+                        <th class="px-5 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                    {% for m in members %}
+                    <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                        <td class="px-5 py-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-nordic-500/20 to-frost-500/20 flex items-center justify-center">
+                                    <span class="text-xs font-bold text-nordic-600 dark:text-nordic-400">{{ (m.user.display_name or m.user.username or '?')[0]|upper }}</span>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-void-900 dark:text-white">{{ m.user.display_name or m.user.username or 'User #' ~ m.user.id }}</p>
+                                    {% if m.user.username %}
+                                    <p class="text-xs text-void-500 dark:text-void-400 font-mono">{{ m.user.username }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-5 py-3">
+                            <form method="POST" action="/companies/{{ company.id }}/members/{{ m.user.id }}/role" class="inline-flex items-center gap-2">
+                                {% include "partials/csrf_field.html" %}
+                                <select name="role" onchange="this.form.submit()"
+                                        class="bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                                    {% for r in ['admin', 'manager', 'member'] %}
+                                    <option value="{{ r }}" {% if m.company_user.role == r %}selected{% endif %}>{{ r|title }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                        </td>
+                        <td class="px-5 py-3 hidden md:table-cell">
+                            {% if m.company_user.is_default %}
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-nordic-500/10 text-nordic-600 dark:text-nordic-400">Default</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                            <form method="POST" action="/companies/{{ company.id }}/members/{{ m.user.id }}/remove"
+                                  onsubmit="return confirm('Remove this member?')" class="inline">
+                                {% include "partials/csrf_field.html" %}
+                                <button type="submit" class="p-1.5 rounded-lg text-void-400 hover:text-red-500 hover:bg-red-500/10 transition-colors" title="Remove member">
+                                    <i class="fas fa-user-minus text-sm"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-5 text-center">
+            <p class="text-void-500 dark:text-void-400">No members yet.</p>
+        </div>
+        {% endif %}
+
+        <!-- Add Member -->
+        {% if available_users %}
+        <div class="p-5 border-t border-void-200 dark:border-void-800 bg-void-50 dark:bg-void-800/30">
+            <h4 class="font-medium text-void-900 dark:text-white mb-3 flex items-center gap-2">
+                <i class="fas fa-user-plus text-nordic-500"></i>
+                Add Member
+            </h4>
+            <form method="POST" action="/companies/{{ company.id }}/members/add" class="flex items-end gap-3">
+                {% include "partials/csrf_field.html" %}
+                <div class="flex-1">
+                    <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">User</label>
+                    <select name="user_id" required
+                            class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                        {% for u in available_users %}
+                        <option value="{{ u.id }}">{{ u.display_name or u.username }} ({{ u.username }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Role</label>
+                    <select name="role"
+                            class="bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                        <option value="member">Member</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <button type="submit" class="px-4 py-2 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-sm font-medium transition-colors whitespace-nowrap">
+                    <i class="fas fa-plus mr-1"></i> Add
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

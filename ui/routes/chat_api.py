@@ -94,7 +94,7 @@ def _ensure_db():
 
 
 def _uid(user: dict) -> str:
-    return user.get("unified_id") or user.get("username")
+    return user["username"]
 
 
 def _serialize_row(row: dict) -> dict:

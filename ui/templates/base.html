@@ -549,6 +549,11 @@
                                 <i class="fas fa-puzzle-piece w-5 text-center"></i>
                                 <span>{{ _("Plugins") }}</span>
                             </a>
+                            <a href="/companies/"
+                               class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/companies' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
+                                <i class="fas fa-building w-5 text-center"></i>
+                                <span>{{ _("Companies") }}</span>
+                            </a>
                             <a href="/admin/languages"
                                class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all hover:bg-void-100 dark:hover:bg-void-800 {% if '/admin/languages' in request.url.path %}menu-active text-nordic-600 dark:text-nordic-400{% else %}text-void-600 dark:text-void-300{% endif %}">
                                 <i class="fas fa-language w-5 text-center"></i>
@@ -562,6 +567,31 @@
                         </div>
                     </div>
                 </nav>
+
+                <!-- Company Switcher -->
+                {% set user_companies = request.state.user_companies or [] %}
+                {% if cu and cu.is_superadmin and user_companies|length > 0 %}
+                <div class="px-4 py-2 border-t border-void-200 dark:border-void-800" x-data="{ companyOpen: false }">
+                    <button @click="companyOpen = !companyOpen" class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-void-100 dark:hover:bg-void-800 transition-colors text-sm">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-building text-void-400 text-xs"></i>
+                            <span class="text-void-600 dark:text-void-300 truncate">{{ request.state.active_company_name or 'No company' }}</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-[8px] text-void-400 transition-transform duration-200" :class="companyOpen && 'rotate-180'"></i>
+                    </button>
+                    <div x-show="companyOpen" x-cloak x-collapse class="mt-1 space-y-0.5">
+                        {% for cu_row in user_companies %}
+                        <form method="POST" action="/companies/switch" class="w-full">
+                            {% include "partials/csrf_field.html" %}
+                            <input type="hidden" name="company_id" value="{{ cu_row.company_id }}">
+                            <button type="submit" class="w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors {% if cu_row.company_id == request.state.active_company_id %}bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 font-medium{% else %}text-void-500 dark:text-void-400 hover:bg-void-100 dark:hover:bg-void-800{% endif %}">
+                                {{ cu_row.company_name or 'Company #' ~ cu_row.company_id }}
+                            </button>
+                        </form>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
 
                 <!-- User Menu -->
                 {% set cu = request.state.current_user %}

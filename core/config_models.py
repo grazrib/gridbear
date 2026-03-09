@@ -1,9 +1,9 @@
 """ORM models for user/channel configuration (replaces admin_config.json).
 
-Eight normalized tables under the ``app`` schema store what was previously
-a single JSON file: authorized channel users, cross-platform identities,
-MCP permissions (per-user and per-group), memory groups, service accounts,
-user profiles, and temporary OAuth tokens.
+Normalized tables under the ``app`` schema store what was previously
+a single JSON file: authorized channel users, cross-platform identities
+(UserPlatform with FK to User), MCP permissions (per-user and per-group),
+memory groups, service accounts, and temporary OAuth tokens.
 
 Global scalar settings (bot_identity, bot_email_settings, webchat_tts_provider)
 live in the existing ``SystemConfig`` key-value table.
@@ -11,6 +11,7 @@ live in the existing ``SystemConfig`` key-value table.
 
 from __future__ import annotations
 
+from core.models.user import User
 from core.orm import Model, fields
 
 
@@ -30,19 +31,20 @@ class ChannelAuthorizedUser(Model):
     ]
 
 
-class UserIdentity(Model):
-    """Cross-platform identity mapping: unified_id <-> platform:username."""
+class UserPlatform(Model):
+    """FK-based cross-platform identity mapping (replaces UserIdentity)."""
 
     _schema = "app"
-    _name = "user_identities"
+    _name = "user_platforms"
+    _tenant_field = None
 
-    unified_id = fields.Text(required=True, index=True)
+    user_id = fields.ForeignKey(User, on_delete="CASCADE", required=True, index=True)
     platform = fields.Text(required=True)
-    username = fields.Text(required=True)
+    platform_username = fields.Text(required=True)
 
     _constraints = [
-        ("uq_identity_platform", "UNIQUE (unified_id, platform)"),
-        ("uq_identity_username", "UNIQUE (platform, username)"),
+        ("uq_user_platform", "UNIQUE (user_id, platform)"),
+        ("uq_platform_username", "UNIQUE (platform, platform_username)"),
     ]
 
 
@@ -103,14 +105,19 @@ class UserServiceAccount(Model):
     ]
 
 
-class UserProfile(Model):
-    """Per-user profile settings (locale, preferences) for non-portal users."""
+class PasswordToken(Model):
+    """Tokens for user invites and password resets."""
 
     _schema = "app"
-    _name = "user_profiles"
+    _name = "password_tokens"
+    _tenant_field = None
 
-    unified_id = fields.Text(required=True, unique=True, index=True)
-    locale = fields.Text(default="en")
+    user_id = fields.ForeignKey(User, on_delete="CASCADE", required=True, index=True)
+    token_hash = fields.Text(required=True)
+    purpose = fields.Text(required=True)  # "invite" or "reset"
+    expires_at = fields.DateTime(required=True)
+    used_at = fields.DateTime()
+    created_at = fields.DateTime(auto_now_add=True)
 
 
 class OAuthToken(Model):

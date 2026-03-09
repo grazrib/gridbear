@@ -135,21 +135,28 @@ DATABASE_PATH = DATA_DIR / "sessions.db"
 def get_unified_user_id(platform: str, username: str) -> str:
     """Get unified user ID for cross-platform memory.
 
-    If a user_identity mapping exists, returns the unified_id.
+    Looks up UserPlatform (FK-based) → User.username.
     Otherwise returns "{platform}:{username}" as fallback.
     """
-    try:
-        from core.config_models import UserIdentity
+    username_lower = username.lower().lstrip("@")
+    platform_lower = platform.lower()
 
-        username_lower = username.lower().lstrip("@")
-        platform_lower = platform.lower()
-        row = UserIdentity.get_sync(platform=platform_lower, username=username_lower)
+    try:
+        from core.config_models import UserPlatform
+        from core.models.user import User
+
+        row = UserPlatform.get_sync(
+            platform=platform_lower, platform_username=username_lower
+        )
         if row:
-            return row["unified_id"]
+            user = User.get_sync(id=row["user_id"])
+            if user:
+                return user["username"]
     except Exception:
         pass
+
     # Fallback: platform-prefixed username
-    return f"{platform.lower()}:{username.lower().lstrip('@')}"
+    return f"{platform_lower}:{username_lower}"
 
 
 def get_memory_group_user_ids(user_id: str) -> list[str]:
@@ -296,11 +303,11 @@ DEFAULT_LOCALE = "en"
 
 
 def get_user_locale(unified_id: str) -> str | None:
-    """Get user's preferred locale."""
+    """Get user's preferred locale from User.locale."""
     try:
-        from core.config_models import UserProfile
+        from core.models.user import User
 
-        row = UserProfile.get_sync(unified_id=unified_id.lower())
+        row = User.get_sync(username=unified_id.lower())
         if row:
             return row["locale"]
     except Exception:
@@ -309,16 +316,14 @@ def get_user_locale(unified_id: str) -> str | None:
 
 
 def set_user_locale(unified_id: str, locale: str) -> bool:
-    """Set user's preferred locale."""
+    """Set user's preferred locale on User.locale."""
     try:
-        from core.config_models import UserProfile
+        from core.models.user import User
 
-        UserProfile.create_or_update_sync(
-            _conflict_fields=("unified_id",),
-            _update_fields=["locale"],
-            unified_id=unified_id.lower(),
-            locale=locale,
-        )
-        return True
+        row = User.get_sync(username=unified_id.lower())
+        if row:
+            User.write_sync(row["id"], locale=locale)
+            return True
     except Exception:
-        return False
+        pass
+    return False
