@@ -1155,13 +1155,10 @@ class MCPClientManager:
             import json
 
             from core.mcp_gateway.provider_loader import (
-                PLUGINS_CONFIG,
                 _get_plugins_dir,
                 _load_provider_class,
             )
-
-            with open(PLUGINS_CONFIG) as f:
-                config = json.load(f)
+            from ui.plugin_helpers import load_plugin_config
 
             plugins_dir = _get_plugins_dir()
             # Use plugin_dir (actual directory name) instead of provider_name
@@ -1174,7 +1171,7 @@ class MCPClientManager:
 
                 provider_cls = _load_provider_class(plugin_dir, manifest)
                 if provider_cls and hasattr(provider_cls, "get_user_server_config"):
-                    plugin_config = config.get(plugin_dir, {})
+                    plugin_config = load_plugin_config(plugin_dir)
                     provider = provider_cls(plugin_config)
                     return provider.get_user_server_config(unified_id, credentials)
         except Exception as e:
@@ -1186,7 +1183,11 @@ class MCPClientManager:
 
         # Fallback: use global config with injected auth header
         base_config = dict(server_info.config)
-        token = credentials.get("token") or credentials.get("api_key")
+        token = (
+            credentials.get("access_token")
+            or credentials.get("token")
+            or credentials.get("api_key")
+        )
         if token and "url" in base_config:
             headers = dict(base_config.get("headers") or {})
             headers["Authorization"] = f"Bearer {token}"
