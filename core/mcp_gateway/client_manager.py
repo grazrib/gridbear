@@ -239,14 +239,9 @@ def _get_user_credentials(
 
     import json
 
-    # Build list of unified_ids to try: primary + memory group aliases
-    # (e.g. "user_a" and "user_b" are the same person)
-    try:
-        from config.settings import get_memory_group_user_ids
-
-        candidates = get_memory_group_user_ids(unified_id)
-    except Exception:
-        candidates = [unified_id]
+    # Credentials are per-user (bound to a specific OAuth2 flow),
+    # NOT shared across memory group aliases
+    candidates = [unified_id]
 
     # Try per-user credentials for each candidate
     for uid in candidates:
@@ -936,8 +931,9 @@ class MCPClientManager:
                 )
             else:
                 logger.error(
-                    "MCP Gateway: connection failed for %s: %s",
+                    "MCP Gateway: connection failed for %s (%s): %s",
                     server_info.server_name,
+                    transport,
                     e,
                 )
             await self._cleanup_connection(conn)
@@ -1154,18 +1150,16 @@ class MCPClientManager:
         try:
             import json
 
-            from core.mcp_gateway.provider_loader import (
-                _get_plugins_dir,
-                _load_provider_class,
-            )
+            from core.mcp_gateway.provider_loader import _load_provider_class
+            from core.registry import get_plugin_path
             from ui.plugin_helpers import load_plugin_config
 
-            plugins_dir = _get_plugins_dir()
-            # Use plugin_dir (actual directory name) instead of provider_name
-            # (display name like "odoo-mcp" vs directory "odoo")
+            # Use get_plugin_path() which resolves external plugin dirs
+            # (GRIDBEAR_PLUGIN_PATHS), not just the core plugins/ directory
             plugin_dir = server_info.plugin_dir or server_info.provider_name
-            manifest_path = plugins_dir / plugin_dir / "manifest.json"
-            if manifest_path.exists():
+            plugin_path = get_plugin_path(plugin_dir)
+            manifest_path = plugin_path / "manifest.json" if plugin_path else None
+            if manifest_path and manifest_path.exists():
                 with open(manifest_path) as f:
                     manifest = json.load(f)
 
@@ -1200,6 +1194,36 @@ class MCPClientManager:
         if conn:
             await self._cleanup_connection(conn)
             logger.info(f"MCP Gateway: disconnected user connection {conn_key}")
+
+    async def invalidate_user_connections(
+        self, unified_id: str, server_name: str | None = None
+    ) -> int:
+        """Invalidate cached user connections so they reconnect with fresh credentials.
+
+        Called when a user updates or removes their service credentials (e.g. from /me).
+        If server_name is given, only that server's connection is invalidated;
+        otherwise all connections for the user are invalidated.
+
+        Returns the number of connections invalidated.
+        """
+        targets = []
+        for key in list(self._user_connections.keys()):
+            parts = key.split(":", 1)
+            if len(parts) == 2 and parts[1] == unified_id:
+                if server_name is None or parts[0] == server_name:
+                    targets.append(key)
+
+        for key in targets:
+            await self._disconnect_user(key)
+
+        if targets:
+            logger.info(
+                "MCP Gateway: invalidated %d user connection(s) for %s%s",
+                len(targets),
+                unified_id,
+                f" (server={server_name})" if server_name else "",
+            )
+        return len(targets)
 
     async def _cleanup_loop(self) -> None:
         """Periodically check and disconnect idle connections."""

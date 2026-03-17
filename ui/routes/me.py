@@ -75,6 +75,34 @@ def _is_token_expired(token_raw: str) -> bool:
     return False
 
 
+async def _invalidate_mcp_connections(unified_id: str, conn_id: str) -> None:
+    """Invalidate cached MCP gateway connections when credentials change.
+
+    Maps the service connection ID (e.g. "odoo") to the MCP server name
+    (e.g. "odoo-mcp") and tells the client manager to drop the cached
+    SSE/HTTP connection so the next request reconnects with fresh credentials.
+    """
+    try:
+        from core.mcp_gateway.server import get_client_manager
+
+        cm = get_client_manager()
+        if not cm:
+            return
+        # Find which server_name(s) use this service_connection_id
+        server_names = [
+            name
+            for name, info in cm._known_servers.items()
+            if info.service_connection_id == conn_id
+        ]
+        for server_name in server_names:
+            await cm.invalidate_user_connections(unified_id, server_name)
+        if not server_names:
+            # Fallback: invalidate all connections for this user
+            await cm.invalidate_user_connections(unified_id)
+    except Exception as e:
+        logger.warning("Failed to invalidate MCP connections: %s", e)
+
+
 async def _notify_expired_tokens(connections: list[dict], user: dict) -> None:
     """Create bell notifications for any expired OAuth2 tokens."""
     expired = [c for c in connections if c.get("token_expired")]
@@ -657,6 +685,9 @@ async def connection_connect_post(
             status_code=303,
         )
 
+    # Invalidate cached connection so gateway uses fresh credentials
+    await _invalidate_mcp_connections(unified_id, conn_id)
+
     return RedirectResponse(url="/me/connections", status_code=303)
 
 
@@ -750,6 +781,8 @@ async def connection_oauth_callback(
                             json.dumps(token_data),
                             description=f"User {unified_id} OAuth token for {conn_id}",
                         )
+                        # Invalidate cached connection so gateway uses fresh token
+                        await _invalidate_mcp_connections(unified_id, conn_id)
                         return RedirectResponse(url="/me/connections", status_code=303)
                     else:
                         logger.warning(
@@ -789,6 +822,9 @@ async def connection_disconnect(
         key = f"user:{unified_id}:svc:{conn_id}:{suffix}"
         if secrets_manager.get(key) is not None:
             secrets_manager.delete(key)
+
+    # Invalidate cached MCP gateway connections so they don't use stale tokens
+    await _invalidate_mcp_connections(unified_id, conn_id)
 
     return RedirectResponse(url="/me/connections", status_code=303)
 
