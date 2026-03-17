@@ -85,8 +85,11 @@ i18n = [
 mistral = [
     "mistral-vibe>=0.1.0",
 ]
+data = [
+    "openpyxl>=3.1.0",
+]
 all = [
-    "gridbear[telegram,discord,memory,tts,google,ms365,livekit,remote-dev,pdf,executor,openai,2fa,cli,i18n,mistral]",
+    "gridbear[telegram,discord,memory,tts,google,ms365,livekit,remote-dev,pdf,executor,openai,2fa,cli,i18n,mistral,data]",
 ]
 dev = [
     "pytest>=7.0",

@@ -1126,6 +1126,47 @@ class GoogleWorkspaceMCPServer:
                     "required": ["file_path"],
                 },
             },
+            {
+                "name": "drive_download",
+                "description": f"Download a file from Google Drive to local disk ({email}). "
+                "Google Docs/Sheets/Slides are exported to Office format (docx/xlsx/pptx). "
+                "Binary files (PDF, XLSX, images) are downloaded as-is.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "file_id": {
+                            "type": "string",
+                            "description": "Google Drive file ID",
+                        },
+                    },
+                    "required": ["file_id"],
+                },
+            },
+            {
+                "name": "drive_read_spreadsheet",
+                "description": f"Read a spreadsheet from Google Drive ({email}) and return "
+                "structured data (headers + rows). Works with Google Sheets and "
+                "uploaded .xlsx files. Use this instead of downloading + parsing manually.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "file_id": {
+                            "type": "string",
+                            "description": "Google Drive file ID of the spreadsheet",
+                        },
+                        "sheet": {
+                            "type": "string",
+                            "description": "Sheet name to read (default: first sheet)",
+                        },
+                        "max_rows": {
+                            "type": "integer",
+                            "description": "Max rows to return (default 500, max 2000)",
+                            "default": 500,
+                        },
+                    },
+                    "required": ["file_id"],
+                },
+            },
         ]
 
     def _track_operation(self, name: str, args: dict, result: dict) -> None:
@@ -1490,6 +1531,17 @@ class GoogleWorkspaceMCPServer:
                 args.get("name"),
                 args.get("folder_id"),
                 args.get("share", False),
+            )
+        elif name == "drive_download":
+            return self.drive.download(
+                args["file_id"],
+                str(self.export_dir),
+            )
+        elif name == "drive_read_spreadsheet":
+            return self.drive.read_spreadsheet(
+                args["file_id"],
+                args.get("sheet"),
+                args.get("max_rows", 500),
             )
         else:
             return {
