@@ -721,6 +721,12 @@ class ClaudeRunner(BaseRunner):
 
         except asyncio.TimeoutError:
             logger.error(f"Pooled request timed out after {self.timeout}s")
+            # Destroy the process — it may be stuck mid-tool-use and
+            # cannot be safely reused. A fresh process will be created
+            # on the next request.
+            if pooled:
+                await self._pool.destroy(pooled)
+                pooled = None  # prevent release in finally
             return RunnerResponse(
                 text=f"Timeout: la richiesta ha impiegato più di {self.timeout} secondi.",
                 session_id=session_id,
