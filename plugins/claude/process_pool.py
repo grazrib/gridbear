@@ -410,6 +410,25 @@ class ClaudeProcessPool:
         pooled.request_count += 1
         pooled.last_used = time.time()
 
+    async def destroy(self, pooled: PooledProcess):
+        """Terminate and remove a process from the pool.
+
+        Use after a timeout or unrecoverable error — the process may be
+        stuck mid-operation and cannot be safely reused.
+        """
+        async with self._lock:
+            for processes in self._pools.values():
+                if pooled in processes:
+                    processes.remove(pooled)
+                    break
+        await self._terminate_process(pooled)
+        logger.info(
+            "Pool: destroyed process for agent=%s session=%s (pid=%s)",
+            pooled.agent_id,
+            pooled.session_id,
+            pooled.process.pid if pooled.process else "?",
+        )
+
     async def send_prompt(
         self,
         pooled: PooledProcess,
