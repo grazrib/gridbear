@@ -117,9 +117,14 @@ async def upload_sa(
     validate_csrf_token(request, csrf_token)
 
     content = await sa_file.read()
-    sa_json = content.decode("utf-8")
+    sa_json = content.decode("utf-8").strip()
 
-    parsed = json.loads(sa_json)
+    try:
+        parsed = json.loads(sa_json)
+    except (json.JSONDecodeError, ValueError):
+        return RedirectResponse(
+            url="/plugins/google-sa?error=invalid_sa", status_code=303
+        )
     if "client_email" not in parsed or "private_key" not in parsed:
         return RedirectResponse(
             url="/plugins/google-sa?error=invalid_sa", status_code=303
@@ -165,9 +170,14 @@ async def upload_agent_sa(
         )
 
     content = await sa_file.read()
-    sa_json = content.decode("utf-8")
+    sa_json = content.decode("utf-8").strip()
 
-    parsed = json.loads(sa_json)
+    try:
+        parsed = json.loads(sa_json)
+    except (json.JSONDecodeError, ValueError):
+        return RedirectResponse(
+            url="/plugins/google-sa?error=invalid_sa", status_code=303
+        )
     if "client_email" not in parsed or "private_key" not in parsed:
         return RedirectResponse(
             url="/plugins/google-sa?error=invalid_sa", status_code=303
