@@ -1,8 +1,29 @@
 """Google Drive service."""
 
+import io
+from pathlib import Path
+
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaIoBaseDownload
 
 from .base import BaseGoogleService
+
+# Google Workspace MIME types → export format mapping
+_GOOGLE_EXPORT_MAP = {
+    "application/vnd.google-apps.document": (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".docx",
+    ),
+    "application/vnd.google-apps.spreadsheet": (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xlsx",
+    ),
+    "application/vnd.google-apps.presentation": (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".pptx",
+    ),
+    "application/vnd.google-apps.drawing": ("application/pdf", ".pdf"),
+}
 
 
 class DriveService(BaseGoogleService):
@@ -375,6 +396,156 @@ class DriveService(BaseGoogleService):
                     "size": result.get("size"),
                     "mimeType": mime_type,
                     "shared": share,
+                }
+            )
+        except HttpError as e:
+            return self._format_error(self._handle_api_error(e))
+
+    def read_spreadsheet(
+        self,
+        file_id: str,
+        sheet: str | None = None,
+        max_rows: int = 500,
+    ) -> dict:
+        """Download and read a spreadsheet, returning structured data.
+
+        Supports Google Sheets (exported to xlsx) and uploaded .xlsx files.
+
+        Args:
+            file_id: Google Drive file ID
+            sheet: Sheet name to read (default: first sheet)
+            max_rows: Maximum rows to return (default 500, cap 2000)
+
+        Returns:
+            Response with headers, rows, and metadata
+        """
+        import openpyxl
+
+        max_rows = min(max_rows, 2000)
+
+        try:
+            meta = (
+                self.drive.files()
+                .get(fileId=file_id, fields="id,name,mimeType")
+                .execute()
+            )
+            name = meta.get("name", file_id)
+            mime = meta.get("mimeType", "")
+
+            buf = io.BytesIO()
+
+            if mime == "application/vnd.google-apps.spreadsheet":
+                export_mime = (
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                request = self.drive.files().export_media(
+                    fileId=file_id, mimeType=export_mime
+                )
+            else:
+                request = self.drive.files().get_media(fileId=file_id)
+
+            downloader = MediaIoBaseDownload(buf, request)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+
+            buf.seek(0)
+            wb = openpyxl.load_workbook(buf, read_only=True, data_only=True)
+
+            sheet_names = wb.sheetnames
+            ws = wb[sheet] if sheet and sheet in sheet_names else wb.active
+
+            rows = []
+            headers = []
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                str_row = [str(c) if c is not None else "" for c in row]
+                if i == 0:
+                    headers = str_row
+                    continue
+                if i > max_rows:
+                    break
+                rows.append(str_row)
+
+            total_rows = ws.max_row - 1 if ws.max_row else 0
+            wb.close()
+
+            return self._format_response(
+                data={
+                    "fileId": file_id,
+                    "fileName": name,
+                    "sheetName": ws.title,
+                    "allSheets": sheet_names,
+                    "headers": headers,
+                    "rows": rows,
+                    "rowCount": len(rows),
+                    "totalRows": total_rows,
+                    "truncated": total_rows > max_rows,
+                }
+            )
+        except HttpError as e:
+            return self._format_error(self._handle_api_error(e))
+        except Exception as e:
+            return self._format_response(
+                success=False,
+                error=f"Failed to read spreadsheet: {e}",
+            )
+
+    def download(self, file_id: str, dest_dir: str) -> dict:
+        """Download a file from Google Drive to a local directory.
+
+        For Google-native files (Docs, Sheets, Slides) exports to
+        Office format (docx, xlsx, pptx). For binary files (PDF, XLSX,
+        images, etc.) downloads the original content.
+
+        Args:
+            file_id: Google Drive file ID
+            dest_dir: Local directory to save the file
+
+        Returns:
+            Response with local file path and metadata
+        """
+        dest = Path(dest_dir)
+        dest.mkdir(parents=True, exist_ok=True)
+
+        try:
+            meta = (
+                self.drive.files()
+                .get(fileId=file_id, fields="id,name,mimeType,size")
+                .execute()
+            )
+            name = meta.get("name", file_id)
+            mime = meta.get("mimeType", "")
+
+            buf = io.BytesIO()
+
+            if mime in _GOOGLE_EXPORT_MAP:
+                # Google-native file → export to Office format
+                export_mime, ext = _GOOGLE_EXPORT_MAP[mime]
+                request = self.drive.files().export_media(
+                    fileId=file_id, mimeType=export_mime
+                )
+                # Strip any existing extension and add the export one
+                stem = Path(name).stem
+                name = f"{stem}{ext}"
+            else:
+                # Binary file → download as-is
+                request = self.drive.files().get_media(fileId=file_id)
+
+            downloader = MediaIoBaseDownload(buf, request)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
+
+            local_path = dest / name
+            local_path.write_bytes(buf.getvalue())
+
+            return self._format_response(
+                data={
+                    "fileId": file_id,
+                    "name": name,
+                    "localPath": str(local_path),
+                    "mimeType": mime,
+                    "size": len(buf.getvalue()),
                 }
             )
         except HttpError as e:
