@@ -1,10 +1,15 @@
 """Tests for MCP Gateway client_manager — list_all_tools fallback behavior."""
 
-from unittest.mock import patch
+import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.mcp_gateway.client_manager import MCPClientManager, _sanitize_name
+from core.mcp_gateway.client_manager import (
+    MCPClientManager,
+    _mark_token_expired,
+    _sanitize_name,
+)
 from core.mcp_gateway.provider_loader import ServerInfo
 
 
@@ -91,3 +96,74 @@ class TestListAllToolsFallback:
         names = {t["name"] for t in tools}
         assert "odoo-mcp__search" in names
         assert "homeassistant__tool1" in names
+
+
+class TestMarkTokenExpired:
+    """Verify that _mark_token_expired sets expires_at=0 in the vault."""
+
+    def test_marks_valid_token_as_expired(self):
+        """A valid token JSON should have expires_at set to 0."""
+        token_data = {
+            "access_token": "abc123",
+            "expires_at": 9999999999,
+            "refresh_token": "ref456",
+        }
+        mock_sm = MagicMock()
+        mock_sm.get_plain.return_value = json.dumps(token_data)
+
+        with (
+            patch(
+                "core.mcp_gateway.client_manager.secrets_manager", mock_sm, create=True
+            ),
+            patch.dict(
+                "sys.modules",
+                {"ui.secrets_manager": MagicMock(secrets_manager=mock_sm)},
+            ),
+        ):
+            _mark_token_expired("dcorio", "odoo")
+
+        mock_sm.set.assert_called_once()
+        call_args = mock_sm.set.call_args
+        key = call_args[0][0]
+        saved = json.loads(call_args[0][1])
+
+        assert key == "user:dcorio:svc:odoo:token"
+        assert saved["expires_at"] == 0
+        assert saved["access_token"] == "abc123"
+        assert saved["refresh_token"] == "ref456"
+
+    def test_no_token_in_vault_does_nothing(self):
+        """If no token exists, _mark_token_expired should be a no-op."""
+        mock_sm = MagicMock()
+        mock_sm.get_plain.return_value = None
+
+        with (
+            patch(
+                "core.mcp_gateway.client_manager.secrets_manager", mock_sm, create=True
+            ),
+            patch.dict(
+                "sys.modules",
+                {"ui.secrets_manager": MagicMock(secrets_manager=mock_sm)},
+            ),
+        ):
+            _mark_token_expired("nobody", "odoo")
+
+        mock_sm.set.assert_not_called()
+
+    def test_invalid_json_does_nothing(self):
+        """If the vault contains invalid JSON, should be a no-op."""
+        mock_sm = MagicMock()
+        mock_sm.get_plain.return_value = "not-json"
+
+        with (
+            patch(
+                "core.mcp_gateway.client_manager.secrets_manager", mock_sm, create=True
+            ),
+            patch.dict(
+                "sys.modules",
+                {"ui.secrets_manager": MagicMock(secrets_manager=mock_sm)},
+            ),
+        ):
+            _mark_token_expired("dcorio", "odoo")
+
+        mock_sm.set.assert_not_called()
