@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-03-19
+
+### Added
+
+- **Multi-tenancy Phase 1**: ORM tenant isolation with `_tenant_field`, automatic tenant filtering on all queries, `Company` and `CompanyUser` models
+- **Unified User model**: Single `app.users` table replaces dual admin/app user tables, with `UserPlatform` for platform identity mapping
+- **Invite flow**: Token-based user invite with password setup, email sent via system agent's Gmail MCP server
+- **GWS drive tools**: `drive_download` and `drive_read_spreadsheet` for Google Drive file access and XLSX/Google Sheets parsing
+- **Ollama admin page**: Cloud authentication, health check, model management with pull support
+- **openpyxl dependency**: Added to `data` extras for spreadsheet analysis
+
+### Improved
+
+- MCP Gateway: mark user OAuth2 token as expired on 401 from external servers, `/me/connections` shows amber badge
+- MCP Gateway: propagate user identity in subprocess mode for per-user tool access
+- MCP Gateway: normalize camelCase tool arguments from LLMs to match server expectations
+- MCP Gateway: fix user credential resolution for external (enterprise) plugins
+- MCP Gateway: skip virtual transport providers during SSE health checks
+- Invite emails sent via system agent's Gmail MCP server instead of SMTP
+- MCP user permissions migrated to `unified_id` (username-based)
+
+### Fixed
+
+- Runner: destroy pooled Claude CLI process on timeout instead of releasing (prevents zombie processes)
+- Google SA: handle invalid JSON on per-agent service account upload (was 500)
+- Auth: add forgot password link to login page
+- `_is_token_expired()`: `expires_at=0` was skipped because 0 is falsy in Python
+- UI: update collaboration label from tag syntax to tool name
+- Docker: `PYTHONPATH` + gateway URL for gridbear CLI
+
+### Dependencies
+
+- Bumped minor/patch dependencies
+
 ## [0.5.0] - 2026-03-04
 
 ### Added
