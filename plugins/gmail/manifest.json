@@ -1,6 +1,6 @@
 {
   "name": "gmail",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "mcp",
   "description": "Gmail MCP server provider (multi-account, encrypted tokens)",
   "entry_point": "provider.py",

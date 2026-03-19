@@ -194,6 +194,52 @@ class GmailMCPServer:
                 },
             },
             {
+                "name": "reply_email",
+                "description": (
+                    f"Reply to an existing email in {email}. "
+                    "Keeps the message in the same thread."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "messageId": {
+                            "type": "string",
+                            "description": "ID of the email to reply to",
+                        },
+                        "body": {
+                            "type": "string",
+                            "description": "Reply body (plain text)",
+                        },
+                        "cc": {
+                            "type": "string",
+                            "description": "CC recipients (comma-separated, optional)",
+                        },
+                        "bcc": {
+                            "type": "string",
+                            "description": "BCC recipients (comma-separated, optional)",
+                        },
+                        "from_alias": {
+                            "type": "string",
+                            "description": "Send from this email alias",
+                        },
+                        "from_name": {
+                            "type": "string",
+                            "description": "Display name for sender",
+                        },
+                        "attachments": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "List of absolute file paths to attach "
+                                "(e.g. ['/app/data/playwright/page-123.png']). "
+                                "Files must be under /app/data/."
+                            ),
+                        },
+                    },
+                    "required": ["messageId", "body"],
+                },
+            },
+            {
                 "name": "mark_as_read",
                 "description": f"Mark one or more emails as read in {email}.",
                 "inputSchema": {
@@ -556,6 +602,108 @@ class GmailMCPServer:
             "attachments": attached_names,
         }
 
+    def reply_email(
+        self,
+        message_id: str,
+        body: str,
+        cc: str = None,
+        bcc: str = None,
+        from_alias: str = None,
+        from_name: str = None,
+        attachments: list[str] | None = None,
+    ) -> dict:
+        """Reply to an existing email, keeping the thread intact."""
+        # Fetch original message for thread info and headers
+        original = (
+            self.gmail.users()
+            .messages()
+            .get(
+                userId="me",
+                id=message_id,
+                format="metadata",
+                metadataHeaders=["Subject", "From", "To", "Message-ID", "References"],
+            )
+            .execute()
+        )
+
+        thread_id = original.get("threadId")
+        orig_headers = original.get("payload", {}).get("headers", [])
+        orig_subject = self._get_header(orig_headers, "Subject") or ""
+        orig_from = self._get_header(orig_headers, "From") or ""
+        orig_message_id = self._get_header(orig_headers, "Message-ID") or ""
+        orig_references = self._get_header(orig_headers, "References") or ""
+
+        # Reply goes to the original sender
+        reply_to = orig_from
+        # Build References chain
+        references = (
+            f"{orig_references} {orig_message_id}".strip()
+            if orig_references
+            else orig_message_id
+        )
+        # Subject with Re: prefix
+        subject = (
+            orig_subject if orig_subject.startswith("Re:") else f"Re: {orig_subject}"
+        )
+
+        sender_email = from_alias or self.user_email
+        sender_name = from_name or self.user_name
+
+        if attachments:
+            message = MIMEMultipart()
+            message.attach(MIMEText(body))
+            for file_path in attachments:
+                p = Path(file_path)
+                if not p.is_file():
+                    raise FileNotFoundError(f"Attachment not found: {file_path}")
+                if not str(p.resolve()).startswith("/app/data"):
+                    raise ValueError(
+                        f"Attachment path must be under /app/data: {file_path}"
+                    )
+                content_type = (
+                    mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+                )
+                maintype, subtype = content_type.split("/", 1)
+                part = MIMEBase(maintype, subtype)
+                part.set_payload(p.read_bytes())
+                email.encoders.encode_base64(part)
+                part.add_header("Content-Disposition", "attachment", filename=p.name)
+                message.attach(part)
+        else:
+            message = MIMEText(body)
+
+        message["to"] = reply_to
+        message["subject"] = subject
+        message["from"] = (
+            f"{sender_name} <{sender_email}>" if sender_name else sender_email
+        )
+        if cc:
+            message["cc"] = cc
+        if bcc:
+            message["bcc"] = bcc
+        if orig_message_id:
+            message["In-Reply-To"] = orig_message_id
+        if references:
+            message["References"] = references
+
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        send_body = {"raw": raw}
+        if thread_id:
+            send_body["threadId"] = thread_id
+
+        response = (
+            self.gmail.users().messages().send(userId="me", body=send_body).execute()
+        )
+
+        attached_names = [Path(f).name for f in (attachments or [])]
+        return {
+            "id": response.get("id"),
+            "threadId": response.get("threadId"),
+            "to": reply_to,
+            "subject": subject,
+            "attachments": attached_names,
+        }
+
     def mark_as_read(self, message_ids: list[str]) -> dict:
         """Mark emails as read by removing the UNREAD label."""
         results = []
@@ -817,7 +965,7 @@ class GmailMCPServer:
                     "timestamp": timestamp,
                 }
 
-            elif name == "send_email":
+            elif name in ("send_email", "reply_email"):
                 op_record["to"] = args.get("to", "")
                 op_record["subject"] = args.get("subject", "")
 
@@ -858,6 +1006,16 @@ class GmailMCPServer:
             return self.send_email(
                 args["to"],
                 args["subject"],
+                args["body"],
+                args.get("cc"),
+                args.get("bcc"),
+                args.get("from_alias"),
+                args.get("from_name"),
+                args.get("attachments"),
+            )
+        elif name == "reply_email":
+            return self.reply_email(
+                args["messageId"],
                 args["body"],
                 args.get("cc"),
                 args.get("bcc"),
