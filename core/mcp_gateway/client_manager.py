@@ -292,6 +292,41 @@ def _get_user_credentials(
     return None
 
 
+def _mark_token_expired(unified_id: str, connection_id: str) -> None:
+    """Mark a user's OAuth2 token as expired in the vault.
+
+    Sets expires_at to 0 so _is_token_expired() picks it up and the
+    /me/connections page shows the amber "Expired" badge.
+    """
+    import json
+
+    try:
+        from ui.secrets_manager import secrets_manager
+    except ImportError:
+        return
+
+    key = f"user:{unified_id}:svc:{connection_id}:token"
+    raw = secrets_manager.get_plain(key)
+    if not raw:
+        return
+
+    try:
+        token_data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return
+
+    if not isinstance(token_data, dict):
+        return
+
+    token_data["expires_at"] = 0
+    secrets_manager.set(key, json.dumps(token_data))
+    logger.info(
+        "MCP Gateway: marked token expired for user=%s connection=%s",
+        unified_id,
+        connection_id,
+    )
+
+
 class MCPClientManager:
     """Manages connections to all MCP servers and aggregates tools."""
 
@@ -1118,11 +1153,17 @@ class MCPClientManager:
                     sub = ""
                     if hasattr(e, "exceptions"):
                         sub = "; ".join(str(se) for se in e.exceptions)
+                    err_str = f"{e} {sub}".lower()
                     logger.error(
                         f"MCP Gateway: failed to connect user {unified_id} "
                         f"to {server_name}: {e}" + (f" | sub: {sub}" if sub else ""),
                         exc_info=True,
                     )
+                    # Mark token as expired if auth failure (401/unauthorized)
+                    if "401" in err_str or "unauthorized" in err_str:
+                        conn_id = self._known_servers[server_name].service_connection_id
+                        if conn_id:
+                            _mark_token_expired(unified_id, conn_id)
                     try:
                         from ui.services.notifications import NotificationService
 

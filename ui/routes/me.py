@@ -68,7 +68,7 @@ def _is_token_expired(token_raw: str) -> bool:
     try:
         token_data = json.loads(token_raw)
         expires_at = token_data.get("expires_at")
-        if expires_at and time.time() > float(expires_at):
+        if expires_at is not None and time.time() > float(expires_at):
             return True
     except (json.JSONDecodeError, ValueError, TypeError):
         pass
