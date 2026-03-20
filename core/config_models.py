@@ -54,8 +54,9 @@ class UserMcpPermission(Model):
     _schema = "app"
     _name = "user_mcp_permissions"
 
-    unified_id = fields.Text(index=True)
+    username = fields.Text(required=True, index=True)
     server_name = fields.Text(required=True)
+    unified_id = fields.Text(index=True)
 
     _constraints = [
         ("uq_user_mcp_uid", "UNIQUE (unified_id, server_name)"),

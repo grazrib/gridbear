@@ -48,6 +48,10 @@ _client_manager = None
 _last_refresh: float = 0
 _REFRESH_INTERVAL = int(os.getenv("MCP_REFRESH_INTERVAL", "30"))
 
+# Tools list cache: (timestamp, tools_list) per cache_key
+_tools_cache: dict[str, tuple[float, list[dict]]] = {}
+_TOOLS_CACHE_TTL = int(os.getenv("MCP_TOOLS_CACHE_TTL", "120"))  # seconds
+
 # Rate limiting
 _RATE_LIMIT_MAX_REQUESTS = int(os.getenv("MCP_RATE_LIMIT_MAX_REQUESTS", "100"))
 _RATE_LIMIT_WINDOW = float(os.getenv("MCP_RATE_LIMIT_WINDOW", "60"))
@@ -223,6 +227,51 @@ def _filter_by_permissions(tools: list[dict], mcp_permissions: list[str]) -> lis
         mcp_permissions,
         sanitized_to_original=reverse_map,
     )
+
+
+def _filter_by_user_mcp_permissions(tools: list[dict], unified_id: str) -> list[dict]:
+    """Filter tools by per-user MCP permissions (set in admin /permissions page).
+
+    If the user has no explicit permissions, all tools pass through (backwards compat).
+    If the user has permissions, only namespaced tools from allowed servers are kept.
+    Non-namespaced tools (gridbear_help, send_file_to_chat, etc.) always pass through.
+    """
+    try:
+        from config.settings import get_user_mcp_permissions
+
+        user_perms = get_user_mcp_permissions(unified_id)
+        if not user_perms:
+            # No permissions configured = no MCP tools allowed.
+            # Keep only non-namespaced built-in tools.
+            return [t for t in tools if "__" not in t.get("name", "")]
+        pre = len(tools)
+        reverse_map = _client_manager._sanitized_to_original if _client_manager else {}
+        from core.permissions.mcp_resolver import matches_permission
+
+        ns_sep = "__"
+        filtered = []
+        for tool in tools:
+            name = tool.get("name", "")
+            if ns_sep in name:
+                sanitized = name[: name.index(ns_sep)]
+                original = reverse_map.get(sanitized, sanitized)
+                if matches_permission(original, user_perms):
+                    filtered.append(tool)
+            else:
+                # Non-namespaced = built-in system tools, always allowed
+                filtered.append(tool)
+        if len(filtered) < pre:
+            logger.info(
+                "MCP Gateway: user %s perms filtered %d→%d (user_perms=%s)",
+                unified_id,
+                pre,
+                len(filtered),
+                user_perms,
+            )
+        return filtered
+    except Exception as e:
+        logger.warning("Error filtering by user MCP permissions: %s", e)
+        return tools
 
 
 def _filter_by_user_prefs(tools: list[dict], unified_id: str) -> list[dict]:
@@ -1098,6 +1147,10 @@ async def _handle_search_tools(
             len(all_tools),
         )
 
+    # Filter by per-user MCP permissions
+    if unified_id:
+        all_tools = _filter_by_user_mcp_permissions(all_tools, unified_id)
+
     # Filter by user preferences
     if unified_id:
         all_tools = _filter_by_user_prefs(all_tools, unified_id)
@@ -1704,17 +1757,36 @@ async def _handle_message(msg: dict, session_id: str, request: Request) -> dict 
     if msg_id is None:
         if method == "notifications/initialized":
             logger.info(f"MCP Gateway: client initialized (session={session_id[:8]})")
+        else:
+            logger.debug(
+                "MCP Gateway: notification %s (session=%s)", method, session_id[:8]
+            )
         return None
 
     if method == "initialize":
+        # Negotiate protocol version: accept client's version if we support it,
+        # otherwise fall back to our latest supported version.
+        client_version = params.get("protocolVersion", "2025-03-26")
+        supported_versions = {"2024-11-05", "2025-03-26", "2025-11-25"}
+        negotiated = (
+            client_version if client_version in supported_versions else "2025-03-26"
+        )
+        client_info = params.get("clientInfo", {})
         _sessions[session_id] = {
-            "client_info": params.get("clientInfo", {}),
-            "protocol_version": params.get("protocolVersion", "2025-03-26"),
+            "client_info": client_info,
+            "protocol_version": negotiated,
         }
+        logger.info(
+            "MCP Gateway: initialize session=%s client=%s v=%s → negotiated=%s",
+            session_id[:8],
+            client_info.get("name", "?"),
+            client_version,
+            negotiated,
+        )
         return _jsonrpc_response(
             msg_id,
             {
-                "protocolVersion": "2025-03-26",
+                "protocolVersion": negotiated,
                 "capabilities": MCP_CAPABILITIES,
                 "serverInfo": MCP_SERVER_INFO,
             },
@@ -1765,92 +1837,116 @@ async def _handle_message(msg: dict, session_id: str, request: Request) -> dict 
         tool_loading = tool_loading or "full"
         is_search_mode = tool_loading == "search"
 
-        if is_search_mode:
-            # Search mode: no MCP tools loaded — agent uses search_tools to discover
-            tools = []
+        # Build cache key from parameters that affect the tool list
+        mcp_perms = getattr(request.state, "oauth2_mcp_permissions", None)
+        cache_key = f"{agent_name}:{effective_user}:{tool_loading}:{tool_budget_param}"
+        if mcp_perms:
+            cache_key += ":" + ",".join(sorted(mcp_perms))
+
+        # Check tools cache
+        now = time.time()
+        cached = _tools_cache.get(cache_key)
+        if cached and (now - cached[0]) < _TOOLS_CACHE_TTL:
+            tools = list(cached[1])  # shallow copy
+            logger.debug(
+                "tools/list cache hit for key=%s (%d tools)", cache_key[:40], len(tools)
+            )
         else:
-            try:
-                tools = await _client_manager.list_all_tools(
-                    unified_id=effective_user, agent_name=agent_name
-                )
-            except Exception as e:
-                logger.error(f"MCP Gateway: tools/list failed: {e}")
+            # Cache miss — build the full tool list
+            if is_search_mode:
+                # Search mode: no MCP tools loaded
                 tools = []
+            else:
+                try:
+                    tools = await _client_manager.list_all_tools(
+                        unified_id=effective_user, agent_name=agent_name
+                    )
+                except Exception as e:
+                    logger.error(f"MCP Gateway: tools/list failed: {e}")
+                    tools = []
 
-            # Filter by OAuth2 MCP permissions
-            mcp_perms = getattr(request.state, "oauth2_mcp_permissions", None)
-            if mcp_perms:
-                pre_filter = len(tools)
-                tools = _filter_by_permissions(tools, mcp_perms)
-                logger.info(
-                    "MCP Gateway: tools/list filtered %d→%d (perms=%s)",
-                    pre_filter,
-                    len(tools),
-                    mcp_perms,
-                )
-
-            # Filter by user tool preferences
-            if effective_user:
-                tools = _filter_by_user_prefs(tools, effective_user)
-
-            # Filter by per-agent tool preferences (admin-managed)
-            if agent_name:
-                tools = _filter_by_agent_prefs(tools, agent_name)
-
-            # Apply tool budget (MCP tools only — built-in added after)
-            tool_budget = tool_budget_param
-            if tool_budget and isinstance(tool_budget, int) and tool_budget > 0:
-                pre_budget = len(tools)
-                if pre_budget > tool_budget:
-                    tools = _apply_tool_budget(tools, tool_budget, agent_name=None)
+                # Filter by OAuth2 MCP permissions
+                if mcp_perms:
+                    pre_filter = len(tools)
+                    tools = _filter_by_permissions(tools, mcp_perms)
                     logger.info(
-                        "Tool budget applied: %d→%d MCP tools",
-                        pre_budget,
-                        tool_budget,
+                        "MCP Gateway: tools/list filtered %d→%d (perms=%s)",
+                        pre_filter,
+                        len(tools),
+                        mcp_perms,
                     )
 
-        mcp_perms = getattr(request.state, "oauth2_mcp_permissions", None)
+                # Filter by user tool preferences
+                if effective_user:
+                    tools = _filter_by_user_prefs(tools, effective_user)
 
-        # Add gridbear_help meta-tool
-        tools.append(_HELP_TOOL)
+                # Filter by per-agent tool preferences (admin-managed)
+                if agent_name:
+                    tools = _filter_by_agent_prefs(tools, agent_name)
 
-        # Add credential-vault tools if agent has permission
-        if mcp_perms:
-            from core.permissions.mcp_resolver import matches_permission
+                # Apply tool budget (MCP tools only — built-in added after)
+                tool_budget = tool_budget_param
+                if tool_budget and isinstance(tool_budget, int) and tool_budget > 0:
+                    pre_budget = len(tools)
+                    if pre_budget > tool_budget:
+                        tools = _apply_tool_budget(tools, tool_budget, agent_name=None)
+                        logger.info(
+                            "Tool budget applied: %d→%d MCP tools",
+                            pre_budget,
+                            tool_budget,
+                        )
 
-            if matches_permission(_VAULT_SERVER_NAME, mcp_perms):
-                tools.extend(_VAULT_TOOLS)
+            # Add gridbear_help meta-tool
+            tools.append(_HELP_TOOL)
 
-        # Add virtual tool provider tools (always available — they are local plugins)
-        for provider in _local_tool_providers:
-            tools.extend(provider.get_tools())
+            # Add credential-vault tools if agent has permission
+            if mcp_perms:
+                from core.permissions.mcp_resolver import matches_permission
 
-        # Discover active platform names for enum injection
-        platform_names = _get_active_platforms()
+                if matches_permission(_VAULT_SERVER_NAME, mcp_perms):
+                    tools.extend(_VAULT_TOOLS)
 
-        # Add send_file_to_chat tool (with dynamic platform enum)
-        send_file_tool = _inject_platform_enum(
-            _SEND_FILE_TOOL, "platform", platform_names
-        )
-        tools.append(send_file_tool)
+            # Add virtual tool provider tools (always available — they are local plugins)
+            for provider in _local_tool_providers:
+                tools.extend(provider.get_tools())
 
-        # Add ask_agent tool (always available, inter-agent communication)
-        tools.append(_ASK_AGENT_TOOL)
+            # Discover active platform names for enum injection
+            platform_names = _get_active_platforms()
 
-        # Add async task tools (with dynamic platform enum)
-        async_tools = []
-        for tool in _ASYNC_TOOLS:
-            if tool["name"] == "async_run_tool":
-                tool = _inject_platform_enum(tool, "notify_platform", platform_names)
-            async_tools.append(tool)
-        tools.extend(async_tools)
+            # Add send_file_to_chat tool (with dynamic platform enum)
+            send_file_tool = _inject_platform_enum(
+                _SEND_FILE_TOOL, "platform", platform_names
+            )
+            tools.append(send_file_tool)
 
-        # Add chat history tools (always available)
-        tools.extend(_CHAT_HISTORY_TOOLS)
+            # Add ask_agent tool (always available, inter-agent communication)
+            tools.append(_ASK_AGENT_TOOL)
 
-        # Add search_tools + execute_discovered_tool (always available)
-        tools.append(_SEARCH_TOOLS_TOOL)
-        tools.append(_EXECUTE_DISCOVERED_TOOL)
+            # Add async task tools (with dynamic platform enum)
+            async_tools = []
+            for tool in _ASYNC_TOOLS:
+                if tool["name"] == "async_run_tool":
+                    tool = _inject_platform_enum(
+                        tool, "notify_platform", platform_names
+                    )
+                async_tools.append(tool)
+            tools.extend(async_tools)
+
+            # Add chat history tools (always available)
+            tools.extend(_CHAT_HISTORY_TOOLS)
+
+            # Add search_tools + execute_discovered_tool (always available)
+            tools.append(_SEARCH_TOOLS_TOOL)
+            tools.append(_EXECUTE_DISCOVERED_TOOL)
+
+            # Store in cache (before user-level filtering which is per-user)
+            _tools_cache[cache_key] = (now, list(tools))
+
+        # Filter by per-user MCP permissions (admin-managed in /admin/permissions).
+        # Runs after ALL tools are assembled (MCP + virtual + built-in) so that
+        # virtual tool providers are also subject to user restrictions.
+        if effective_user:
+            tools = _filter_by_user_mcp_permissions(tools, effective_user)
 
         # Structured logging with per-server breakdown
         by_server = {}
@@ -1882,6 +1978,59 @@ async def _handle_message(msg: dict, session_id: str, request: Request) -> dict 
             or oauth2_user
         )
         mcp_perms = getattr(request.state, "oauth2_mcp_permissions", None)
+
+        # Enforce per-user MCP permissions on tool calls (not just tools/list).
+        # Non-namespaced tools (built-in) are always allowed.
+        if effective_user and "__" in tool_name:
+            from config.settings import get_user_mcp_permissions
+            from core.permissions.mcp_resolver import matches_permission
+
+            user_perms = get_user_mcp_permissions(effective_user)
+            if user_perms is not None:
+                ns_sep = "__"
+                sanitized = tool_name[: tool_name.index(ns_sep)]
+                reverse_map = (
+                    _client_manager._sanitized_to_original if _client_manager else {}
+                )
+                original = reverse_map.get(sanitized, sanitized)
+                if not matches_permission(original, user_perms):
+                    logger.warning(
+                        "MCP Gateway: user %s denied tool %s (user_perms=%s)",
+                        effective_user,
+                        tool_name,
+                        user_perms,
+                    )
+                    return _jsonrpc_response(
+                        msg_id,
+                        {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"Error: you don't have permission to use {tool_name}.",
+                                }
+                            ],
+                            "isError": True,
+                        },
+                    )
+            elif user_perms is None:
+                # No permissions configured = no MCP tools allowed
+                logger.warning(
+                    "MCP Gateway: user %s has no MCP permissions, denied tool %s",
+                    effective_user,
+                    tool_name,
+                )
+                return _jsonrpc_response(
+                    msg_id,
+                    {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Error: you don't have permission to use {tool_name}.",
+                            }
+                        ],
+                        "isError": True,
+                    },
+                )
 
         # Handle async task tools
         if tool_name == "async_run_tool":
