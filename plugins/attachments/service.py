@@ -3,6 +3,7 @@
 Handles attachment storage and cleanup.
 """
 
+import shutil
 import time
 from pathlib import Path
 
@@ -96,9 +97,7 @@ class AttachmentService(BaseAttachmentService):
         """Remove all attachments for a session."""
         session_dir = self.base_dir / str(session_id)
         if session_dir.exists():
-            for f in session_dir.iterdir():
-                f.unlink()
-            session_dir.rmdir()
+            shutil.rmtree(session_dir)
             logger.info(f"Cleaned up attachments for session {session_id}")
 
     async def cleanup_expired(self, max_age_hours: int = 24) -> int:
@@ -123,10 +122,8 @@ class AttachmentService(BaseAttachmentService):
             try:
                 dir_mtime = session_dir.stat().st_mtime
                 if dir_mtime < cutoff_time:
-                    for f in session_dir.iterdir():
-                        f.unlink()
-                        cleaned += 1
-                    session_dir.rmdir()
+                    cleaned += sum(1 for f in session_dir.rglob("*") if f.is_file())
+                    shutil.rmtree(session_dir)
                     logger.debug(f"Cleaned up expired session dir: {session_dir.name}")
             except Exception as e:
                 logger.warning(f"Error cleaning up {session_dir}: {e}")
