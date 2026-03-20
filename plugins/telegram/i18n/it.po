@@ -121,6 +121,9 @@ msgstr "[Allegato: {filename}]"
 msgid "A request is already running. Use /stop to cancel it."
 msgstr "Una richiesta è già in corso. Usa /stop per annullarla."
 
+msgid "Queued (position {position}). Use /stop to cancel current request."
+msgstr "In coda (posizione {position}). Usa /stop per annullare la richiesta in corso."
+
 msgid "Request cancelled."
 msgstr "Richiesta annullata."
 

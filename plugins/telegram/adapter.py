@@ -116,6 +116,7 @@ class TelegramChannel(BaseChannel):
         self._bot_username: str | None = None
         self._user_usernames: dict[int, str] = {}
         self._active_tasks: dict[int, asyncio.Task] = {}
+        self._message_queues: dict[int, asyncio.Queue] = {}
 
     def _create_runner_callbacks(self, thinking_msg):
         """Create progress, error, and tool callbacks for runner.
@@ -443,7 +444,12 @@ class TelegramChannel(BaseChannel):
             lines.append(f"{status} *{t['id']}*: {display_text}")
             lines.append(f"   ⏰ {when}")
             if t.get("last_run"):
-                lines.append(f"   {_('Last run:')} {t['last_run'][:16]}")
+                last_run = t["last_run"]
+                if hasattr(last_run, "strftime"):
+                    last_run = last_run.strftime("%Y-%m-%d %H:%M")
+                else:
+                    last_run = str(last_run)[:16]
+                lines.append(f"   {_('Last run:')} {last_run}")
         try:
             await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
         except Exception:
@@ -730,27 +736,88 @@ class TelegramChannel(BaseChannel):
                     username=username,
                 )
 
-            # Reject if already processing
+            # Queue if already processing
             if user_id in self._active_tasks and not self._active_tasks[user_id].done():
+                if user_id not in self._message_queues:
+                    self._message_queues[user_id] = asyncio.Queue()
+                await self._message_queues[user_id].put((update, message, user_info))
+                queue_size = self._message_queues[user_id].qsize()
                 await update.message.reply_text(
-                    _("A request is already running. Use /stop to cancel it.")
+                    _(
+                        "Queued (position {position}). Use /stop to cancel current request."
+                    ).format(position=queue_size)
                 )
                 return
 
+            await self._process_message_and_drain_queue(
+                update, message, user_info, user_id
+            )
+
+    async def _process_message_and_drain_queue(
+        self,
+        update: Update,
+        message: Message,
+        user_info: UserInfo,
+        user_id: int,
+    ) -> None:
+        """Process a message, then drain any queued messages for this user."""
+        try:
             thinking_msg = await update.message.reply_text(_("Thinking..."))
+        except Exception as e:
+            logger.warning("Failed to send thinking message: %s", e)
+            thinking_msg = None
+        task = asyncio.create_task(
+            self._run_message_pipeline(update, message, user_info, thinking_msg)
+        )
+        self._active_tasks[user_id] = task
+
+        try:
+            await task
+        except asyncio.CancelledError:
+            with contextlib.suppress(Exception):
+                if thinking_msg:
+                    await thinking_msg.delete()
+            with contextlib.suppress(Exception):
+                await update.message.reply_text(_("Request cancelled."))
+        except Exception as e:
+            logger.error("Message pipeline error for user %s: %s", user_id, e)
+        finally:
+            self._active_tasks.pop(user_id, None)
+
+        # Drain queued messages
+        queue = self._message_queues.get(user_id)
+        while queue and not queue.empty():
+            try:
+                q_update, q_message, q_user_info = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            try:
+                thinking_msg = await q_update.message.reply_text(_("Thinking..."))
+            except Exception as e:
+                logger.warning("Failed to send thinking message (queue): %s", e)
+                thinking_msg = None
             task = asyncio.create_task(
-                self._run_message_pipeline(update, message, user_info, thinking_msg)
+                self._run_message_pipeline(
+                    q_update, q_message, q_user_info, thinking_msg
+                )
             )
             self._active_tasks[user_id] = task
-
             try:
                 await task
             except asyncio.CancelledError:
                 with contextlib.suppress(Exception):
-                    await thinking_msg.delete()
-                await update.message.reply_text(_("Request cancelled."))
+                    if thinking_msg:
+                        await thinking_msg.delete()
+                with contextlib.suppress(Exception):
+                    await q_update.message.reply_text(_("Request cancelled."))
+            except Exception as e:
+                logger.error("Queued pipeline error for user %s: %s", user_id, e)
             finally:
                 self._active_tasks.pop(user_id, None)
+
+        # Cleanup empty queue
+        if queue and queue.empty():
+            self._message_queues.pop(user_id, None)
 
     async def _run_message_pipeline(
         self,
@@ -835,6 +902,10 @@ class TelegramChannel(BaseChannel):
 
         task.cancel()
 
+        # Clear queued messages for this user
+        queue = self._message_queues.pop(user_id, None)
+        queued_count = queue.qsize() if queue else 0
+
         # Also cancel any async background tasks for this agent
         from core.mcp_gateway.server import get_task_manager
 
@@ -846,7 +917,10 @@ class TelegramChannel(BaseChannel):
                     "Cancelled %d async tasks for agent %s", cancelled, self.agent_name
                 )
 
-        await update.message.reply_text(_("Stopping..."))
+        msg = _("Stopping...")
+        if queued_count:
+            msg += f" ({queued_count} queued messages discarded)"
+        await update.message.reply_text(msg)
 
     async def _handle_voice(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -862,10 +936,55 @@ class TelegramChannel(BaseChannel):
 
         self._cache_username(user_id, username)
 
-        # Reject if already processing
+        # Queue if already processing
         if user_id in self._active_tasks and not self._active_tasks[user_id].done():
+            if user_id not in self._message_queues:
+                self._message_queues[user_id] = asyncio.Queue()
+            # Voice needs transcription first — do it now, queue the text
+            voice = update.message.voice
+            if not voice:
+                return
+            file = await voice.get_file()
+            voice_path = Path(f"/tmp/gridbear_voice_{uuid.uuid4().hex}.ogg")
+            try:
+                await file.download_to_drive(voice_path)
+                voice_service = (
+                    self._plugin_manager.get_service("transcription")
+                    if self._plugin_manager
+                    else None
+                )
+                if not voice_service:
+                    await update.message.reply_text(_("Voice service not available."))
+                    return
+                text = await voice_service.transcribe(str(voice_path))
+            finally:
+                voice_path.unlink(missing_ok=True)
+            if not text:
+                await update.message.reply_text(
+                    _("Could not transcribe voice message.")
+                )
+                return
+            await update.message.reply_text(f"_{text}_", parse_mode="Markdown")
+            msg = Message(
+                user_id=user_id,
+                username=username,
+                text=text,
+                platform="telegram",
+                respond_with_voice=True,
+                is_group_chat=update.effective_chat.type != "private",
+            )
+            u_info = UserInfo(
+                user_id=user_id,
+                username=username,
+                display_name=update.effective_user.first_name,
+                platform="telegram",
+            )
+            await self._message_queues[user_id].put((update, msg, u_info))
+            queue_size = self._message_queues[user_id].qsize()
             await update.message.reply_text(
-                _("A request is already running. Use /stop to cancel it.")
+                _(
+                    "Queued (position {position}). Use /stop to cancel current request."
+                ).format(position=queue_size)
             )
             return
 
@@ -1036,13 +1155,6 @@ class TelegramChannel(BaseChannel):
 
         self._cache_username(user_id, username)
 
-        # Reject if already processing
-        if user_id in self._active_tasks and not self._active_tasks[user_id].done():
-            await update.message.reply_text(
-                _("A request is already running. Use /stop to cancel it.")
-            )
-            return
-
         sessions_service = (
             self._plugin_manager.get_service("sessions")
             if self._plugin_manager
@@ -1108,6 +1220,19 @@ class TelegramChannel(BaseChannel):
                 display_name=update.effective_user.first_name,
                 platform="telegram",
             )
+
+            # Queue if already processing
+            if user_id in self._active_tasks and not self._active_tasks[user_id].done():
+                if user_id not in self._message_queues:
+                    self._message_queues[user_id] = asyncio.Queue()
+                await self._message_queues[user_id].put((update, message, user_info))
+                queue_size = self._message_queues[user_id].qsize()
+                await update.message.reply_text(
+                    _(
+                        "Queued (position {position}). Use /stop to cancel current request."
+                    ).format(position=queue_size)
+                )
+                return
 
             thinking_msg = await update.message.reply_text(_("Thinking..."))
             progress_cb, error_cb, tool_cb = self._create_runner_callbacks(thinking_msg)
