@@ -202,7 +202,7 @@
                 {% for memory in memories %}
                 <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
                     <td class="px-2 sm:px-5 py-4">
-                        <p class="text-sm text-void-900 dark:text-white line-clamp-2 max-w-xl">{{ memory.content[:200] }}{% if memory.content|length > 200 %}...{% endif %}</p>
+                        <p class="text-sm text-void-900 dark:text-white line-clamp-2 max-w-xl">{{ memory.document[:200] }}{% if memory.document|length > 200 %}...{% endif %}</p>
                     </td>
                     <td class="px-2 sm:px-5 py-4 hidden sm:table-cell">
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium
