@@ -224,7 +224,11 @@ class ConfigManager:
         unified_id = unified_id.lower()
         UserMcpPermission.delete_multi_sync([("unified_id", "=", unified_id)])
         for server in servers:
-            UserMcpPermission.create_sync(unified_id=unified_id, server_name=server)
+            UserMcpPermission.create_sync(
+                username=unified_id,
+                unified_id=unified_id,
+                server_name=server,
+            )
 
     def delete_user_permissions(self, unified_id: str):
         """Remove user permissions (reverts to default)."""
