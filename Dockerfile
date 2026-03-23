@@ -49,7 +49,8 @@ COPY core/__version__.py core/__version__.py
 # B2+B3: Use uv with cache mount (10-100x faster rebuilds)
 # Install all optional groups (plugins need their deps at runtime)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system ".[dev,all]"
+    uv pip install --system ".[dev,all]" && \
+    uv pip install --system "starlette<1.0.0"
 
 # B5: Pre-download embedding model (~90MB, avoids download at first startup)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
