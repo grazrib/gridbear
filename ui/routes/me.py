@@ -27,12 +27,36 @@ ADMIN_DIR = Path(__file__).resolve().parent.parent
 BASE_DIR = ADMIN_DIR.parent
 
 
+def _get_allowed_users(agent_config: dict) -> set[str]:
+    """Extract allowed usernames from all channels in an agent config.
+
+    Collects allowed_users from every channel and normalises them
+    (strips leading '@').  An empty set means no users are explicitly
+    allowed — superadmins can still access.
+    """
+    users: set[str] = set()
+    channels = agent_config.get("channels") or {}
+    for channel_cfg in channels.values():
+        if not isinstance(channel_cfg, dict):
+            continue
+        for entry in channel_cfg.get("allowed_users", []):
+            users.add(str(entry).lstrip("@").lower())
+    return users
+
+
 def _get_user_agents(user: dict) -> list[dict]:
-    """Get agents available to this user."""
+    """Get agents available to this user.
+
+    Superadmins see all agents.  Regular users only see agents that
+    list their username in at least one channel's allowed_users.
+    """
     agents_dir = BASE_DIR / "config" / "agents"
     agents = []
     if not agents_dir.exists():
         return agents
+
+    username = (user.get("username") or "").lower()
+    is_superadmin = user.get("is_superadmin", False)
 
     for agent_file in sorted(agents_dir.glob("*.yaml")):
         try:
@@ -40,6 +64,15 @@ def _get_user_agents(user: dict) -> list[dict]:
 
             with open(agent_file) as f:
                 agent_config = yaml.safe_load(f) or {}
+
+            # Access check: superadmins see all, others must be listed
+            # in at least one channel's allowed_users.  Agents without
+            # any allowed_users (e.g. internal-only) are admin-only.
+            if not is_superadmin:
+                allowed = _get_allowed_users(agent_config)
+                if not allowed or username not in allowed:
+                    continue
+
             agents.append(
                 {
                     "name": agent_file.stem,
