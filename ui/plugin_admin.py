@@ -224,6 +224,71 @@ class PluginAdminRegistry:
                 except Exception as e:
                     logger.error(f"Failed to register routes for {plugin_name}: {e}")
 
+    def register_plugin_routes_sync(self, app: "FastAPI") -> None:
+        """Register plugin admin routes at module level (before startup).
+
+        Uses a direct psycopg query to discover enabled plugins because
+        the ORM is not yet initialized when this runs.
+        """
+        enabled = self._get_enabled_plugins_raw()
+        if not enabled:
+            logger.debug("No enabled plugins found (early route registration)")
+            return
+
+        for plugin_name in enabled:
+            plugin_path = self._path_resolver.resolve(plugin_name)
+            if plugin_path is None:
+                continue
+            routes_path = plugin_path / "admin" / "routes.py"
+
+            if routes_path.exists():
+                try:
+                    module = self._import_plugin_module(
+                        plugin_name, plugin_path, routes_path
+                    )
+                    if hasattr(module, "router"):
+                        if module.router.prefix:
+                            app.include_router(
+                                module.router,
+                                tags=[f"plugin-{plugin_name}"],
+                            )
+                        else:
+                            app.include_router(
+                                module.router,
+                                prefix=f"/plugin/{plugin_name}",
+                                tags=[f"plugin-{plugin_name}"],
+                            )
+                        logger.info(
+                            "Registered admin routes for plugin: %s", plugin_name
+                        )
+                except Exception as exc:
+                    logger.error(
+                        "Failed to register routes for %s: %s", plugin_name, exc
+                    )
+
+    @staticmethod
+    def _get_enabled_plugins_raw() -> list[str]:
+        """Query enabled plugins via psycopg (no ORM needed)."""
+        import os
+
+        try:
+            import psycopg
+
+            dsn = os.environ.get("DATABASE_URL", "")
+            if not dsn:
+                return []
+            with psycopg.connect(dsn) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT name FROM app.plugin_registry "
+                        "WHERE state = 'installed' AND enabled = true "
+                        "ORDER BY name"
+                    )
+                    return [row[0] for row in cur.fetchall()]
+        except Exception as exc:
+            logger.debug("_get_enabled_plugins_raw failed: %s", exc)
+            return []
+
     def get_plugins_by_type(self) -> dict[str, list[str]]:
         """Get enabled plugins grouped by type."""
         result = {

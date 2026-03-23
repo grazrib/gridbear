@@ -5,14 +5,14 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from ui.csrf import validate_csrf_token
 from ui.jinja_env import templates
 from ui.routes.auth import require_login
 from ui.secrets_manager import secrets_manager
 
-router = APIRouter()
+router = APIRouter(prefix="/plugins")
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 ADMIN_DIR = Path(__file__).resolve().parent.parent
 
@@ -650,3 +650,33 @@ async def reload_plugin(
     return RedirectResponse(
         url=f"/plugins/{plugin_name}?reload_requested=1", status_code=303
     )
+
+
+@router.post("/{plugin_name}/{agent_id}/trigger")
+async def trigger_plugin_action(
+    request: Request,
+    plugin_name: str,
+    agent_id: str,
+    _: dict = Depends(require_login),
+):
+    """Generic plugin action trigger — delegates to the bot's internal API.
+
+    Handles POST /plugins/{plugin}/peggy/trigger by proxying to the bot
+    container's internal API.
+    """
+    import httpx
+
+    bot_url = os.getenv("GRIDBEAR_INTERNAL_URL", "http://gridbear:8000")
+    api_secret = os.getenv("INTERNAL_API_SECRET", "")
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                f"{bot_url}/api/{plugin_name}/{agent_id}/trigger",
+                headers={"Authorization": f"Bearer {api_secret}"},
+            )
+            return JSONResponse(resp.json(), status_code=resp.status_code)
+    except httpx.ConnectError:
+        return JSONResponse({"ok": False, "error": "Bot unreachable"}, status_code=503)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
