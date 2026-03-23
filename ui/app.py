@@ -513,9 +513,25 @@ app.include_router(
     notifications.router, prefix="/notifications", tags=["notifications"]
 )
 
-# NOTE: plugins.router is registered in the startup handler AFTER
-# plugin-specific admin routes, so /plugins/ms365 etc. take priority
-# over the generic /plugins/{plugin_name} catch-all.
+
+# ── Plugin admin routes (MUST be registered before app startup) ───────
+# Starlette compiles the routing table when building the middleware stack.
+# Routes added via include_router() during startup events are NOT reachable.
+# We register plugin routes here at module level using a direct psycopg
+# query (ORM is not yet initialized).
+def _register_plugin_routes():
+    """Register plugin-specific routes BEFORE the generic catch-all."""
+    try:
+        plugin_registry.register_plugin_routes_sync(app)
+    except Exception as exc:
+        logger.warning("Early plugin route registration failed: %s", exc)
+    # Generic catch-all AFTER plugin-specific routes.
+    # plugins.router has prefix="/plugins" built-in — include WITHOUT
+    # prefix so Starlette doesn't create a Mount that shadows plugin routes.
+    app.include_router(plugins.router, tags=["plugins"])
+
+
+_register_plugin_routes()
 
 app.include_router(secrets_routes.router)
 app.include_router(settings_routes.router)
@@ -955,12 +971,10 @@ async def startup_cleanup():
         # Register plugin portal routes (requires ORM/DB for get_enabled_plugins)
         plugin_registry.register_portal_routes(app)
 
-        # Register plugin admin routes (requires ORM/DB — cannot run at import time)
-        # Plugin-specific routes FIRST so they take priority over the
-        # generic /plugins/{plugin_name} catch-all.
-        plugin_registry.register_plugin_routes(app)
-        app.include_router(plugins.router, prefix="/plugins", tags=["plugins"])
-        logger.info("Admin: plugin admin routes registered")
+        # NOTE: Plugin admin routes + plugins.router are registered at module
+        # level via _register_plugin_routes() — NOT here.  Starlette compiles
+        # routes before startup, so include_router() in startup is a no-op.
+        logger.info("Admin: plugin admin routes registered (at module level)")
 
         # Initialize OAuth2 database (requires PostgreSQL)
         db = OAuth2Database()

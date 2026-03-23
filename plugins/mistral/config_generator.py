@@ -28,39 +28,60 @@ def write_env(api_key: str) -> bool:
         return False
 
 
+_GW_BLOCK_MARKER = "# --- gridbear-gateway (managed) ---"
+
+_GW_TEMPLATE = """{marker}
+[[mcp_servers]]
+name = "gridbear-gateway"
+transport = "http"
+url = "{url}"
+api_key_env = "{env}"
+api_key_header = "Authorization"
+api_key_format = "Bearer {{token}}"
+{marker}"""
+
+
 def write_config(
-    model: str = "mistral-large-latest",
     gateway_url: str | None = None,
     mcp_token_env: str = "GRIDBEAR_MCP_TOKEN",
 ) -> bool:
-    """Write ~/.vibe/config.toml with model and MCP server config.
+    """Ensure ~/.vibe/config.toml has the MCP gateway server configured.
 
-    Args:
-        model: Active model ID.
-        gateway_url: MCP Gateway URL. If None, reads from MCP_GATEWAY_URL env.
-        mcp_token_env: Env var name containing the MCP gateway token.
+    Uses text-level surgery to avoid corrupting Vibe's complex TOML
+    (nested tables like [tools.bash] break with parse+reserialize).
+    Only touches the marked gridbear-gateway block — leaves everything
+    else (active_model, models, tools, providers) untouched.
 
     Returns True if the file was written successfully.
     """
+    import re
+
     gw_url = gateway_url or os.getenv("MCP_GATEWAY_URL", "http://gridbear-ui:8080")
 
-    lines = [
-        f'active_model = "{model}"',
-        "",
-        "[[mcp_servers]]",
-        'name = "gridbear-gateway"',
-        'transport = "http"',
-        f'url = "{gw_url}/mcp"',
-        f'api_key_env = "{mcp_token_env}"',
-        'api_key_header = "Authorization"',
-        'api_key_format = "Bearer {token}"',
-        "",
-    ]
+    gw_block = _GW_TEMPLATE.format(
+        marker=_GW_BLOCK_MARKER,
+        url=f"{gw_url}/mcp",
+        env=mcp_token_env,
+    )
 
     try:
         VIBE_HOME.mkdir(parents=True, exist_ok=True)
-        VIBE_CONFIG_PATH.write_text("\n".join(lines))
-        logger.debug("Wrote Vibe config: model=%s, gateway=%s", model, gw_url)
+
+        if VIBE_CONFIG_PATH.exists():
+            text = VIBE_CONFIG_PATH.read_text()
+        else:
+            text = ""
+
+        # Replace or append gridbear-gateway block
+        marker_re = re.escape(_GW_BLOCK_MARKER)
+        pattern = rf"{marker_re}.*?{marker_re}"
+        if re.search(pattern, text, re.DOTALL):
+            text = re.sub(pattern, gw_block, text, count=1, flags=re.DOTALL)
+        else:
+            text = text.rstrip() + "\n\n" + gw_block + "\n"
+
+        VIBE_CONFIG_PATH.write_text(text)
+        logger.debug("Wrote Vibe MCP config: gateway=%s", gw_url)
         return True
     except OSError as e:
         logger.warning("Could not write %s: %s", VIBE_CONFIG_PATH, e)

@@ -82,6 +82,10 @@ class MistralCliBackend:
         unified_id = kwargs.get("unified_id")
         if not no_tools and agent_id:
             self._prepare_mcp_token(agent_id, unified_id=unified_id)
+            # Ensure Vibe TOML has MCP server config pointing to gateway
+            from .config_generator import write_config
+
+            write_config(gateway_url=self._gateway_url)
 
         cmd = self._build_command(prompt=prompt)
         logger.debug("Running vibe: %d args, prompt_len=%d", len(cmd), len(prompt))
@@ -159,16 +163,25 @@ class MistralCliBackend:
                 )
 
             except asyncio.TimeoutError:
-                logger.error(
-                    "[%s] Vibe CLI timed out after %ds",
-                    agent_label,
-                    self.timeout,
-                )
+                # Capture stderr before killing for diagnostics
+                stderr_dump = ""
                 try:
                     process.kill()
-                    await process.wait()
+                    _, stderr_raw = await asyncio.wait_for(
+                        process.communicate(), timeout=5
+                    )
+                    stderr_dump = stderr_raw.decode(errors="replace").strip()
                 except Exception:
-                    pass
+                    try:
+                        await process.wait()
+                    except Exception:
+                        pass
+                logger.error(
+                    "[%s] Vibe CLI timed out after %ds. stderr: %s",
+                    agent_label,
+                    self.timeout,
+                    stderr_dump[:500] or "(empty)",
+                )
 
                 if error_callback:
                     await error_callback(
