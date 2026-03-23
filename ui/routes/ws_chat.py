@@ -7,6 +7,7 @@ Routes messages through GridBear's internal API for full pipeline processing
 
 import json
 import os
+from pathlib import Path
 
 import aiohttp
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -17,6 +18,21 @@ router = APIRouter()
 
 GRIDBEAR_URL = os.getenv("GRIDBEAR_INTERNAL_URL", "http://gridbear:8000")
 GRIDBEAR_SECRET = os.getenv("INTERNAL_API_SECRET", "")
+_AGENTS_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "agents"
+
+
+def _load_agent_yaml(agent_name: str) -> dict | None:
+    """Load an agent YAML config by name. Returns None if not found."""
+    import yaml
+
+    path = _AGENTS_DIR / f"{agent_name}.yaml"
+    if not path.exists():
+        return None
+    try:
+        with open(path) as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return None
 
 
 async def _authenticate_ws(websocket: WebSocket) -> dict | None:
@@ -149,6 +165,20 @@ async def ws_chat(websocket: WebSocket):
     agent_name = websocket.query_params.get("agent", "")
     conversation_id = websocket.query_params.get("conversation_id", "") or None
     uid = user["username"]
+
+    # Validate agent access: non-superadmins must be in allowed_users
+    if agent_name and not user.get("is_superadmin"):
+        from ui.routes.me import _get_allowed_users
+
+        agent_cfg = _load_agent_yaml(agent_name)
+        if agent_cfg:
+            allowed = _get_allowed_users(agent_cfg)
+            if not allowed or uid.lower() not in allowed:
+                await websocket.send_json(
+                    {"type": "error", "text": "Non hai accesso a questo agente"}
+                )
+                await websocket.close(code=4003, reason="Forbidden")
+                return
 
     # Validate conversation ownership if provided
     if conversation_id:

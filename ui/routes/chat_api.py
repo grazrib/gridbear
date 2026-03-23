@@ -211,6 +211,18 @@ async def create_conversation(request: Request, user: dict = Depends(require_use
 
     agent_name = body.get("agent_name", "")
     uid = _uid(user)
+
+    # Validate agent access
+    if agent_name and not user.get("is_superadmin"):
+        from ui.routes.me import _get_allowed_users
+        from ui.routes.ws_chat import _load_agent_yaml
+
+        agent_cfg = _load_agent_yaml(agent_name)
+        if agent_cfg:
+            allowed = _get_allowed_users(agent_cfg)
+            if not allowed or uid.lower() not in allowed:
+                return api_error(403, "Access denied to this agent", "forbidden")
+
     conv_id = str(uuid.uuid4())
 
     _ensure_db()
