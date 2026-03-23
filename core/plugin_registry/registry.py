@@ -23,8 +23,9 @@ class PluginRegistry:
         """Compare plugins on disk vs DB, update states.
 
         - New on disk → insert as 'available'
-        - Was not_available, now back on disk → restore to 'available'
-        - Manifest hash changed → update metadata
+        - Was not_available, now back on disk → restore previous state
+          (installed if it had installed_at, otherwise available)
+        - Manifest hash changed → update metadata (preserve state)
         - In DB but gone from disk → mark 'not_available'
         """
         db_entries = await PluginRegistryEntry.search([])
@@ -47,14 +48,23 @@ class PluginRegistry:
                 logger.info(f"Plugin registry: new plugin '{name}' (available)")
 
             elif db_map[name]["state"] == "not_available":
+                # Restore to previous state: if it was installed before
+                # (has installed_at), restore as installed+enabled so a
+                # temporary volume unmount doesn't permanently downgrade.
+                was_installed = db_map[name].get("installed_at") is not None
+                restored_state = "installed" if was_installed else "available"
+                restore_enabled = was_installed or db_map[name].get("enabled", False)
                 await PluginRegistryEntry.write(
                     db_map[name]["id"],
-                    state="available",
+                    state=restored_state,
+                    enabled=restore_enabled,
                     version=version,
                     plugin_type=plugin_type,
                     manifest_hash=m_hash,
                 )
-                logger.info(f"Plugin registry: '{name}' back on disk (available)")
+                logger.info(
+                    f"Plugin registry: '{name}' back on disk ({restored_state})"
+                )
 
             elif m_hash != db_map[name].get("manifest_hash"):
                 await PluginRegistryEntry.write(
