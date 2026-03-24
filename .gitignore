@@ -123,3 +123,4 @@ debate-logs/
 node_modules/
 package-lock.json
 ui/static/css/output.css
+config/monitoring/

@@ -912,12 +912,17 @@ async def _handle_send_file(
             {"type": "text", "text": "Error: only files under /app/data/ can be sent."}
         ]
 
-    internal_url = os.getenv("GRIDBEAR_INTERNAL_URL", "http://gridbear:8000")
-    internal_secret = os.getenv("INTERNAL_API_SECRET", "")
-
     logger.info(
         f"send_file_to_chat: agent={agent_name} platform={platform} file={file_path}"
     )
+
+    # Webchat: deliver via WebSocket push (no bot channel adapter needed)
+    if platform == "webchat":
+        logger.info(f"send_file_to_chat: routing to webchat handler, uid={chat_id}")
+        return await _handle_send_file_webchat(resolved, chat_id, caption)
+
+    internal_url = os.getenv("GRIDBEAR_INTERNAL_URL", "http://gridbear:8000")
+    internal_secret = os.getenv("INTERNAL_API_SECRET", "")
 
     try:
         import httpx
@@ -946,6 +951,107 @@ async def _handle_send_file(
     except Exception as e:
         logger.error(f"send_file_to_chat exception: agent={agent_name} error={e}")
         return [{"type": "text", "text": f"Error sending file: {e}"}]
+
+
+async def _handle_send_file_webchat(
+    file_path: str,
+    uid: str,
+    caption: str | None,
+) -> list[dict]:
+    """Deliver a file to webchat user via WebSocket push."""
+    import mimetypes
+    import shutil
+    from pathlib import Path
+
+    logger.info(f"_handle_send_file_webchat: start uid={uid} file={file_path}")
+
+    src = Path(file_path)
+    if not src.exists():
+        logger.error(f"_handle_send_file_webchat: file not found: {file_path}")
+        return [{"type": "text", "text": f"Error: file not found: {file_path}"}]
+
+    # Resolve uid from active WebSocket connections if runner passed
+    # a numeric placeholder (e.g. "0") instead of the username.
+    try:
+        from ui.routes.ws_chat import _active_connections
+    except ImportError:
+        _active_connections = {}
+
+    logger.info(
+        f"_handle_send_file_webchat: active connections={list(_active_connections.keys())}"
+    )
+
+    if uid not in _active_connections:
+        if uid == "0" and _active_connections:
+            uid = next(iter(_active_connections))
+            logger.warning(
+                f"send_file_to_chat webchat: chat_id was '0', "
+                f"resolved to {uid} (rebuild bot to fix)"
+            )
+        elif not _active_connections:
+            logger.error("_handle_send_file_webchat: no connections active")
+            return [{"type": "text", "text": "Error: no webchat user connected."}]
+        else:
+            logger.error(
+                f"_handle_send_file_webchat: uid={uid} not in {list(_active_connections.keys())}"
+            )
+            return [
+                {
+                    "type": "text",
+                    "text": f"Error: webchat user '{uid}' not connected.",
+                }
+            ]
+
+    try:
+        # Copy to outbound directory for the file-serving endpoint
+        outbound_dir = Path("/app/data/attachments/webchat-outbound") / uid
+        outbound_dir.mkdir(parents=True, exist_ok=True)
+        dest = outbound_dir / src.name
+        if dest.exists():
+            import time
+
+            dest = outbound_dir / f"{int(time.time())}_{src.name}"
+        shutil.copy2(str(src), str(dest))
+        logger.info(f"_handle_send_file_webchat: copied to {dest}")
+
+        # Create a file-serving token
+        from ui.routes.chat_api import create_file_token
+
+        token = create_file_token(str(dest), uid)
+        url = f"/me/chat/api/files/{token}"
+        filename = src.name
+        mimetype = mimetypes.guess_type(str(src))[0] or "application/octet-stream"
+        logger.info(f"_handle_send_file_webchat: token={token[:8]}... url={url}")
+
+        # Push attachment event to user's active WebSocket
+        from ui.routes.ws_chat import push_to_webchat
+
+        event = {
+            "type": "attachment",
+            "url": url,
+            "filename": filename,
+            "mimetype": mimetype,
+            "caption": caption,
+        }
+        delivered = await push_to_webchat(uid, event)
+        logger.info(f"_handle_send_file_webchat: delivered={delivered}")
+
+        # Return the URL to the runner so it can include the image
+        # in its markdown response (rendered by marked.parse in the frontend).
+        # Direct WebSocket push has concurrency issues with the NDJSON stream.
+        return [
+            {
+                "type": "text",
+                "text": (
+                    f"File delivered. "
+                    f"Include this in your response as a markdown image so the "
+                    f"user can see it: ![{filename}]({url})"
+                ),
+            }
+        ]
+    except Exception as exc:
+        logger.error(f"_handle_send_file_webchat: exception: {exc}", exc_info=True)
+        return [{"type": "text", "text": f"Error delivering file: {exc}"}]
 
 
 async def _handle_chat_history_call(
@@ -1731,7 +1837,7 @@ def _get_active_platforms() -> list[str]:
     if not pm:
         return []
     # _manifests contains all loaded plugins; filter by type=channel
-    platforms = []
+    platforms = ["webchat"]
     for name, manifest in pm._manifests.items():
         if manifest.get("type") == "channel":
             platforms.append(name)

@@ -18,6 +18,29 @@ router = APIRouter()
 
 GRIDBEAR_URL = os.getenv("GRIDBEAR_INTERNAL_URL", "http://gridbear:8000")
 GRIDBEAR_SECRET = os.getenv("INTERNAL_API_SECRET", "")
+
+# Active WebSocket connections: {uid: websocket}
+_active_connections: dict[str, WebSocket] = {}
+
+
+async def push_to_webchat(uid: str, event: dict) -> bool:
+    """Push an event to a user's active WebSocket connection.
+
+    Returns True if delivered, False if user not connected.
+    """
+    ws = _active_connections.get(uid)
+    if not ws:
+        logger.debug(f"WebChat push: user {uid} not connected")
+        return False
+    try:
+        await ws.send_json(event)
+        return True
+    except Exception as exc:
+        logger.debug(f"WebChat push failed for {uid}: {exc}")
+        _active_connections.pop(uid, None)
+        return False
+
+
 _AGENTS_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "agents"
 
 
@@ -196,6 +219,8 @@ async def ws_chat(websocket: WebSocket):
         + (f" conv={conversation_id[:8]}..." if conversation_id else "")
     )
 
+    _active_connections[uid] = websocket
+
     try:
         while True:
             try:
@@ -263,4 +288,5 @@ async def ws_chat(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebChat: connection error: {e}")
     finally:
+        _active_connections.pop(uid, None)
         logger.info(f"WebChat: user {uid} disconnected")

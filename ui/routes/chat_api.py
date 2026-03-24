@@ -394,6 +394,60 @@ async def upload_file(request: Request, user: dict = Depends(require_user)):
     )
 
 
+# --- Bot file delivery ---
+
+OUTBOUND_DIR = ATTACHMENTS_DIR / "webchat-outbound"
+
+# Token store: {token: {"path": str, "uid": str, "expires": float}}
+_file_tokens: dict[str, dict] = {}
+_FILE_TOKEN_TTL = 3600  # 1 hour
+
+
+def create_file_token(file_path: str, uid: str) -> str:
+    """Create a short-lived token to serve a file to a specific user."""
+    import secrets
+
+    token = secrets.token_urlsafe(32)
+    _file_tokens[token] = {
+        "path": file_path,
+        "uid": uid,
+        "expires": time.time() + _FILE_TOKEN_TTL,
+    }
+    # Prune expired tokens periodically (every 100 creates)
+    if len(_file_tokens) % 100 == 0:
+        now = time.time()
+        expired = [k for k, v in _file_tokens.items() if v["expires"] < now]
+        for k in expired:
+            del _file_tokens[k]
+    return token
+
+
+@router.get("/files/{token}")
+async def serve_file(token: str, user: dict = Depends(require_user)):
+    """Serve a bot-delivered file via token-based access."""
+    entry = _file_tokens.get(token)
+    if not entry:
+        return api_error(404, "File not found or expired", "not_found")
+
+    if entry["expires"] < time.time():
+        _file_tokens.pop(token, None)
+        return api_error(404, "File expired", "not_found")
+
+    uid = _uid(user)
+    if entry["uid"] != uid:
+        return api_error(403, "Access denied", "forbidden")
+
+    file_path = Path(entry["path"])
+    if not file_path.exists():
+        _file_tokens.pop(token, None)
+        return api_error(404, "File no longer available", "not_found")
+
+    import mimetypes
+
+    content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
+    return FileResponse(file_path, media_type=content_type)
+
+
 # --- TTS ---
 
 

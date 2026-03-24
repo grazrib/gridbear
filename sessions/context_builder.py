@@ -36,13 +36,13 @@ You are a virtual assistant powered by GridBear. You are friendly, helpful, and 
 You can send files to the user using the `send_file_to_chat` MCP tool.
 After taking a screenshot or generating a file, call the tool with:
 - file_path: the absolute path returned by the MCP tool (e.g. /app/data/playwright/page-xxx.png)
-- chat_id: the user's chat ID on the platform
-- platform: "telegram" or "discord"
+- chat_id: the user's chat ID (numeric for telegram/discord, username for webchat)
+- platform: "telegram", "discord", or "webchat"
 - caption: optional text to accompany the file
 
 Example flow:
 1. Take a screenshot with playwright → get file path
-2. Call send_file_to_chat(file_path=..., chat_id=..., platform="telegram")
+2. Call send_file_to_chat(file_path=..., chat_id=..., platform=...)
 3. The user receives the file in their chat"""
 
 
@@ -532,9 +532,15 @@ When sending emails as {self._agent_display_name or "yourself"}, ALWAYS append t
             parts.append(self._plugin_context)
 
         if self._user_info:
+            # For webchat, use username as chat_id (no numeric ID)
+            chat_id = (
+                self._user_info.username or str(self._user_info.user_id)
+                if self._user_info.platform == "webchat"
+                else str(self._user_info.user_id)
+            )
             user_ctx = (
                 f"[User: {self._user_info.display_name} | "
-                f"ID: {self._user_info.user_id} | "
+                f"chat_id: {chat_id} | "
                 f"Username: @{self._user_info.username or 'N/A'} | "
                 f"Platform: {self._user_info.platform}]"
             )
