@@ -1,14 +1,15 @@
 """CSRF Protection Middleware for FastAPI.
 
 Simple token-based CSRF protection using session-stored tokens.
+Implemented as pure ASGI middleware to avoid BaseHTTPMiddleware's
+anyio TaskGroup cancellation loop (CPU leak).
 """
 
 import secrets
 from urllib.parse import parse_qs
 
-from fastapi import HTTPException, Request
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # Methods that modify state and require CSRF validation
 UNSAFE_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
@@ -50,61 +51,94 @@ def validate_csrf_token(request: Request, token: str | None) -> bool:
     return secrets.compare_digest(session_token, token)
 
 
-class CSRFMiddleware(BaseHTTPMiddleware):
-    """Middleware for CSRF protection on unsafe HTTP methods."""
+class CSRFMiddleware:
+    """Pure ASGI middleware for CSRF protection on unsafe HTTP methods."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
+        method = scope.get("method", "GET")
+
         # Skip safe methods
-        if request.method not in UNSAFE_METHODS:
-            return await call_next(request)
+        if method not in UNSAFE_METHODS:
+            await self.app(scope, receive, send)
+            return
+
+        path = scope["path"]
 
         # Skip exempt paths
-        if request.url.path in CSRF_EXEMPT_PATHS:
-            return await call_next(request)
+        if path in CSRF_EXEMPT_PATHS:
+            await self.app(scope, receive, send)
+            return
 
         # Skip exempt prefixes (Bearer-token-based APIs)
-        if request.url.path.startswith(CSRF_EXEMPT_PREFIXES):
-            return await call_next(request)
+        if path.startswith(CSRF_EXEMPT_PREFIXES):
+            await self.app(scope, receive, send)
+            return
 
         # Skip if no session (unauthenticated requests)
         if not hasattr(request, "session") or not request.session:
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
-        # Get token from form data or header
+        # Read body from receive for CSRF token extraction.
+        # We must buffer it and provide a wrapper so downstream can re-read.
+        body_parts = []
+        while True:
+            message = await receive()
+            body_parts.append(message.get("body", b""))
+            if not message.get("more_body", False):
+                break
+        body = b"".join(body_parts)
+
+        # Provide a receive wrapper that replays the buffered body
+        body_sent = False
+
+        async def receive_wrapper():
+            nonlocal body_sent
+            if not body_sent:
+                body_sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            # After body is consumed, return disconnect on subsequent calls
+            return {"type": "http.disconnect"}
+
+        # Get token from header first (AJAX requests)
         csrf_token = None
+        for key, value in scope.get("headers", []):
+            if key == b"x-csrf-token":
+                csrf_token = value.decode("latin-1")
+                break
 
-        # Check header first (for AJAX requests)
-        csrf_token = request.headers.get("X-CSRF-Token")
-
-        # If not in header, check form data by reading raw body
-        # We avoid request.form() because BaseHTTPMiddleware causes issues
-        # with body consumption - FastAPI can't read it again
+        # If not in header, check form data
         if not csrf_token:
-            content_type = request.headers.get("content-type", "")
+            content_type = ""
+            for key, value in scope.get("headers", []):
+                if key == b"content-type":
+                    content_type = value.decode("latin-1")
+                    break
+
             if "application/x-www-form-urlencoded" in content_type:
-                # Read raw body and parse it manually
-                body = await request.body()
                 try:
                     parsed = parse_qs(body.decode("utf-8"))
                     csrf_token = parsed.get("csrf_token", [None])[0]
                 except Exception:
                     pass
             elif "multipart/form-data" in content_type:
-                # For multipart forms, extract csrf_token from the boundary-delimited body
-                body = await request.body()
                 try:
-                    # Find csrf_token field in multipart body
                     body_str = body.decode("utf-8", errors="replace")
                     marker = 'name="csrf_token"'
                     idx = body_str.find(marker)
                     if idx != -1:
-                        # Value follows after double newline
                         rest = body_str[idx + len(marker) :]
-                        # Skip \r\n\r\n
                         val_start = rest.find("\r\n\r\n")
                         if val_start != -1:
                             val_rest = rest[val_start + 4 :]
-                            # Value ends at next boundary (line starting with --)
                             val_end = val_rest.find("\r\n")
                             if val_end != -1:
                                 csrf_token = val_rest[:val_end].strip()
@@ -112,13 +146,18 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     pass
 
         # Special handling for login - first login sets the token
-        if request.url.path == "/auth/login" and not request.session.get("csrf_token"):
-            # First login attempt, generate token for next request
+        if path == "/auth/login" and not request.session.get("csrf_token"):
             get_csrf_token(request)
-            return await call_next(request)
+            await self.app(scope, receive_wrapper, send)
+            return
 
         # Validate token
         if not validate_csrf_token(request, csrf_token):
-            raise HTTPException(status_code=403, detail="CSRF token validation failed")
+            response = JSONResponse(
+                status_code=403,
+                content={"detail": "CSRF token validation failed"},
+            )
+            await response(scope, receive_wrapper, send)
+            return
 
-        return await call_next(request)
+        await self.app(scope, receive_wrapper, send)
