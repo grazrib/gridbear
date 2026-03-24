@@ -177,7 +177,7 @@ class MessageProcessor:
         builder.set_allowed_mcp_servers(hook_data.mcp_permissions)
         builder.set_shared_accounts(shared_accounts)
         builder.set_plugin_context(
-            await self.plugin_manager.get_all_context_injections()
+            await self.plugin_manager.get_all_context_injections(unified_id=unified_id)
         )
 
         if hook_data.attachments:
@@ -509,7 +509,9 @@ class AgentAwareMessageProcessor(MessageProcessor):
             builder.set_shared_accounts(shared_accounts)
         if not ctx_opts.get("skip_plugin_context"):
             builder.set_plugin_context(
-                await self.plugin_manager.get_all_context_injections()
+                await self.plugin_manager.get_all_context_injections(
+                    unified_id=unified_id
+                )
             )
 
         # Set agent identity (key addition for multi-agent mode)
@@ -577,7 +579,13 @@ class AgentAwareMessageProcessor(MessageProcessor):
         full_prompt = builder.build()
 
         hook_data.prompt = full_prompt
-        hook_data.session_id = session.runner_session_id if session else None
+        # Workflow steps get a fresh runner session (no --resume) to avoid
+        # contamination from previous conversations.
+        _source = inter_agent_context.get("source", "") if inter_agent_context else ""
+        if _source == "workflow":
+            hook_data.session_id = None
+        else:
+            hook_data.session_id = session.runner_session_id if session else None
 
         # HOOK: after_context_build
         hook_data = await self.hooks.execute(

@@ -36,6 +36,17 @@ async def get_user_map() -> dict:
     return user_map
 
 
+async def _get_app_user_map() -> dict[int, str]:
+    """Map app.users id → username for skill author display."""
+    try:
+        from core.models.user import User
+
+        rows = await User.search([])
+        return {r["id"]: r["username"] for r in rows}
+    except Exception:
+        return {}
+
+
 async def get_all_skills() -> list[dict]:
     """Get all skills from database."""
     from plugins.skills.models import Skill
@@ -51,10 +62,13 @@ async def skills_list(request: Request, _=Depends(require_login)):
     user_map = await get_user_map()
 
     # Add username to skills
+    # Resolve from chat history (legacy) or app.users (portal users)
+    app_user_map = await _get_app_user_map()
     for skill in skills:
         if skill.get("created_by"):
-            key = f"{skill['created_by']}_{skill.get('created_by_platform', '')}"
-            skill["username"] = user_map.get(key, str(skill["created_by"]))
+            uid = skill["created_by"]
+            key = f"{uid}_{skill.get('created_by_platform', '')}"
+            skill["username"] = user_map.get(key) or app_user_map.get(uid) or str(uid)
         else:
             skill["username"] = "System"
 
@@ -149,9 +163,11 @@ async def skill_detail(request: Request, skill_id: int, _=Depends(require_login)
     skill = dict(results[0])
 
     user_map = await get_user_map()
+    app_user_map = await _get_app_user_map()
     if skill.get("created_by"):
-        key = f"{skill['created_by']}_{skill.get('created_by_platform', '')}"
-        skill["username"] = user_map.get(key, str(skill["created_by"]))
+        uid = skill["created_by"]
+        key = f"{uid}_{skill.get('created_by_platform', '')}"
+        skill["username"] = user_map.get(key) or app_user_map.get(uid) or str(uid)
     else:
         skill["username"] = "System"
 

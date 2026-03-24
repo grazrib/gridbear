@@ -814,25 +814,36 @@ class PluginManager:
         if seeded:
             logger.info(f"Seeded {seeded} new context skills")
 
-    async def get_all_context_injections(self) -> str:
+    async def get_all_context_injections(self, unified_id: str | None = None) -> str:
         """Get all context injections concatenated.
 
-        Reads from Skills DB (context_skills) if available,
+        Reads from Skills DB (context_skills + user_skills) if available,
         falls back to in-memory dict for backward compatibility.
+
+        Args:
+            unified_id: If provided, also include per-user skills.
 
         Returns:
             Combined context string from all plugins with context injection
         """
+        parts: list[str] = []
         skills_service = self.get_service("skills")
         if skills_service:
             enabled = list(self._manifests.keys())
             context_skills = await skills_service.get_context_skills(enabled)
             if context_skills:
-                return "\n\n".join(s["prompt"] for s in context_skills)
+                parts.extend(s["prompt"] for s in context_skills)
+
+            # Per-user skills (created by or shared with this user)
+            if unified_id:
+                user_skills = await skills_service.get_user_skills(unified_id)
+                if user_skills:
+                    parts.extend(s["prompt"] for s in user_skills)
+
         # Fallback: old in-memory dict (backward compat during migration)
-        if self._context_injections:
-            return "\n\n".join(self._context_injections.values())
-        return ""
+        if not parts and self._context_injections:
+            parts.extend(self._context_injections.values())
+        return "\n\n".join(parts)
 
     def get_runner(self, name: str | None = None) -> BaseRunner | None:
         """Get a runner by name, or the configured default, or the first available.
