@@ -4,7 +4,7 @@ import signal
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -556,6 +556,42 @@ app.include_router(rest_api_router, tags=["rest-api"])
 async def health_check():
     """Lightweight health probe for Docker healthcheck."""
     return {"status": "ok"}
+
+
+@app.get("/debug/profile", include_in_schema=False)
+async def debug_profile(request: Request, seconds: int = 5):
+    """Capture async profiling data for CPU diagnostics.
+
+    Only accessible by admin (checked manually — Depends not used to
+    keep the import lazy).
+    """
+    from ui.routes.auth import get_current_user
+
+    user = get_current_user(request)
+    if not user or not user.get("is_superadmin"):
+        raise HTTPException(status_code=403)
+
+    import asyncio
+    import io
+
+    import yappi
+
+    yappi.set_clock_type("cpu")
+    yappi.start()
+    await asyncio.sleep(min(seconds, 30))
+    yappi.stop()
+
+    buf = io.StringIO()
+    stats = yappi.get_func_stats()
+    stats.sort("ttot", "desc")
+    stats.print_all(
+        out=buf,
+        columns={0: ("name", 80), 1: ("ncall", 10), 2: ("ttot", 8), 3: ("tsub", 8)},
+    )
+    result = buf.getvalue()
+
+    yappi.clear_stats()
+    return Response(content=result, media_type="text/plain")
 
 
 def get_agents_count() -> int:
