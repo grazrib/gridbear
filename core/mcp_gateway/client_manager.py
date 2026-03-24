@@ -1051,10 +1051,14 @@ class MCPClientManager:
                 pass
             conn.session = None
 
-        # Close transport
+        # Close transport with timeout to prevent indefinite hangs
+        # when anyio _deliver_cancellation retries on stuck tasks
         if conn.transport_ctx:
             try:
-                await conn.transport_ctx.__aexit__(None, None, None)
+                await asyncio.wait_for(
+                    conn.transport_ctx.__aexit__(None, None, None),
+                    timeout=10,
+                )
             except Exception:
                 pass
             conn.transport_ctx = None

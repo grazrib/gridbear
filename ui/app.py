@@ -1,8 +1,10 @@
 import atexit
 import os
 import signal
+from asyncio import get_running_loop
 from pathlib import Path
 
+import anyio._backends._asyncio as _anyio_asyncio  # noqa: E402
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +12,26 @@ from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from config.logging_config import logger
+
+# ── Throttle anyio _deliver_cancellation (CPU leak fix) ─────────────
+# When a CancelScope cancels tasks blocked on slow I/O (MCP SSE/stdio),
+# anyio retries via call_soon() — a tight loop burning 100% CPU.
+# Replacing with call_later(0.01) adds 10ms between retries (~0% CPU).
+_orig_deliver_cancellation = _anyio_asyncio.CancelScope._deliver_cancellation
+
+
+def _throttled_deliver_cancellation(self, origin):
+    result = _orig_deliver_cancellation(self, origin)
+    if origin is self and self._cancel_handle is not None:
+        self._cancel_handle.cancel()
+        self._cancel_handle = get_running_loop().call_later(
+            0.01, self._deliver_cancellation, origin
+        )
+    return result
+
+
+_anyio_asyncio.CancelScope._deliver_cancellation = _throttled_deliver_cancellation
+# ────────────────────────────────────────────────────────────────────
 from core.__version__ import __version__
 from core.mcp_gateway.server import router as mcp_gateway_router
 from core.oauth2.discovery import router as oauth2_discovery_router
@@ -116,40 +138,6 @@ from starlette.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
-@app.middleware("http")
-async def inject_context_skill(request, call_next):
-    """Inject context_skill data into request.state for plugin admin pages."""
-    path = request.url.path.rstrip("/")
-    if path.startswith("/plugin/"):
-        parts = path.split("/")
-        if len(parts) >= 3:
-            plugin_name = parts[2]
-            try:
-                from core.registry import get_database
-
-                db = get_database()
-                if db:
-                    rows = await db.fetch_all(
-                        "SELECT id, title, prompt FROM app.skills "
-                        "WHERE plugin_name = %s AND category = %s",
-                        (plugin_name, "context"),
-                    )
-                    if rows:
-                        s = rows[0]
-                        prompt = s.get("prompt", "") or ""
-                        request.state.context_skill = {
-                            "id": s["id"],
-                            "title": s.get("title", ""),
-                            "preview": (prompt[:120] + "...")
-                            if len(prompt) > 120
-                            else prompt,
-                        }
-            except Exception as exc:
-                logger.debug("Context skill lookup for %s: %s", plugin_name, exc)
-    response = await call_next(request)
-    return response
-
-
 # Mount theme static directories BEFORE the general /static mount
 # (more specific paths must be registered first in Starlette)
 _all_manifests = _path_resolver.discover_all()
@@ -226,127 +214,173 @@ def get_enabled_plugins_by_type() -> dict:
     return result
 
 
-@app.middleware("http")
-async def i18n_middleware(request: Request, call_next):
-    """Set the translation language for each request."""
-    from core.i18n import resolve_language, set_language
+class _ContextMiddleware:
+    """Pure ASGI middleware replacing three @app.middleware("http") functions.
 
-    user = getattr(request.state, "current_user", None)
-    accept = request.headers.get("accept-language", "")
-    lang = resolve_language(user=user, accept_language=accept)
-    set_language(lang)
-    response = await call_next(request)
-    return response
+    Handles: user auth, tenant context, i18n, role-based redirects,
+    plugin menus, context skills, and content-length cleanup.
 
+    Avoids BaseHTTPMiddleware's anyio TaskGroup which causes
+    _deliver_cancellation CPU loops on connection close.
+    """
 
-@app.middleware("http")
-async def add_plugin_context(request: Request, call_next):
-    """Add enabled plugins, menus and current user to request state for templates."""
-    from ui.auth.session import get_current_user
+    def __init__(self, app):
+        self.app = app
 
-    path = request.url.path
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-    # Tenant defaults (so templates never crash on missing attributes)
-    request.state.active_company_id = None
-    request.state.active_company_name = None
-    request.state.user_companies = []
+        request = Request(scope, receive)
+        path = scope.get("path", "")
 
-    # Make current user available to all templates via request.state
-    request.state.current_user = get_current_user(request)
+        # ── 1. User + tenant context (from add_plugin_context) ──────
+        from ui.auth.session import get_current_user
 
-    # ── Tenant context ──────────────────────────────────────────────
-    user = request.state.current_user
-    if user:
-        try:
-            from core.models.company import Company
-            from core.models.company_user import CompanyUser
-            from core.tenant import SUPERADMIN_BYPASS, clear_tenant, set_tenant
+        scope.setdefault("state", {})
+        request.state.active_company_id = None
+        request.state.active_company_name = None
+        request.state.user_companies = []
+        request.state.current_user = get_current_user(request)
 
-            cu_rows = CompanyUser.search_sync(
-                [("user_id", "=", user["id"])],
-            )
-            if cu_rows:
-                # Resolve company names for the switcher dropdown
-                company_ids = [row["company_id"] for row in cu_rows]
-                companies = Company.search_sync(
-                    [("id", "in", company_ids)],
+        user = request.state.current_user
+        if user:
+            try:
+                from core.models.company import Company
+                from core.models.company_user import CompanyUser
+                from core.tenant import SUPERADMIN_BYPASS, clear_tenant, set_tenant
+
+                cu_rows = CompanyUser.search_sync(
+                    [("user_id", "=", user["id"])],
                 )
-                name_map = {c["id"]: c["name"] for c in companies}
+                if cu_rows:
+                    company_ids = [row["company_id"] for row in cu_rows]
+                    companies = Company.search_sync(
+                        [("id", "in", company_ids)],
+                    )
+                    name_map = {c["id"]: c["name"] for c in companies}
 
-                company_list = []
-                default_company_id = None
-                for row in cu_rows:
-                    cid = row["company_id"]
-                    entry = dict(row)
-                    entry["company_name"] = name_map.get(cid, f"Company #{cid}")
-                    company_list.append(entry)
-                    if row.get("is_default"):
-                        default_company_id = cid
+                    company_list = []
+                    default_company_id = None
+                    for row in cu_rows:
+                        cid = row["company_id"]
+                        entry = dict(row)
+                        entry["company_name"] = name_map.get(cid, f"Company #{cid}")
+                        company_list.append(entry)
+                        if row.get("is_default"):
+                            default_company_id = cid
 
-                # Fallback to first company if no explicit default
-                if default_company_id is None:
-                    default_company_id = company_ids[0]
+                    if default_company_id is None:
+                        default_company_id = company_ids[0]
 
-                active_company_id = default_company_id
+                    active_company_id = default_company_id
 
-                # Superadmin session override (company switcher)
-                if user.get("is_superadmin"):
-                    session_override = request.session.get("active_company_id")
-                    if session_override is not None:
-                        active_company_id = int(session_override)
+                    if user.get("is_superadmin"):
+                        session_override = request.session.get("active_company_id")
+                        if session_override is not None:
+                            active_company_id = int(session_override)
 
-                set_tenant(active_company_id, tuple(company_ids))
-                request.state.active_company_id = active_company_id
-                request.state.user_companies = company_list
-                request.state.active_company_name = name_map.get(active_company_id)
-            elif user.get("is_superadmin"):
-                # Superadmin with no company assignment: bypass mode
-                set_tenant(SUPERADMIN_BYPASS)
-        except Exception as exc:
-            # Graceful degradation: tables may not exist yet during bootstrap
-            logger.debug("Tenant context setup: %s", exc)
+                    set_tenant(active_company_id, tuple(company_ids))
+                    request.state.active_company_id = active_company_id
+                    request.state.user_companies = company_list
+                    request.state.active_company_name = name_map.get(active_company_id)
+                elif user.get("is_superadmin"):
+                    set_tenant(SUPERADMIN_BYPASS)
+            except Exception as exc:
+                logger.debug("Tenant context setup: %s", exc)
 
-    # Enforce role-based access: non-admin users can only access public paths
-    public_prefixes = (
-        "/auth/",
-        "/static/",
-        "/me",
-        "/oauth2/",
-        "/ws/",
-        "/.well-known/",
-        "/notifications",
-    )
-    is_public = any(path.startswith(p) for p in public_prefixes) or path == "/mcp"
+        # ── 2. Role-based access enforcement ────────────────────────
+        public_prefixes = (
+            "/auth/",
+            "/static/",
+            "/me",
+            "/oauth2/",
+            "/ws/",
+            "/.well-known/",
+            "/notifications",
+        )
+        is_public = any(path.startswith(p) for p in public_prefixes) or path == "/mcp"
 
-    if not is_public:
-        if user and not user.get("is_superadmin"):
+        if not is_public and user and not user.get("is_superadmin"):
             try:
                 from core.tenant import clear_tenant
 
                 clear_tenant()
             except Exception:
                 pass
-            return RedirectResponse(url="/me", status_code=303)
+            response = RedirectResponse(url="/me", status_code=303)
+            await response(scope, receive, send)
+            return
 
-    request.state.plugins = get_enabled_plugins_by_type()
-    request.state.plugin_menus = plugin_registry.discover_plugin_menus()
+        # ── 3. Plugin menus + enabled plugins ───────────────────────
+        request.state.plugins = get_enabled_plugins_by_type()
+        request.state.plugin_menus = plugin_registry.discover_plugin_menus()
 
-    try:
-        response = await call_next(request)
-    finally:
-        # Clear tenant context to prevent leakage between requests
+        # ── 4. i18n language (from i18n_middleware) ──────────────────
+        from core.i18n import resolve_language, set_language
+
+        accept = ""
+        for key, value in scope.get("headers", []):
+            if key == b"accept-language":
+                accept = value.decode("latin-1")
+                break
+        lang = resolve_language(user=user, accept_language=accept)
+        set_language(lang)
+
+        # ── 5. Context skill injection (from inject_context_skill) ──
+        stripped_path = path.rstrip("/")
+        if stripped_path.startswith("/plugin/"):
+            parts = stripped_path.split("/")
+            if len(parts) >= 3:
+                plugin_name = parts[2]
+                try:
+                    from core.registry import get_database
+
+                    db = get_database()
+                    if db:
+                        rows = await db.fetch_all(
+                            "SELECT id, title, prompt FROM app.skills "
+                            "WHERE plugin_name = %s AND category = %s",
+                            (plugin_name, "context"),
+                        )
+                        if rows:
+                            s = rows[0]
+                            prompt = s.get("prompt", "") or ""
+                            request.state.context_skill = {
+                                "id": s["id"],
+                                "title": s.get("title", ""),
+                                "preview": (prompt[:120] + "...")
+                                if len(prompt) > 120
+                                else prompt,
+                            }
+                except Exception as exc:
+                    logger.debug("Context skill lookup for %s: %s", plugin_name, exc)
+
+        # ── 6. Wrap send to strip content-length ────────────────────
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = [
+                    (k, v)
+                    for k, v in message.get("headers", [])
+                    if k.lower() != b"content-length"
+                ]
+                message = {**message, "headers": headers}
+            await send(message)
+
+        # ── 7. Call downstream, then clear tenant ───────────────────
         try:
-            from core.tenant import clear_tenant
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            try:
+                from core.tenant import clear_tenant
 
-            clear_tenant()
-        except Exception:
-            pass
+                clear_tenant()
+            except Exception:
+                pass
 
-    # BaseHTTPMiddleware can cause Content-Length mismatch on large responses;
-    # let the server recalculate it from the actual body
-    if "content-length" in response.headers:
-        del response.headers["content-length"]
-    return response
+
+app.add_middleware(_ContextMiddleware)
 
 
 def _get_plugin_health(plugins: dict) -> dict[str, str]:
