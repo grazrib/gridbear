@@ -483,17 +483,6 @@ async def save_agent_config(
     image_provider: str = Form(""),
     mcp_permissions: list[str] = Form([]),
     plugins_enabled: list[str] = Form([]),
-    # Email settings
-    email_enabled: str = Form(""),
-    email_account: str = Form(""),
-    email_interval: int = Form(5),
-    email_label: str = Form("INBOX"),
-    email_sender_name: str = Form(""),
-    email_auto_reply_allowed: str = Form(""),
-    email_instructions: str = Form(""),
-    email_signature: str = Form(""),
-    email_notification_username: str = Form(""),
-    email_notification_chat_id: str = Form(""),
     # Tool management
     max_tools: str = Form(""),
     tool_loading: str = Form("full"),
@@ -593,28 +582,6 @@ async def save_agent_config(
         config["image"] = {"provider": image_provider}
 
     # Email settings
-    if email_account.strip() or email_enabled == "on":
-        email_config = {
-            "enabled": email_enabled == "on",
-            "account": email_account.strip(),
-            "check_interval_minutes": email_interval,
-            "label": email_label.strip() or "INBOX",
-            "sender_name": email_sender_name.strip(),
-            "auto_reply_allowed": email_auto_reply_allowed.strip(),
-            "instructions": email_instructions.strip(),
-            "signature": email_signature,
-            "notification_username": email_notification_username.strip().lstrip("@"),
-        }
-        # Parse chat_id if provided
-        if email_notification_chat_id.strip():
-            try:
-                email_config["notification_chat_id"] = int(
-                    email_notification_chat_id.strip()
-                )
-            except ValueError:
-                pass
-        config["email"] = email_config
-
     # MCP permissions - always save what form sends (allows deselecting all)
     config["mcp_permissions"] = mcp_permissions
 

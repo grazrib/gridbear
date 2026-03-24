@@ -204,6 +204,43 @@ class SkillsService(BaseService):
         rows = await Skill.search(domain, order="plugin_name, title")
         return [dict(r) for r in rows]
 
+    async def get_user_skills(self, unified_id: str) -> list[dict]:
+        """Get user skills visible to a specific user.
+
+        Returns skills created by this user plus shared user skills.
+        Looks up the user's DB id from unified_id (username).
+        """
+        from plugins.skills.models import Skill
+
+        # Resolve unified_id → user DB id
+        user_db_id = await self._resolve_user_id(unified_id)
+        if user_db_id is None:
+            # Unknown user — return only shared user skills
+            domain = [
+                ("skill_type", "=", "user"),
+                ("shared", "=", True),
+            ]
+        else:
+            domain = [
+                ("skill_type", "=", "user"),
+                "|",
+                ("created_by", "=", user_db_id),
+                ("shared", "=", True),
+            ]
+        rows = await Skill.search(domain, order="category, title")
+        return [dict(r) for r in rows]
+
+    @staticmethod
+    async def _resolve_user_id(unified_id: str) -> int | None:
+        """Resolve a unified_id (username) to the app.users primary key."""
+        try:
+            from core.models.user import User
+
+            user = await User.get(username=unified_id)
+            return user["id"] if user else None
+        except Exception:
+            return None
+
     async def reset_skill_to_default(self, skill_id: int, default_prompt: str) -> bool:
         """Reset a skill's prompt to the default from the .md file."""
         from plugins.skills.models import Skill

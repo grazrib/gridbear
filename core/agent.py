@@ -404,19 +404,28 @@ class Agent:
         # Create a synthetic message and user info for the handler
         from core.interfaces.channel import Message, UserInfo
 
+        # For workflow steps, use the original user identity so that
+        # user-aware MCP servers (odoo, google-sheets) get proper creds.
+        original_user = context.get("original_user_id")
+        effective_username = original_user or context.get("from_agent", "system")
+
         synthetic_message = Message(
             user_id=0,  # System/inter-agent
-            username=context.get("from_agent", "system"),
+            username=effective_username,
             text=message,
             platform="inter_agent",
         )
 
         synthetic_user = UserInfo(
             user_id=0,
-            username=context.get("from_agent", "system"),
+            username=effective_username,
             display_name=context.get("from_agent", "System").title(),
             platform="inter_agent",
         )
+        # Set unified_id directly so the message handler uses the real
+        # user identity instead of falling back to "inter_agent:{username}"
+        if original_user:
+            synthetic_user.unified_id = original_user
 
         try:
             # Call the message handler

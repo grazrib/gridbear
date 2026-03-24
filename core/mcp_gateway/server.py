@@ -235,7 +235,13 @@ def _filter_by_user_mcp_permissions(tools: list[dict], unified_id: str) -> list[
     If the user has no explicit permissions, all tools pass through (backwards compat).
     If the user has permissions, only namespaced tools from allowed servers are kept.
     Non-namespaced tools (gridbear_help, send_file_to_chat, etc.) always pass through.
+    System callers (inter-agent, workflow) bypass user-level filtering — they
+    rely on agent-level mcp_permissions instead.
     """
+    # System callers are not real users — skip per-user filtering
+    if unified_id and unified_id.startswith("inter_agent:"):
+        return tools
+
     try:
         from config.settings import get_user_mcp_permissions
 
@@ -1981,7 +1987,11 @@ async def _handle_message(msg: dict, session_id: str, request: Request) -> dict 
 
         # Enforce per-user MCP permissions on tool calls (not just tools/list).
         # Non-namespaced tools (built-in) are always allowed.
-        if effective_user and "__" in tool_name:
+        if (
+            effective_user
+            and "__" in tool_name
+            and not effective_user.startswith("inter_agent:")
+        ):
             from config.settings import get_user_mcp_permissions
             from core.permissions.mcp_resolver import matches_permission
 
