@@ -177,6 +177,13 @@
                 <i class="fas fa-circle text-[6px] mr-1"></i>
                 <span x-text="wsConnected ? i18n.connected : i18n.disconnected"></span>
             </span>
+            <button @click="toggleEnterToSend()"
+                    class="p-1.5 rounded-lg transition-all text-xs flex items-center gap-1"
+                    :class="enterToSend ? 'bg-nordic-500/10 text-nordic-600 dark:text-nordic-400' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'"
+                    :title="enterToSend ? 'Enter = {{ _("send") }}, Ctrl+Enter = {{ _("new line") }}' : 'Enter = {{ _("new line") }}, Ctrl+Enter = {{ _("send") }}'">
+                <i class="fas fa-keyboard"></i>
+                <span x-text="enterToSend ? 'Enter = {{ _("send") }}' : 'Enter = {{ _("new line") }}'"></span>
+            </button>
             <button @click="toggleTts()"
                     class="p-1.5 rounded-lg transition-all text-xs"
                     :class="ttsEnabled ? 'bg-nordic-500/10 text-nordic-600 dark:text-nordic-400' : 'text-void-400 hover:text-void-600 dark:hover:text-void-300'"
@@ -256,7 +263,7 @@
                                             </template>
                                         </div>
                                     </template>
-                                    <div class="text-sm leading-relaxed prose max-w-none" x-html="renderMarkdown(msg.text)"></div>
+                                    <div class="text-sm leading-relaxed prose max-w-none" x-html="msg.isHtml ? msg.text : renderMarkdown(msg.text)"></div>
                                 </div>
                             </template>
                         </div>
@@ -311,12 +318,15 @@
                                 title="{{ _("Attach file") }}">
                             <i class="fas fa-paperclip"></i>
                         </button>
-                        <input type="text" x-model="inputText"
-                               @keydown.enter="sendMessage()"
+                        <textarea x-model="inputText"
+                               @keydown="if ($event.key === 'Enter') handleEnter($event)"
                                @paste="handlePaste($event)"
+                               @input="autoResize($event)"
                                placeholder="{{ _("Type a message or paste an image...") }}"
                                :disabled="!wsConnected"
-                               class="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all disabled:opacity-50">
+                               rows="1"
+                               class="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all disabled:opacity-50 resize-none overflow-y-auto"
+                               style="max-height: 150px"></textarea>
                         <!-- Microphone button -->
                         <button x-show="voiceSupported"
                                 @click="toggleVoice()"
@@ -404,6 +414,9 @@ function chatApp() {
         _voiceMode: null,  // 'speech-api' or 'recorder'
         _voiceCommitted: '',  // text already committed to inputText by speech API
         _voiceRestarting: false,
+
+        // Enter behavior: true = Enter sends, Ctrl+Enter for newline (default)
+        enterToSend: localStorage.getItem('gridbear_enter_to_send') !== '0',
 
         // TTS
         ttsEnabled: localStorage.getItem('gridbear_tts') === '1',
@@ -764,6 +777,27 @@ function chatApp() {
                         text: i18n.error + ' ' + data.text,
                         time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
                     });
+                } else if (data.type === 'attachment') {
+                    // Bot sent a file/image via send_file_to_chat
+                    var isImage = (data.mimetype || '').startsWith('image/');
+                    var html = '';
+                    if (isImage) {
+                        html = '<img src="' + data.url + '" alt="' + (data.filename || '') + '" class="max-w-sm rounded-lg shadow-md cursor-pointer" onclick="window.open(this.src, \'_blank\')">';
+                    } else {
+                        html = '<a href="' + data.url + '" target="_blank" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 hover:bg-nordic-500/20 transition-all text-sm"><i class="fas fa-file-download"></i> ' + (data.filename || 'file') + '</a>';
+                    }
+                    if (data.caption) {
+                        html = (data.caption ? '<p class="text-sm mb-2">' + data.caption + '</p>' : '') + html;
+                    }
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'agent',
+                        text: html,
+                        isHtml: true,
+                        time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                    self.isTyping = false;
+                    self.$nextTick(function() { self.scrollToBottom(); });
                 } else if (data.type === 'conversation_update') {
                     // Update title in sidebar
                     for (var i = 0; i < self.conversations.length; i++) {
@@ -822,6 +856,12 @@ function chatApp() {
             this._voiceCommitted = '';
             this.pendingFiles = [];
             this.isTyping = true;
+
+            // Reset textarea height after send
+            this.$nextTick(function() {
+                var ta = self.$el.querySelector('textarea');
+                if (ta) ta.style.height = 'auto';
+            });
 
             // Restart speech recognition to clear old results buffer
             if (this.voiceActive && this._recognition) {
@@ -1006,6 +1046,35 @@ function chatApp() {
                     showToast(i18n.micDenied, 'error');
                 }
             }
+        },
+
+        // --- Enter behavior ---
+
+        handleEnter(event) {
+            if (this.enterToSend) {
+                // Enter = send, Shift+Enter or Ctrl+Enter = newline
+                if (!event.shiftKey && !event.ctrlKey) {
+                    event.preventDefault();
+                    this.sendMessage();
+                }
+            } else {
+                // Enter = newline, Ctrl+Enter = send
+                if (event.ctrlKey) {
+                    event.preventDefault();
+                    this.sendMessage();
+                }
+            }
+        },
+
+        toggleEnterToSend() {
+            this.enterToSend = !this.enterToSend;
+            localStorage.setItem('gridbear_enter_to_send', this.enterToSend ? '1' : '0');
+        },
+
+        autoResize(event) {
+            var el = event.target;
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 150) + 'px';
         },
 
         // --- TTS ---
