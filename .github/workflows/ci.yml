@@ -122,7 +122,7 @@ jobs:
           pip install --upgrade "setuptools>=78.1.1"
 
       - name: Dependency vulnerability scan
-        run: pip-audit --desc --skip-editable
+        run: pip-audit --desc --skip-editable --ignore-vuln CVE-2026-4539  # pygments regex DoS, local-only
 
       - name: Secret scan
         run: |
