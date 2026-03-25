@@ -481,6 +481,10 @@ async def save_agent_config(
     voice_id: str = Form(""),
     voice_language: str = Form(""),
     image_provider: str = Form(""),
+    email_account: str = Form(""),
+    email_sender_name: str = Form(""),
+    email_from_alias: str = Form(""),
+    email_signature: str = Form(""),
     mcp_permissions: list[str] = Form([]),
     plugins_enabled: list[str] = Form([]),
     # Tool management
@@ -582,6 +586,16 @@ async def save_agent_config(
         config["image"] = {"provider": image_provider}
 
     # Email settings
+    if email_account.strip():
+        email_cfg = {"account": email_account.strip()}
+        if email_sender_name.strip():
+            email_cfg["sender_name"] = email_sender_name.strip()
+        if email_from_alias.strip():
+            email_cfg["from_alias"] = email_from_alias.strip()
+        if email_signature.strip():
+            email_cfg["signature"] = email_signature.strip()
+        config["email"] = email_cfg
+
     # MCP permissions - always save what form sends (allows deselecting all)
     config["mcp_permissions"] = mcp_permissions
 
