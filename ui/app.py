@@ -547,6 +547,10 @@ app.include_router(
     notifications.router, prefix="/notifications", tags=["notifications"]
 )
 
+from ui.routes import vault_api
+
+app.include_router(vault_api.router)
+
 
 # ── Plugin admin routes (MUST be registered before app startup) ───────
 # Starlette compiles the routing table when building the middleware stack.
