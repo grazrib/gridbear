@@ -91,6 +91,36 @@ def _get_user_agents(user: dict) -> list[dict]:
                 }
             )
 
+    # Sort by last conversation activity (most recent first)
+    if agents:
+        try:
+            from core.registry import get_database
+
+            db = get_database()
+            if db:
+                uid = username
+                with db.acquire_sync() as conn:
+                    cur = conn.execute(
+                        """SELECT agent_name, MAX(updated_at) AS last_active
+                           FROM chat.webchat_conversations
+                           WHERE unified_id = %s
+                           GROUP BY agent_name""",
+                        (uid,),
+                    )
+                    last_active = {
+                        row["agent_name"]: row["last_active"] for row in cur.fetchall()
+                    }
+                if last_active:
+                    from datetime import datetime, timezone
+
+                    epoch = datetime.min.replace(tzinfo=timezone.utc)
+                    agents.sort(
+                        key=lambda a: last_active.get(a["name"], epoch),
+                        reverse=True,
+                    )
+        except Exception:
+            pass
+
     return agents
 
 
