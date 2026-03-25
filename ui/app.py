@@ -16,7 +16,7 @@ from config.logging_config import logger
 # ── Throttle anyio _deliver_cancellation (CPU leak fix) ─────────────
 # When a CancelScope cancels tasks blocked on slow I/O (MCP SSE/stdio),
 # anyio retries via call_soon() — a tight loop burning 100% CPU.
-# Replacing with call_later(0.01) adds 10ms between retries (~0% CPU).
+# Replacing with call_later(1.0) adds 1s between retries (~0% CPU).
 _orig_deliver_cancellation = _anyio_asyncio.CancelScope._deliver_cancellation
 
 
@@ -25,7 +25,7 @@ def _throttled_deliver_cancellation(self, origin):
     if origin is self and self._cancel_handle is not None:
         self._cancel_handle.cancel()
         self._cancel_handle = get_running_loop().call_later(
-            0.01, self._deliver_cancellation, origin
+            1.0, self._deliver_cancellation, origin
         )
     return result
 

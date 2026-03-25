@@ -483,6 +483,7 @@ class ContextBuilder:
         sender_name = self._agent_email_settings.get(
             "sender_name", self._agent_display_name or "Assistant"
         )
+        sender_alias = self._agent_email_settings.get("from_alias", "")
         signature = self._agent_email_settings.get("signature", "")
 
         # Derive MCP server name from account
@@ -492,16 +493,29 @@ class ContextBuilder:
 You have your own email account: {account}.
 When sending emails on your own behalf (not on behalf of the user), ALWAYS use:
 - Server: {server_name}
-- from_name: {sender_name}
+- from_name: {sender_name}"""
 
-Example: mcp__{server_name}__send_email with from_name="{sender_name}"
+        if sender_alias:
+            email_ctx += f"""
+- from_alias: {sender_alias}
 
-This applies to:
-- Responding to support requests received at your address
-- Sending notifications or updates as {self._agent_display_name or "yourself"}
-- Any email where YOU are the sender, not the user
+Example: mcp__{server_name}__send_email with from_alias="{sender_alias}" and from_name="{sender_name}" """
+        else:
+            email_ctx += f"""
 
-Only use the user's email account when they explicitly ask you to send an email as them."""
+Example: mcp__{server_name}__send_email with from_name="{sender_name}" """
+
+        email_ctx += f"""
+
+ALWAYS prefer sending from YOUR account ({account}) by default.
+This applies to ALL emails unless the user EXPLICITLY asks you to send from their account.
+Including:
+- Responding to support requests
+- Sending notifications or updates
+- Forwarding information
+- Any email the user asks you to send (use your account, not theirs)
+
+Only use the user's personal email account when they EXPLICITLY say "send from my account" or "send as me"."""
 
         if signature:
             email_ctx += f"""
