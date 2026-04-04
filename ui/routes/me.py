@@ -978,3 +978,81 @@ async def chat_page(request: Request, user: dict = Depends(require_user)):
             "agents": agents,
         },
     )
+
+
+@router.get("/chat/join/{token}", response_class=HTMLResponse)
+async def chat_join_page(
+    request: Request, token: str, user: dict = Depends(require_user)
+):
+    """Show invite confirmation page."""
+    from ui.routes.chat_api import _db, _ensure_db
+
+    _ensure_db()
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            """SELECT i.conversation_id, i.expires_at, i.max_uses, i.use_count,
+                      c.title, c.agent_name
+               FROM chat.webchat_invites i
+               JOIN chat.webchat_conversations c ON c.id = i.conversation_id
+               WHERE i.token = %s AND i.expires_at > NOW()
+                 AND (i.max_uses = 0 OR i.use_count < i.max_uses)""",
+            (token,),
+        ).fetchone()
+
+    if not row:
+        return templates.TemplateResponse(
+            "me/chat_join.html",
+            {"request": request, "user": user, "error": "Invite expired or invalid"},
+        )
+
+    return templates.TemplateResponse(
+        "me/chat_join.html",
+        {
+            "request": request,
+            "user": user,
+            "token": token,
+            "conversation_title": row["title"] or "Untitled",
+            "agent_name": row["agent_name"],
+        },
+    )
+
+
+@router.post("/chat/join/{token}")
+async def chat_join_accept(
+    request: Request, token: str, user: dict = Depends(require_user)
+):
+    """Accept an invite and join the conversation."""
+    from ui.routes.chat_api import _db, _ensure_db
+
+    uid = user["username"]
+    _ensure_db()
+
+    with _db.acquire_sync() as conn:
+        # Atomic token redemption
+        row = conn.execute(
+            """UPDATE chat.webchat_invites
+               SET use_count = use_count + 1
+               WHERE token = %s
+                 AND expires_at > NOW()
+                 AND (max_uses = 0 OR use_count < max_uses)
+               RETURNING conversation_id""",
+            (token,),
+        ).fetchone()
+
+        if not row:
+            conn.rollback()
+            return RedirectResponse(url="/me/chat", status_code=303)
+
+        conv_id = row["conversation_id"]
+
+        # Add as participant (ignore if already member)
+        conn.execute(
+            """INSERT INTO chat.webchat_participants
+               (conversation_id, unified_id, role)
+               VALUES (%s, %s, 'member')
+               ON CONFLICT DO NOTHING""",
+            (conv_id, uid),
+        )
+        conn.commit()
+
+    return RedirectResponse(url="/me/chat", status_code=303)

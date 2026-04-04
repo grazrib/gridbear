@@ -589,6 +589,12 @@ When sending emails as {self._agent_display_name or "yourself"}, ALWAYS append t
                 )
             if self._channel_metadata.get("chat_type"):
                 source_parts.append(f"chat_type: {self._channel_metadata['chat_type']}")
+            if self._channel_metadata.get("participants"):
+                names = ", ".join(
+                    f"{p['name']} (@{p['uid']})"
+                    for p in self._channel_metadata["participants"]
+                )
+                source_parts.append(f"participants: {names}")
             parts.append("[Message Source]\n" + "\n".join(source_parts))
 
         # Language instruction

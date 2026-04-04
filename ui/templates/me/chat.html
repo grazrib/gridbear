@@ -7,6 +7,7 @@
 <style>
     #chat-messages { scroll-behavior: smooth; }
     .msg-user { background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(45, 212, 191, 0.05)); }
+    .msg-other-user { background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(251, 191, 36, 0.05)); }
     .msg-agent { background: rgba(100, 116, 139, 0.05); }
     .typing-indicator span {
         animation: blink 1.4s infinite both;
@@ -153,9 +154,11 @@
                         <span x-show="conv.unread"
                               class="w-2 h-2 rounded-full bg-nordic-500 flex-shrink-0"></span>
                         <div class="min-w-0">
-                            <p class="text-sm font-medium truncate"
-                               :class="activeConversationId === conv.id ? 'text-nordic-700 dark:text-nordic-300' : conv.unread ? 'text-nordic-600 dark:text-nordic-400 font-semibold' : 'text-void-700 dark:text-void-300'"
-                               x-text="conv.title || i18n.newConversation"></p>
+                            <p class="text-sm font-medium truncate flex items-center gap-1"
+                               :class="activeConversationId === conv.id ? 'text-nordic-700 dark:text-nordic-300' : conv.unread ? 'text-nordic-600 dark:text-nordic-400 font-semibold' : 'text-void-700 dark:text-void-300'">
+                                <i x-show="conv.type === 'shared'" class="fas fa-users text-[9px] text-void-400"></i>
+                                <span x-text="conv.title || i18n.newConversation" class="truncate"></span>
+                            </p>
                             <p class="text-[10px] text-void-400 mt-0.5" x-text="formatDate(conv.updated_at)"></p>
                         </div>
                     </div>
@@ -166,6 +169,11 @@
                             <i class="fas fa-gear text-xs"></i>
                             <span x-show="conv.id === activeConversationId && conversationContext"
                                   class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-nordic-500"></span>
+                        </button>
+                        <button @click.stop="selectConversation(conv); loadParticipants(); participantsPanelOpen = !participantsPanelOpen"
+                                class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all"
+                                title="{{ _("Participants") }}">
+                            <i class="fas fa-users text-xs"></i>
                         </button>
                         <button @click.stop="renameConversation(conv)"
                                 class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all"
@@ -251,6 +259,37 @@
                         <i class="fas fa-circle-notch fa-spin mr-1"></i> {{ _("Saving...") }}
                     </div>
                 </div>
+                <!-- Participants panel -->
+                <div x-show="participantsPanelOpen" x-transition
+                     class="mb-2 p-3 rounded-xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium text-void-500">{{ _("Participants") }}</span>
+                        <button @click="participantsPanelOpen = false"
+                                class="p-1 rounded-lg hover:bg-void-100 dark:hover:bg-void-800/50 text-void-400 hover:text-void-600 transition-all">
+                            <i class="fas fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-1 mb-3">
+                        <template x-for="p in participants" :key="p.uid">
+                            <div class="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-void-50 dark:hover:bg-void-800/30">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full" :class="isParticipantOnline(p.uid) ? 'bg-green-500' : 'bg-void-300'"></span>
+                                    <span class="text-sm" x-text="p.display_name"></span>
+                                    <span x-show="p.role === 'owner'" class="text-[9px] px-1.5 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500">owner</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <!-- Invite input -->
+                    <div class="flex gap-2">
+                        <input type="text" x-model="inviteUsername" placeholder="{{ _('Username to invite...') }}"
+                               class="flex-1 px-3 py-1.5 rounded-lg bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none">
+                        <button @click="inviteUser()" :disabled="!inviteUsername.trim()"
+                                class="px-3 py-1.5 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-xs font-medium transition-colors disabled:opacity-50">
+                            <i class="fas fa-user-plus mr-1"></i> {{ _("Invite") }}
+                        </button>
+                    </div>
+                </div>
                 <!-- Messages -->
                 <div id="chat-messages" class="flex-1 overflow-y-auto space-y-3 rounded-2xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30 p-4 relative"
                      @dragover.prevent="dragOver = true"
@@ -272,7 +311,7 @@
                         </div>
                     </template>
                     <template x-for="msg in messages" :key="msg.id">
-                        <div :class="msg.role === 'user' ? 'msg-user ml-2 sm:ml-8' : msg.role === 'system' ? 'mx-2 sm:mx-8 text-center' : 'msg-agent mr-2 sm:mr-8'" class="rounded-xl p-4">
+                        <div :class="msg.role === 'user' ? 'msg-user ml-2 sm:ml-8' : msg.role === 'other_user' ? 'msg-other-user mr-2 sm:mr-8' : msg.role === 'system' ? 'mx-2 sm:mx-8 text-center' : 'msg-agent mr-2 sm:mr-8'" class="rounded-xl p-4">
                             <template x-if="msg.role === 'system'">
                                 <div class="text-[11px] text-void-400 italic" x-text="msg.text"></div>
                             </template>
@@ -280,8 +319,8 @@
                                 <div>
                                     <div class="flex items-center gap-2 mb-1">
                                         <span class="text-[10px] font-semibold uppercase tracking-wide"
-                                              :class="msg.role === 'user' ? 'text-frost-500' : 'text-nordic-500'"
-                                              x-text="msg.role === 'user' ? '{{ user.display_name or user.username }}' : msg.agent || selectedAgent"></span>
+                                              :class="msg.role === 'user' ? 'text-frost-500' : msg.role === 'other_user' ? 'text-amber-500' : 'text-nordic-500'"
+                                              x-text="msg.role === 'user' ? '{{ user.display_name or user.username }}' : msg.role === 'other_user' ? msg.display_name : msg.agent || selectedAgent"></span>
                                         <span class="text-[10px] text-void-400" x-text="msg.time"></span>
                                     </div>
                                     <!-- Attachment thumbnails in message -->
@@ -442,6 +481,11 @@ function chatApp() {
         lastSavedContext: '',
         contextPanelOpen: false,
         contextSaving: false,
+
+        // Participants
+        participantsPanelOpen: false,
+        participants: [],
+        inviteUsername: '',
 
         // Attachments
         pendingFiles: [],  // [{file, previewUrl, uploading, uploadedPath, filename}]
@@ -856,6 +900,41 @@ function chatApp() {
                     });
                     self.isTyping = false;
                     self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'user_message') {
+                    // Message from another user in shared conversation
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'other_user',
+                        sender: data.sender,
+                        display_name: data.display_name || data.sender,
+                        text: data.text,
+                        time: data.time || new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                    self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'participant_joined') {
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'system',
+                        text: (data.display_name || data.uid) + ' joined the conversation',
+                        time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                } else if (data.type === 'participant_removed' || data.type === 'participant_left') {
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'system',
+                        text: (data.display_name || data.uid || 'A participant') + ' left the conversation',
+                        time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                } else if (data.type === 'conversation_invited') {
+                    // Reload conversations to show the new one
+                    self.loadConversations();
+                } else if (data.type === 'conversation_deleted') {
+                    // Remove from sidebar and deselect if active
+                    self.conversations = self.conversations.filter(function(c) { return c.id !== data.conversation_id; });
+                    if (self.activeConversationId === data.conversation_id) {
+                        self.activeConversationId = null;
+                        self.messages = [];
+                    }
                 } else if (data.type === 'unread') {
                     // Mark conversation as having unread messages
                     if (data.conversation_id !== self.activeConversationId) {
@@ -1160,6 +1239,44 @@ function chatApp() {
                 if (data.ok) self.lastSavedContext = self.conversationContext;
             })
             .catch(function() { self.contextSaving = false; });
+        },
+
+        // --- Participants ---
+
+        loadParticipants() {
+            var self = this;
+            if (!self.activeConversationId) return;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/participants')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    self.participants = (data.data && data.data.participants) || [];
+                })
+                .catch(function() { self.participants = []; });
+        },
+
+        inviteUser() {
+            var self = this;
+            var target = self.inviteUsername.trim().toLowerCase();
+            if (!target || !self.activeConversationId) return;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/invite', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]') ? document.querySelector('[name=csrf_token]').value : ''},
+                body: JSON.stringify({ username: target }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    self.inviteUsername = '';
+                    self.loadParticipants();
+                } else {
+                    alert(data.detail || data.error || 'Error');
+                }
+            });
+        },
+
+        isParticipantOnline(uid) {
+            // Simplified: check if uid is in active connections (via unread events)
+            return false; // TODO: implement with presence events
         },
 
         autoResize(event) {
