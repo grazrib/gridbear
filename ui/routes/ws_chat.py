@@ -310,11 +310,11 @@ async def ws_chat(websocket: WebSocket):
                 await websocket.close(code=4003, reason="Forbidden")
                 return
 
-    # Validate conversation ownership if provided
+    # Validate conversation access (owner or member)
     if conversation_id:
-        from ui.routes.chat_api import validate_conversation_ownership
+        from ui.routes.chat_api import validate_conversation_access
 
-        if not validate_conversation_ownership(conversation_id, uid):
+        if not validate_conversation_access(conversation_id, uid):
             await websocket.send_json(
                 {"type": "error", "text": "Conversazione non valida"}
             )
