@@ -90,6 +90,14 @@ def _ensure_db():
         else:
             conn.rollback()
 
+    # Ensure context_prompt column exists (idempotent)
+    with _db.acquire_sync() as conn:
+        conn.execute(
+            "ALTER TABLE chat.webchat_conversations "
+            "ADD COLUMN IF NOT EXISTS context_prompt TEXT"
+        )
+        conn.commit()
+
     _initialized = True
 
 
@@ -344,6 +352,72 @@ async def delete_conversation(
         )
         conn.commit()
     return api_ok()
+
+
+# --- Conversation context ---
+
+
+@router.get(
+    "/conversations/{conv_id}/context",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def get_context(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    """Get conversation context prompt."""
+    _ensure_db()
+    uid = _uid(user)
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT context_prompt FROM chat.webchat_conversations "
+            "WHERE id = %s AND unified_id = %s",
+            (conv_id, uid),
+        ).fetchone()
+        if not row:
+            return api_error(404, "Not found", "not_found")
+    return api_ok(data={"context_prompt": row["context_prompt"]})
+
+
+@router.post(
+    "/conversations/{conv_id}/context",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def set_context(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    """Set or update conversation context prompt."""
+    _ensure_db()
+    uid = _uid(user)
+    body = await request.json()
+    context_prompt = body.get("context_prompt", "")
+
+    # Validate length
+    if isinstance(context_prompt, str) and len(context_prompt) > 2000:
+        return api_error(
+            422, "Context prompt too long (max 2000 characters)", "validation_error"
+        )
+
+    # Normalize empty → NULL
+    context_prompt = context_prompt.strip() if context_prompt else None
+    context_prompt = context_prompt or None
+
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM chat.webchat_conversations "
+            "WHERE id = %s AND unified_id = %s",
+            (conv_id, uid),
+        ).fetchone()
+        if not row:
+            return api_error(404, "Not found", "not_found")
+
+        conn.execute(
+            "UPDATE chat.webchat_conversations SET context_prompt = %s WHERE id = %s",
+            (context_prompt, conv_id),
+        )
+        conn.commit()
+    return api_ok(data={"context_prompt": context_prompt})
 
 
 # --- File upload ---

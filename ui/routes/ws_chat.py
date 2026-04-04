@@ -5,6 +5,7 @@ Routes messages through GridBear's internal API for full pipeline processing
 (sessions, memory, hooks, context builder, runner, MCP tools).
 """
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,9 @@ GRIDBEAR_SECRET = os.getenv("INTERNAL_API_SECRET", "")
 
 # Active WebSocket connections: {uid: websocket}
 _active_connections: dict[str, WebSocket] = {}
+
+# Background tasks — prevent garbage collection
+_background_tasks: set[asyncio.Task] = set()
 
 
 async def push_to_webchat(uid: str, event: dict) -> bool:
@@ -89,11 +93,16 @@ async def _stream_from_gridbear(
     text: str,
     user: dict,
     agent_name: str,
-    websocket: WebSocket,
+    websocket: WebSocket | None,
     conversation_id: str | None = None,
     attachments: list[str] | None = None,
+    context_prompt: str | None = None,
 ) -> str:
-    """Send message to GridBear internal API and stream NDJSON events to WebSocket."""
+    """Send message to GridBear internal API and stream NDJSON events to WebSocket.
+
+    If the WebSocket disconnects mid-stream, processing continues and the
+    response is still returned (and saved by the caller).
+    """
     uid = user["username"]
 
     payload = {
@@ -105,6 +114,36 @@ async def _stream_from_gridbear(
     }
     if attachments:
         payload["attachments"] = attachments
+    if context_prompt:
+        payload["context_prompt"] = context_prompt
+    if conversation_id:
+        payload["channel_metadata"] = {
+            "channel": "webchat",
+            "conversation_id": conversation_id,
+        }
+        # Add conversation title
+        try:
+            from ui.routes.chat_api import get_conversation_title
+
+            title = get_conversation_title(conversation_id)
+            if title:
+                payload["channel_metadata"]["conversation_title"] = title
+        except Exception:
+            pass
+        if context_prompt:
+            payload["channel_metadata"]["conversation_context"] = context_prompt
+
+    ws_alive = True
+
+    async def _try_send(event):
+        """Best-effort WebSocket send — silently stops if disconnected."""
+        nonlocal ws_alive
+        if not ws_alive or not websocket:
+            return
+        try:
+            await websocket.send_json(event)
+        except Exception:
+            ws_alive = False
 
     async with aiohttp.ClientSession() as session:
         try:
@@ -112,14 +151,14 @@ async def _stream_from_gridbear(
                 f"{GRIDBEAR_URL}/api/chat",
                 json=payload,
                 headers={"Authorization": f"Bearer {GRIDBEAR_SECRET}"},
-                timeout=aiohttp.ClientTimeout(total=600),
+                timeout=aiohttp.ClientTimeout(total=1800),
             ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
                     logger.error(
                         f"WebChat: GridBear API error {resp.status}: {error_text}"
                     )
-                    await websocket.send_json(
+                    await _try_send(
                         {
                             "type": "error",
                             "text": f"GridBear API error: {resp.status}",
@@ -138,8 +177,8 @@ async def _stream_from_gridbear(
                     except json.JSONDecodeError:
                         continue
 
-                    # Forward event to browser WebSocket
-                    await websocket.send_json(event)
+                    # Forward event to browser (best-effort)
+                    await _try_send(event)
 
                     event_type = event.get("type")
                     if event_type == "message":
@@ -152,9 +191,18 @@ async def _stream_from_gridbear(
 
                 return result_text
 
+        except asyncio.TimeoutError:
+            logger.error("WebChat: GridBear API timed out")
+            await _try_send(
+                {
+                    "type": "error",
+                    "text": "La richiesta ha impiegato troppo tempo.",
+                }
+            )
+            return ""
         except aiohttp.ClientError as e:
             logger.error(f"WebChat: connection to GridBear failed: {e}")
-            await websocket.send_json(
+            await _try_send(
                 {
                     "type": "error",
                     "text": "Impossibile contattare il servizio GridBear",
@@ -235,6 +283,7 @@ async def ws_chat(websocket: WebSocket):
             if msg_type == "message":
                 text = data.get("text", "").strip()
                 attachments = data.get("attachments") or []
+                context_prompt = data.get("context_prompt") or None
                 if not text and not attachments:
                     continue
 
@@ -245,43 +294,75 @@ async def ws_chat(websocket: WebSocket):
                 _save_message(conversation_id, "user", save_text)
 
                 # Send typing indicator immediately
-                await websocket.send_json({"type": "typing"})
-
                 try:
-                    result = await _stream_from_gridbear(
+                    await websocket.send_json({"type": "typing"})
+                except Exception:
+                    pass
+
+                # Run in background so the response is saved even if
+                # the user switches conversation (WebSocket disconnects).
+                async def _process_message(
+                    _text, _user, _agent, _ws, _conv_id, _att, _ctx
+                ):
+                    try:
+                        result = await _stream_from_gridbear(
+                            _text,
+                            _user,
+                            _agent,
+                            _ws,
+                            _conv_id,
+                            attachments=_att,
+                            context_prompt=_ctx,
+                        )
+                        if result:
+                            _save_message(_conv_id, "assistant", result)
+                            # Notify user of new message (for unread indicator)
+                            logger.info(
+                                f"WebChat: sending unread for conv={_conv_id[:8]}..."
+                            )
+                            delivered = await push_to_webchat(
+                                _user["username"],
+                                {
+                                    "type": "unread",
+                                    "conversation_id": _conv_id,
+                                },
+                            )
+                            logger.info(
+                                f"WebChat: unread delivered={delivered} "
+                                f"conv={_conv_id[:8]}..."
+                            )
+
+                        if _conv_id:
+                            from ui.routes.chat_api import get_conversation_title
+
+                            title = get_conversation_title(_conv_id)
+                            if title:
+                                try:
+                                    await _ws.send_json(
+                                        {
+                                            "type": "conversation_update",
+                                            "conversation_id": _conv_id,
+                                            "title": title,
+                                        }
+                                    )
+                                except Exception:
+                                    pass
+                    except Exception:
+                        logger.exception("WebChat: background processing error")
+
+                task = asyncio.create_task(
+                    _process_message(
                         text,
                         user,
                         agent_name,
                         websocket,
                         conversation_id,
-                        attachments=attachments if attachments else None,
+                        attachments if attachments else None,
+                        context_prompt,
                     )
-                    # Persist agent response
-                    if result:
-                        _save_message(conversation_id, "assistant", result)
-
-                    # Send updated title if it was auto-generated
-                    if conversation_id:
-                        from ui.routes.chat_api import get_conversation_title
-
-                        title = get_conversation_title(conversation_id)
-                        if title:
-                            await websocket.send_json(
-                                {
-                                    "type": "conversation_update",
-                                    "conversation_id": conversation_id,
-                                    "title": title,
-                                }
-                            )
-
-                except Exception:
-                    logger.exception("WebChat: error processing message")
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "text": "An error occurred processing your message",
-                        }
-                    )
+                )
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
 
     except WebSocketDisconnect:
         pass

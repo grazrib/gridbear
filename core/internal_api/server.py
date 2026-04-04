@@ -34,6 +34,8 @@ class ChatRequest(BaseModel):
     platform: str = "webchat"
     agent_name: str
     attachments: list[str] = []
+    context_prompt: str | None = None
+    channel_metadata: dict = {}
 
 
 @router.post("/chat")
@@ -94,6 +96,8 @@ async def chat(
         text=request.text,
         attachments=request.attachments,
         platform=request.platform,
+        context_prompt=request.context_prompt,
+        channel_metadata=request.channel_metadata,
     )
 
     user_info = UserInfo(
@@ -200,7 +204,7 @@ async def rlm_query(
                 use_pool=False,
                 model=request.model or None,
             ),
-            timeout=120.0,
+            timeout=900.0,
         )
         return api_ok(
             data={
