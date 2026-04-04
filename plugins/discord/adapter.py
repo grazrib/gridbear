@@ -760,6 +760,11 @@ class DiscordChannel(BaseChannel):
                 platform="discord",
                 respond_with_voice=True,
                 is_group_chat=not is_dm,
+                channel_metadata={
+                    "channel": "discord",
+                    "chat_id": str(user_id),
+                    "chat_type": "dm" if is_dm else "guild",
+                },
             )
             user_info = UserInfo(
                 user_id=user_id,
@@ -904,6 +909,11 @@ class DiscordChannel(BaseChannel):
                 attachments=attachment_paths,
                 platform="discord",
                 is_group_chat=not is_dm,
+                channel_metadata={
+                    "channel": "discord",
+                    "chat_id": str(user_id),
+                    "chat_type": "dm" if is_dm else "guild",
+                },
             )
             user_info = UserInfo(
                 user_id=user_id,
@@ -996,6 +1006,11 @@ class DiscordChannel(BaseChannel):
             text=content,
             platform="discord",
             is_group_chat=not is_dm,
+            channel_metadata={
+                "channel": "discord",
+                "chat_id": str(user_id),
+                "chat_type": "dm" if is_dm else "guild",
+            },
         )
         user_info = UserInfo(
             user_id=user_id,
@@ -1328,6 +1343,11 @@ class DiscordChannel(BaseChannel):
             username=username,
             text=prompt,
             platform="discord",
+            channel_metadata={
+                "channel": "discord",
+                "chat_id": str(user_id),
+                "chat_type": "scheduled",
+            },
         )
         user_info = UserInfo(
             user_id=user_id,

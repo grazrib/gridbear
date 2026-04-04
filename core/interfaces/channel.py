@@ -26,6 +26,8 @@ class Message:
         False  # If True, response will be TTS - no emojis/special chars
     )
     is_group_chat: bool = False
+    context_prompt: str | None = None
+    channel_metadata: dict = field(default_factory=dict)
 
 
 @dataclass

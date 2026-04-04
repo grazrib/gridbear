@@ -713,6 +713,11 @@ class TelegramChannel(BaseChannel):
                 text=text,
                 platform="telegram",
                 is_group_chat=not is_private,
+                channel_metadata={
+                    "channel": "telegram",
+                    "chat_id": str(user_id),
+                    "chat_type": "private" if is_private else "group",
+                },
             )
             user_info = UserInfo(
                 user_id=user_id,
@@ -1039,6 +1044,11 @@ class TelegramChannel(BaseChannel):
                 platform="telegram",
                 respond_with_voice=True,
                 is_group_chat=not is_private,
+                channel_metadata={
+                    "channel": "telegram",
+                    "chat_id": str(user_id),
+                    "chat_type": "private" if is_private else "group",
+                },
             )
             user_info = UserInfo(
                 user_id=user_id,
@@ -1213,6 +1223,11 @@ class TelegramChannel(BaseChannel):
                 attachments=[str(attachment_path)],
                 platform="telegram",
                 is_group_chat=not is_private,
+                channel_metadata={
+                    "channel": "telegram",
+                    "chat_id": str(user_id),
+                    "chat_type": "private" if is_private else "group",
+                },
             )
             user_info = UserInfo(
                 user_id=user_id,
@@ -1318,6 +1333,11 @@ class TelegramChannel(BaseChannel):
             username=username,
             text=prompt,
             platform="telegram",
+            channel_metadata={
+                "channel": "telegram",
+                "chat_id": str(user_id),
+                "chat_type": "scheduled",
+            },
         )
         user_info = UserInfo(
             user_id=user_id,

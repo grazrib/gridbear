@@ -109,12 +109,20 @@ class MessageProcessor:
 
         session = None
         if sessions_service:
+            # For webchat, use conversation_id as session key so each
+            # conversation gets its own runner session (separate Claude context).
+            session_user_id = user_info.user_id
+            session_platform = message.platform
+            conv_id = message.channel_metadata.get("conversation_id")
+            if conv_id and message.platform == "webchat":
+                session_platform = f"webchat:{conv_id}"
+
             session = await sessions_service.get_session(
-                user_info.user_id, message.platform
+                session_user_id, session_platform
             )
             if not session:
                 session = await sessions_service.create_session(
-                    user_info.user_id, message.platform
+                    session_user_id, session_platform
                 )
                 # HOOK: on_session_created
                 await self.hooks.execute(
@@ -179,6 +187,10 @@ class MessageProcessor:
         builder.set_plugin_context(
             await self.plugin_manager.get_all_context_injections(unified_id=unified_id)
         )
+        if message.context_prompt:
+            builder.set_conversation_context(message.context_prompt)
+        if message.channel_metadata:
+            builder.set_channel_metadata(message.channel_metadata)
 
         if hook_data.attachments:
             for attachment in hook_data.attachments:
@@ -318,10 +330,24 @@ class MessageProcessor:
                 )
 
                 memory_content = f"User: {user_text}\nAssistant: {assistant_text}"
+                mem_metadata = {}
+                if message.channel_metadata:
+                    mem_metadata["channel"] = message.channel_metadata.get(
+                        "channel", ""
+                    )
+                    if message.channel_metadata.get("conversation_id"):
+                        mem_metadata["conversation_id"] = message.channel_metadata[
+                            "conversation_id"
+                        ]
+                    if message.channel_metadata.get("conversation_context"):
+                        mem_metadata["conversation_context"] = message.channel_metadata[
+                            "conversation_context"
+                        ]
                 asyncio.create_task(
                     memory_service.add_declarative_memory(
                         content=memory_content,
                         user_id=unified_id,
+                        metadata=mem_metadata if mem_metadata else None,
                     )
                 )
 
@@ -430,12 +456,20 @@ class AgentAwareMessageProcessor(MessageProcessor):
 
         session = None
         if sessions_service:
+            # For webchat, use conversation_id as session key so each
+            # conversation gets its own runner session (separate Claude context).
+            session_user_id = user_info.user_id
+            session_platform = message.platform
+            conv_id = message.channel_metadata.get("conversation_id")
+            if conv_id and message.platform == "webchat":
+                session_platform = f"webchat:{conv_id}"
+
             session = await sessions_service.get_session(
-                user_info.user_id, message.platform
+                session_user_id, session_platform
             )
             if not session:
                 session = await sessions_service.create_session(
-                    user_info.user_id, message.platform
+                    session_user_id, session_platform
                 )
                 await self.hooks.execute(
                     HookName.ON_SESSION_CREATED,
@@ -524,6 +558,11 @@ class AgentAwareMessageProcessor(MessageProcessor):
         builder.set_agent_email_settings(self.agent_context.get("email"))
         # Set tool loading mode (full or search)
         builder.set_tool_loading(self.agent_context.get("tool_loading", "full"))
+        # Set per-conversation context if provided
+        if message.context_prompt:
+            builder.set_conversation_context(message.context_prompt)
+        if message.channel_metadata:
+            builder.set_channel_metadata(message.channel_metadata)
 
         # Inject inter-agent context if multi-agent
         if not ctx_opts.get("skip_inter_agent"):
@@ -720,10 +759,24 @@ class AgentAwareMessageProcessor(MessageProcessor):
                 )
 
                 memory_content = f"User: {user_text}\nAssistant: {assistant_text}"
+                mem_metadata = {}
+                if message.channel_metadata:
+                    mem_metadata["channel"] = message.channel_metadata.get(
+                        "channel", ""
+                    )
+                    if message.channel_metadata.get("conversation_id"):
+                        mem_metadata["conversation_id"] = message.channel_metadata[
+                            "conversation_id"
+                        ]
+                    if message.channel_metadata.get("conversation_context"):
+                        mem_metadata["conversation_context"] = message.channel_metadata[
+                            "conversation_context"
+                        ]
                 asyncio.create_task(
                     memory_service.add_declarative_memory(
                         content=memory_content,
                         user_id=unified_id,
+                        metadata=mem_metadata if mem_metadata else None,
                     )
                 )
 
