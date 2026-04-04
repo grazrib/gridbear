@@ -541,12 +541,15 @@ async def list_participants(
                ORDER BY p.joined_at""",
             (conv_id,),
         ).fetchall()
+    from ui.routes.ws_chat import _active_connections
+
     participants = [
         {
             "uid": r["unified_id"],
             "role": r["role"],
             "display_name": r["display_name"] or r["unified_id"],
             "joined_at": r["joined_at"].isoformat() if r["joined_at"] else None,
+            "online": r["unified_id"] in _active_connections,
         }
         for r in rows
     ]

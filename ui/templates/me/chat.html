@@ -1275,8 +1275,8 @@ function chatApp() {
         },
 
         isParticipantOnline(uid) {
-            // Simplified: check if uid is in active connections (via unread events)
-            return false; // TODO: implement with presence events
+            var p = this.participants.find(function(x) { return x.uid === uid; });
+            return p ? p.online : false;
         },
 
         autoResize(event) {
