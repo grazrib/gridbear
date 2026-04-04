@@ -501,7 +501,7 @@ class GmailMCPServer:
         body = self._get_text_content(payload)
         attachments = self._get_attachments(payload)
 
-        return {
+        result = {
             "id": response.get("id"),
             "subject": self._get_header(headers, "Subject"),
             "from": self._get_header(headers, "From"),
@@ -512,6 +512,10 @@ class GmailMCPServer:
             "hasAttachments": len(attachments) > 0,
             "attachmentCount": len(attachments),
         }
+        cc = self._get_header(headers, "Cc")
+        if cc:
+            result["cc"] = cc
+        return result
 
     def list_attachments(self, message_id: str) -> list:
         """List attachments of an email."""

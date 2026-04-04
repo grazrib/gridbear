@@ -141,6 +141,7 @@ async def create_portal_user(
     username: str = Form(...),
     password: str = Form(...),
     display_name: str = Form(default=""),
+    email: str = Form(default=""),
     is_superadmin: str = Form(default=""),
     _: bool = Depends(require_login),
 ):
@@ -160,6 +161,7 @@ async def create_portal_user(
         password_hash=hash_password(password),
         display_name=display_name.strip() or None,
         is_superadmin=is_superadmin == "1",
+        email=email.strip() or None,
     )
 
     return RedirectResponse(url="/users", status_code=303)
@@ -170,6 +172,7 @@ async def update_portal_user(
     request: Request,
     user_id: int,
     display_name: str = Form(default=""),
+    email: str = Form(default=""),
     is_superadmin: str = Form(default=""),
     is_active: str = Form(default=""),
     _: bool = Depends(require_login),
@@ -180,6 +183,7 @@ async def update_portal_user(
         display_name=display_name.strip() or None,
         is_superadmin=is_superadmin == "1",
         is_active=is_active == "1",
+        email=email.strip() or None,
     )
     return RedirectResponse(url="/users", status_code=303)
 

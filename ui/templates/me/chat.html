@@ -149,13 +149,24 @@
                 <div class="conv-item px-3 py-3 cursor-pointer flex items-start gap-2 group"
                      :class="activeConversationId === conv.id ? 'conv-active' : ''"
                      @click="selectConversation(conv)">
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium truncate"
-                           :class="activeConversationId === conv.id ? 'text-nordic-700 dark:text-nordic-300' : 'text-void-700 dark:text-void-300'"
-                           x-text="conv.title || i18n.newConversation"></p>
-                        <p class="text-[10px] text-void-400 mt-0.5" x-text="formatDate(conv.updated_at)"></p>
+                    <div class="flex-1 min-w-0 flex items-center gap-1.5">
+                        <span x-show="conv.unread"
+                              class="w-2 h-2 rounded-full bg-nordic-500 flex-shrink-0"></span>
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium truncate"
+                               :class="activeConversationId === conv.id ? 'text-nordic-700 dark:text-nordic-300' : conv.unread ? 'text-nordic-600 dark:text-nordic-400 font-semibold' : 'text-void-700 dark:text-void-300'"
+                               x-text="conv.title || i18n.newConversation"></p>
+                            <p class="text-[10px] text-void-400 mt-0.5" x-text="formatDate(conv.updated_at)"></p>
+                        </div>
                     </div>
                     <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                        <button @click.stop="selectConversation(conv); contextPanelOpen = !contextPanelOpen"
+                                class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all relative"
+                                title="{{ _("Context") }}">
+                            <i class="fas fa-gear text-xs"></i>
+                            <span x-show="conv.id === activeConversationId && conversationContext"
+                                  class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-nordic-500"></span>
+                        </button>
                         <button @click.stop="renameConversation(conv)"
                                 class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all"
                                 title="{{ _("Rename") }}">
@@ -214,6 +225,32 @@
         <!-- Active conversation -->
         <template x-if="activeConversationId">
             <div class="flex-1 flex flex-col min-h-0">
+                <!-- Context editor panel -->
+                <div x-show="contextPanelOpen" x-transition
+                     class="mb-2 p-3 rounded-xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium text-void-500">{{ _("Conversation Context") }}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-void-400"
+                                  x-text="conversationContext.length + '/2000'"></span>
+                            <button @click="saveContext(); contextPanelOpen = false"
+                                    class="p-1 rounded-lg hover:bg-void-100 dark:hover:bg-void-800/50 text-void-400 hover:text-void-600 transition-all"
+                                    title="{{ _('Close') }}">
+                                <i class="fas fa-xmark text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <textarea x-model="conversationContext"
+                              @blur="saveContext()"
+                              @keydown.ctrl.enter="saveContext()"
+                              maxlength="2000"
+                              rows="3"
+                              placeholder="{{ _('Describe what you are working on...') }}"
+                              class="w-full px-3 py-2 rounded-lg bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none transition-all resize-none"></textarea>
+                    <div x-show="contextSaving" class="text-[10px] text-nordic-500 mt-1">
+                        <i class="fas fa-circle-notch fa-spin mr-1"></i> {{ _("Saving...") }}
+                    </div>
+                </div>
                 <!-- Messages -->
                 <div id="chat-messages" class="flex-1 overflow-y-auto space-y-3 rounded-2xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30 p-4 relative"
                      @dragover.prevent="dragOver = true"
@@ -399,6 +436,12 @@ function chatApp() {
         sidebarLoading: false,
         messagesLoading: false,
         creatingConversation: false,
+
+        // Conversation context
+        conversationContext: '',
+        lastSavedContext: '',
+        contextPanelOpen: false,
+        contextSaving: false,
 
         // Attachments
         pendingFiles: [],  // [{file, previewUrl, uploading, uploadedPath, filename}]
@@ -622,6 +665,20 @@ function chatApp() {
             self.isTyping = false;
             self.messagesLoading = true;
             self._clearPendingFiles();
+            self.conversationContext = '';
+            self.lastSavedContext = '';
+            self.contextPanelOpen = false;
+            conv.unread = false;
+
+            // Load conversation context
+            fetch('/me/chat/api/conversations/' + conv.id + '/context')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var ctx = (data.data && data.data.context_prompt) || '';
+                    self.conversationContext = ctx;
+                    self.lastSavedContext = ctx;
+                })
+                .catch(function() {});
 
             // Load history
             fetch('/me/chat/api/conversations/' + conv.id + '/messages')
@@ -771,10 +828,11 @@ function chatApp() {
                     self.isTyping = true;
                 } else if (data.type === 'error') {
                     self.isTyping = false;
+                    var errMsg = data.text || data.details || data.error_type || 'unknown error';
                     self.messages.push({
                         id: ++self.msgCounter,
                         role: 'agent',
-                        text: i18n.error + ' ' + data.text,
+                        text: i18n.error + ' ' + errMsg,
                         time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
                     });
                 } else if (data.type === 'attachment') {
@@ -798,6 +856,16 @@ function chatApp() {
                     });
                     self.isTyping = false;
                     self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'unread') {
+                    // Mark conversation as having unread messages
+                    if (data.conversation_id !== self.activeConversationId) {
+                        for (var i = 0; i < self.conversations.length; i++) {
+                            if (self.conversations[i].id === data.conversation_id) {
+                                self.conversations[i].unread = true;
+                                break;
+                            }
+                        }
+                    }
                 } else if (data.type === 'conversation_update') {
                     // Update title in sidebar
                     for (var i = 0; i < self.conversations.length; i++) {
@@ -877,6 +945,9 @@ function chatApp() {
             };
             if (attachments.length > 0) {
                 payload.attachments = attachments;
+            }
+            if (this.conversationContext) {
+                payload.context_prompt = this.conversationContext;
             }
             this.ws.send(JSON.stringify(payload));
 
@@ -1069,6 +1140,26 @@ function chatApp() {
         toggleEnterToSend() {
             this.enterToSend = !this.enterToSend;
             localStorage.setItem('gridbear_enter_to_send', this.enterToSend ? '1' : '0');
+        },
+
+        // --- Conversation context ---
+
+        saveContext() {
+            var self = this;
+            if (self.conversationContext === self.lastSavedContext) return;
+            if (!self.activeConversationId) return;
+            self.contextSaving = true;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/context', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]') ? document.querySelector('[name=csrf_token]').value : ''},
+                body: JSON.stringify({ context_prompt: self.conversationContext }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                self.contextSaving = false;
+                if (data.ok) self.lastSavedContext = self.conversationContext;
+            })
+            .catch(function() { self.contextSaving = false; });
         },
 
         autoResize(event) {

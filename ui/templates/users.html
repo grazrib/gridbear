@@ -135,6 +135,11 @@
                                        class="w-32 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
                             </div>
                             <div>
+                                <label class="block text-[10px] font-medium text-void-500 mb-1">Email</label>
+                                <input type="email" name="email" value="{{ user.email or '' }}" placeholder="user@example.com"
+                                       class="w-48 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
+                            </div>
+                            <div>
                                 <label class="block text-[10px] font-medium text-void-500 mb-1">Admin</label>
                                 <select name="is_superadmin"
                                         class="w-20 bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-1.5 px-2 text-sm text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50">
@@ -329,6 +334,12 @@
                 <input type="text" name="display_name"
                        class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
                        placeholder="Mario Rossi">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Email</label>
+                <input type="email" name="email"
+                       class="w-full bg-white dark:bg-void-800 border border-void-200 dark:border-void-700 rounded-lg py-2 px-3 text-sm text-void-900 dark:text-white placeholder-void-400 focus:outline-none focus:border-nordic-500/50"
+                       placeholder="mario@example.com">
             </div>
             <div>
                 <label class="block text-xs font-medium text-void-500 dark:text-void-400 mb-1">Admin</label>

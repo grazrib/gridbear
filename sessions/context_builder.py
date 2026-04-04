@@ -43,7 +43,14 @@ After taking a screenshot or generating a file, call the tool with:
 Example flow:
 1. Take a screenshot with playwright → get file path
 2. Call send_file_to_chat(file_path=..., chat_id=..., platform=...)
-3. The user receives the file in their chat"""
+3. The user receives the file in their chat
+
+[Google Sheets / Docs Access]
+You have two ways to access Google documents:
+- gws-* tools (e.g. gws-davide_corio_dubhe_it): use the USER's Google account (OAuth). Use these when the user asks you to access THEIR documents.
+- google-sheets tools (e.g. google-sheets__sheets_read): use YOUR service account. Use these when accessing documents shared with your SA, or when you need to comment/edit as yourself.
+
+When the user shares a Google document link with you and asks you to access it with your account or service account, ALWAYS use the google-sheets__ prefixed tools, NOT the gws-* tools."""
 
 
 def _build_email_context() -> str:
@@ -132,6 +139,18 @@ class ContextBuilder:
         self._agent_system_prompt: str | None = None
         self._agent_email_settings: dict | None = None
         self._tool_loading: str = "full"
+        self._conversation_context: str | None = None
+        self._channel_metadata: dict | None = None
+
+    def set_channel_metadata(self, metadata: dict | None) -> "ContextBuilder":
+        """Set channel/conversation metadata for message source tracking."""
+        self._channel_metadata = metadata if metadata else None
+        return self
+
+    def set_conversation_context(self, context: str | None) -> "ContextBuilder":
+        """Set per-conversation working context."""
+        self._conversation_context = context if context else None
+        return self
 
     def add_user_info(self, user_info: UserInfo) -> "ContextBuilder":
         """Add user information to context."""
@@ -560,6 +579,18 @@ When sending emails as {self._agent_display_name or "yourself"}, ALWAYS append t
             )
             parts.append(user_ctx)
 
+        # Add channel/conversation metadata
+        if self._channel_metadata:
+            channel = self._channel_metadata.get("channel", "")
+            source_parts = [f"channel: {channel}"]
+            if self._channel_metadata.get("conversation_id"):
+                source_parts.append(
+                    f"conversation_id: {self._channel_metadata['conversation_id']}"
+                )
+            if self._channel_metadata.get("chat_type"):
+                source_parts.append(f"chat_type: {self._channel_metadata['chat_type']}")
+            parts.append("[Message Source]\n" + "\n".join(source_parts))
+
         # Language instruction
         lang_name = LOCALE_NAMES.get(self._locale, self._locale.upper())
         parts.append(
@@ -669,6 +700,29 @@ When sending emails as {self._agent_display_name or "yourself"}, ALWAYS append t
                 parts.append(
                     f"[Personal Memory - Information about this user:]\n{personal_text}"
                 )
+
+        # Include per-conversation working context
+        if self._conversation_context:
+            parts.append(
+                f"[Conversation Context — IMPORTANT]\n"
+                f"This conversation is dedicated to the following scope. "
+                f"All user messages in this conversation relate to this context "
+                f"unless they explicitly say otherwise. "
+                f"If a message seems unrelated to this context, ask the user "
+                f"if they are in the right conversation before proceeding.\n\n"
+                f"{self._conversation_context}"
+            )
+        elif self._channel_metadata and self._channel_metadata.get(
+            "conversation_title"
+        ):
+            title = self._channel_metadata["conversation_title"]
+            parts.append(
+                f"[Conversation Topic]\n"
+                f'This conversation is titled "{title}". '
+                f"User messages likely relate to this topic. "
+                f"If a message seems unrelated, ask the user "
+                f"if they are in the right conversation."
+            )
 
         # Include recent chat history for conversational context
         if self._chat_history:

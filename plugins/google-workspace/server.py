@@ -1167,6 +1167,89 @@ class GoogleWorkspaceMCPServer:
                     "required": ["file_id"],
                 },
             },
+            {
+                "name": "drive_list_comments",
+                "description": f"List comments on a Google Drive file ({email}). "
+                "Returns comment text, author, replies, and resolved status.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "file_id": {
+                            "type": "string",
+                            "description": "Google Drive file ID",
+                        },
+                        "include_resolved": {
+                            "type": "boolean",
+                            "description": "Include resolved comments (default: false)",
+                            "default": False,
+                        },
+                    },
+                    "required": ["file_id"],
+                },
+            },
+            {
+                "name": "drive_add_comment",
+                "description": f"Add a comment to a Google Drive file ({email}). "
+                "Optionally anchor to specific content in Google Docs.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "file_id": {
+                            "type": "string",
+                            "description": "Google Drive file ID",
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Comment text",
+                        },
+                        "quoted_content": {
+                            "type": "string",
+                            "description": "Text in the document to anchor the comment to (optional)",
+                        },
+                    },
+                    "required": ["file_id", "content"],
+                },
+            },
+            {
+                "name": "drive_reply_comment",
+                "description": f"Reply to an existing comment on a Google Drive file ({email}).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "file_id": {
+                            "type": "string",
+                            "description": "Google Drive file ID",
+                        },
+                        "comment_id": {
+                            "type": "string",
+                            "description": "Comment ID to reply to",
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Reply text",
+                        },
+                    },
+                    "required": ["file_id", "comment_id", "content"],
+                },
+            },
+            {
+                "name": "drive_resolve_comment",
+                "description": f"Resolve (close) a comment on a Google Drive file ({email}).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "file_id": {
+                            "type": "string",
+                            "description": "Google Drive file ID",
+                        },
+                        "comment_id": {
+                            "type": "string",
+                            "description": "Comment ID to resolve",
+                        },
+                    },
+                    "required": ["file_id", "comment_id"],
+                },
+            },
         ]
 
     def _track_operation(self, name: str, args: dict, result: dict) -> None:
@@ -1543,6 +1626,28 @@ class GoogleWorkspaceMCPServer:
                 args.get("sheet"),
                 args.get("max_rows", 500),
             )
+        elif name == "drive_list_comments":
+            return self._list_comments(
+                args["file_id"],
+                args.get("include_resolved", False),
+            )
+        elif name == "drive_add_comment":
+            return self._add_comment(
+                args["file_id"],
+                args["content"],
+                args.get("quoted_content"),
+            )
+        elif name == "drive_reply_comment":
+            return self._reply_comment(
+                args["file_id"],
+                args["comment_id"],
+                args["content"],
+            )
+        elif name == "drive_resolve_comment":
+            return self._resolve_comment(
+                args["file_id"],
+                args["comment_id"],
+            )
         else:
             return {
                 "success": False,
@@ -1551,6 +1656,126 @@ class GoogleWorkspaceMCPServer:
                 "recoverable": False,
                 "retry_after": None,
             }
+
+    # ── Drive Comments ──────────────────────────────────────────────
+
+    def _list_comments(self, file_id: str, include_resolved: bool = False) -> dict:
+        """List comments on a Drive file."""
+        try:
+            comments = []
+            page_token = None
+            while True:
+                resp = (
+                    self.drive_api.comments()
+                    .list(
+                        fileId=file_id,
+                        fields="comments(id,content,author(displayName,emailAddress),"
+                        "resolved,createdTime,modifiedTime,"
+                        "replies(id,content,author(displayName,emailAddress),createdTime),"
+                        "quotedFileContent(value)),nextPageToken",
+                        includeDeleted=False,
+                        pageToken=page_token,
+                    )
+                    .execute()
+                )
+                for c in resp.get("comments", []):
+                    if not include_resolved and c.get("resolved"):
+                        continue
+                    comment = {
+                        "id": c["id"],
+                        "author": c.get("author", {}).get("displayName", ""),
+                        "author_email": c.get("author", {}).get("emailAddress", ""),
+                        "content": c.get("content", ""),
+                        "resolved": c.get("resolved", False),
+                        "created": c.get("createdTime", ""),
+                        "modified": c.get("modifiedTime", ""),
+                    }
+                    quoted = c.get("quotedFileContent", {}).get("value")
+                    if quoted:
+                        comment["quoted_text"] = quoted
+                    replies = []
+                    for r in c.get("replies", []):
+                        replies.append(
+                            {
+                                "id": r["id"],
+                                "author": r.get("author", {}).get("displayName", ""),
+                                "content": r.get("content", ""),
+                                "created": r.get("createdTime", ""),
+                            }
+                        )
+                    if replies:
+                        comment["replies"] = replies
+                    comments.append(comment)
+                page_token = resp.get("nextPageToken")
+                if not page_token:
+                    break
+            return {
+                "success": True,
+                "data": {"comments": comments, "count": len(comments)},
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _add_comment(
+        self, file_id: str, content: str, quoted_content: str | None = None
+    ) -> dict:
+        """Add a comment to a Drive file."""
+        try:
+            body = {"content": content}
+            if quoted_content:
+                body["quotedFileContent"] = {"value": quoted_content}
+            result = (
+                self.drive_api.comments()
+                .create(
+                    fileId=file_id, body=body, fields="id,content,author(displayName)"
+                )
+                .execute()
+            )
+            return {
+                "success": True,
+                "data": {
+                    "comment_id": result["id"],
+                    "content": result.get("content", ""),
+                },
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _reply_comment(self, file_id: str, comment_id: str, content: str) -> dict:
+        """Reply to a comment on a Drive file."""
+        try:
+            result = (
+                self.drive_api.replies()
+                .create(
+                    fileId=file_id,
+                    commentId=comment_id,
+                    body={"content": content},
+                    fields="id,content,author(displayName)",
+                )
+                .execute()
+            )
+            return {
+                "success": True,
+                "data": {
+                    "reply_id": result["id"],
+                    "content": result.get("content", ""),
+                },
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _resolve_comment(self, file_id: str, comment_id: str) -> dict:
+        """Resolve a comment on a Drive file."""
+        try:
+            self.drive_api.comments().update(
+                fileId=file_id,
+                commentId=comment_id,
+                body={"resolved": True},
+                fields="id,resolved",
+            ).execute()
+            return {"success": True, "data": {"resolved": True}}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def handle_request(self, request: dict) -> dict:
         """Handle MCP JSON-RPC request."""

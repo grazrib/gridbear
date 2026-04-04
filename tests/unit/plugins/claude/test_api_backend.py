@@ -72,7 +72,7 @@ class TestClaudeApiBackendInit:
             os.environ.pop("CLAUDE_MODEL", None)
             b = ClaudeApiBackend({})
         assert b.model == "sonnet"
-        assert b.timeout == 120
+        assert b.timeout == 900
         assert b.max_output_tokens == 8192
         assert b.max_tool_iterations == 20
 

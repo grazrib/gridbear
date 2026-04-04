@@ -56,7 +56,9 @@ class ClaudeApiBackend:
     def __init__(self, config: dict):
         self.config = config
         self.model = config.get("model", os.getenv("CLAUDE_MODEL", "sonnet"))
-        self.timeout = config.get("timeout", 120)
+        self.timeout = config.get(
+            "timeout", int(os.getenv("CLAUDE_TIMEOUT_SECONDS", "900"))
+        )
         self.max_output_tokens = config.get("max_output_tokens", 8192)
         self.max_tool_iterations = config.get("max_tool_iterations", 20)
         self.max_retries = config.get("max_retries", 2)
