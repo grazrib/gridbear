@@ -43,7 +43,7 @@ class ClaudeRunner(BaseRunner):
         super().__init__(config)
         self.model = config.get("model", os.getenv("CLAUDE_MODEL", "sonnet"))
         self.timeout = config.get(
-            "timeout", int(os.getenv("CLAUDE_TIMEOUT_SECONDS", "600"))
+            "timeout", int(os.getenv("CLAUDE_TIMEOUT_SECONDS", "900"))
         )
         self.max_retries = config.get("max_retries", 2)
         # Send "processing" message after this many seconds
@@ -446,15 +446,13 @@ class ClaudeRunner(BaseRunner):
                 except asyncio.TimeoutError:
                     logger.error(f"Claude CLI timed out after {self.timeout}s")
 
-                    # Notify about timeout
+                    # Notify about timeout (never include prompt content)
                     await self._notify_error_with_callback(
                         error_cb,
                         "timeout",
                         {
                             "timeout_seconds": self.timeout,
-                            "session_id": session_id,
                             "attempt": attempt + 1,
-                            "prompt_preview": prompt[:200] if prompt else "",
                         },
                     )
 
