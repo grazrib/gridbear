@@ -595,6 +595,12 @@ When sending emails as {self._agent_display_name or "yourself"}, ALWAYS append t
                     for p in self._channel_metadata["participants"]
                 )
                 source_parts.append(f"participants: {names}")
+                source_parts.append(
+                    "This is a shared conversation. When replying, "
+                    "always start with @username of the person you are "
+                    "responding to (e.g. @dcorio). "
+                    "You only respond when mentioned with @your_name."
+                )
             parts.append("[Message Source]\n" + "\n".join(source_parts))
 
         # Language instruction
