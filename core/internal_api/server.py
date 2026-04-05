@@ -115,6 +115,21 @@ async def chat(
                             }
                             for r in rows
                         ]
+                    # Fetch conversation documents for context injection
+                    doc_rows = conn.execute(
+                        "SELECT original_filename, content_text "
+                        "FROM chat.webchat_documents "
+                        "WHERE conversation_id = %s ORDER BY uploaded_at",
+                        (conv_id,),
+                    ).fetchall()
+                    if doc_rows:
+                        ch_meta["conversation_documents"] = [
+                            {
+                                "original_filename": r["original_filename"],
+                                "content_text": r["content_text"] or "",
+                            }
+                            for r in doc_rows
+                        ]
         except Exception:
             pass
 

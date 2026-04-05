@@ -144,9 +144,73 @@ def _ensure_db():
             )
             ON CONFLICT DO NOTHING
         """)
+        # Conversation documents (per-conversation knowledge base)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat.webchat_documents (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL
+                    REFERENCES chat.webchat_conversations(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                mime_type TEXT,
+                content_text TEXT,
+                uploaded_by TEXT NOT NULL,
+                uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_webchat_documents_conv
+            ON chat.webchat_documents(conversation_id)
+        """)
         conn.commit()
 
     _initialized = True
+
+
+def _extract_text(file_path: str, mime_type: str | None) -> str:
+    """Extract text content from a document for RAG indexing."""
+    path = Path(file_path)
+    ext = path.suffix.lower()
+    try:
+        if ext in (".txt", ".md", ".csv", ".json", ".xml"):
+            return path.read_text(errors="replace")[:200_000]
+
+        if ext == ".pdf":
+            from pypdf import PdfReader
+
+            reader = PdfReader(path)
+            pages = []
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    pages.append(text)
+            return "\n\n".join(pages)[:200_000]
+
+        if ext == ".docx":
+            from docx import Document as DocxDocument
+
+            doc = DocxDocument(path)
+            return "\n\n".join(p.text for p in doc.paragraphs if p.text)[:200_000]
+
+        if ext in (".xlsx", ".xls"):
+            from openpyxl import load_workbook
+
+            wb = load_workbook(path, read_only=True, data_only=True)
+            lines = []
+            for sheet in wb.sheetnames:
+                ws = wb[sheet]
+                lines.append(f"[Sheet: {sheet}]")
+                for row in ws.iter_rows(values_only=True):
+                    cells = [str(c) if c is not None else "" for c in row]
+                    lines.append("\t".join(cells))
+            wb.close()
+            return "\n".join(lines)[:200_000]
+
+    except Exception as e:
+        logger.warning(f"Text extraction failed for {path.name}: {e}")
+    return ""
 
 
 def _uid(user: dict) -> str:
@@ -894,6 +958,165 @@ async def serve_file(token: str, user: dict = Depends(require_user)):
 
     content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
     return FileResponse(file_path, media_type=content_type)
+
+
+# --- Conversation documents ---
+
+DOCS_DIR = ATTACHMENTS_DIR / "webchat-docs"
+
+
+@router.get(
+    "/conversations/{conv_id}/documents",
+    response_model=ApiResponse[list],
+    response_model_exclude_none=True,
+)
+async def list_documents(conv_id: str, user: dict = Depends(require_user)):
+    """List documents attached to a conversation."""
+    _ensure_db()
+    uid = _uid(user)
+    if not validate_conversation_access(conv_id, uid):
+        return api_error(403, "Access denied", "forbidden")
+
+    with _db.acquire_sync() as conn:
+        rows = conn.execute(
+            "SELECT id, original_filename, file_size, mime_type, "
+            "uploaded_by, uploaded_at "
+            "FROM chat.webchat_documents "
+            "WHERE conversation_id = %s ORDER BY uploaded_at",
+            (conv_id,),
+        ).fetchall()
+    return api_ok(data=[dict(r) for r in rows])
+
+
+@router.post(
+    "/conversations/{conv_id}/documents",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def upload_document(
+    conv_id: str, request: Request, user: dict = Depends(require_user)
+):
+    """Upload a document to a conversation's knowledge base."""
+    _ensure_db()
+    uid = _uid(user)
+    if not validate_conversation_access(conv_id, uid):
+        return api_error(403, "Access denied", "forbidden")
+
+    form = await request.form()
+    file: UploadFile | None = form.get("file")
+    if not file or not file.filename:
+        return api_error(400, "No file provided", "validation_error")
+
+    from handlers.attachment_handler import sanitize_filename
+
+    safe_name = sanitize_filename(file.filename)
+    ext = Path(safe_name).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return api_error(400, f"File type {ext} not allowed", "validation_error")
+
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        return api_error(400, "File too large (max 20MB)", "validation_error")
+
+    # Save to conversation-specific directory
+    conv_dir = DOCS_DIR / conv_id
+    conv_dir.mkdir(parents=True, exist_ok=True)
+    doc_id = str(uuid.uuid4())
+    dest_name = f"{doc_id}_{safe_name}"
+    dest_path = conv_dir / dest_name
+    dest_path.write_bytes(content)
+
+    # Extract text
+    mime = file.content_type or ""
+    content_text = _extract_text(str(dest_path), mime)
+
+    with _db.acquire_sync() as conn:
+        conn.execute(
+            "INSERT INTO chat.webchat_documents "
+            "(id, conversation_id, filename, original_filename, file_path, "
+            "file_size, mime_type, content_text, uploaded_by) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                doc_id,
+                conv_id,
+                dest_name,
+                safe_name,
+                str(dest_path),
+                len(content),
+                mime,
+                content_text,
+                uid,
+            ),
+        )
+        conn.commit()
+
+    logger.info(
+        f"WebChat doc upload: {uid} -> {conv_id[:8]}... "
+        f"{safe_name} ({len(content)} bytes, text={len(content_text)} chars)"
+    )
+
+    return api_ok(
+        data={
+            "id": doc_id,
+            "original_filename": safe_name,
+            "file_size": len(content),
+            "mime_type": mime,
+            "uploaded_by": uid,
+            "has_text": bool(content_text),
+        }
+    )
+
+
+@router.delete(
+    "/conversations/{conv_id}/documents/{doc_id}",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def delete_document(
+    conv_id: str, doc_id: str, user: dict = Depends(require_user)
+):
+    """Remove a document. Available to the uploader or conversation owner."""
+    _ensure_db()
+    uid = _uid(user)
+
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT uploaded_by, file_path FROM chat.webchat_documents "
+            "WHERE id = %s AND conversation_id = %s",
+            (doc_id, conv_id),
+        ).fetchone()
+        if not row:
+            return api_error(404, "Document not found", "not_found")
+
+        # Only uploader or owner can delete
+        if row["uploaded_by"] != uid and not is_conversation_owner(conv_id, uid):
+            return api_error(403, "Not authorized to delete", "forbidden")
+
+        conn.execute("DELETE FROM chat.webchat_documents WHERE id = %s", (doc_id,))
+        conn.commit()
+
+    # Remove file from disk
+    try:
+        file_path = Path(row["file_path"])
+        if file_path.exists():
+            file_path.unlink()
+    except Exception:
+        pass
+
+    return api_ok()
+
+
+def get_conversation_documents(conversation_id: str) -> list[dict]:
+    """Fetch documents with extracted text for context injection."""
+    _ensure_db()
+    with _db.acquire_sync() as conn:
+        rows = conn.execute(
+            "SELECT original_filename, content_text "
+            "FROM chat.webchat_documents "
+            "WHERE conversation_id = %s ORDER BY uploaded_at",
+            (conversation_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # --- TTS ---
