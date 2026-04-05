@@ -558,6 +558,10 @@ function chatApp() {
             if (typeof marked !== 'undefined') {
                 marked.setOptions({ breaks: true, gfm: true });
             }
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
             this.loadConversations();
 
             // Wire up the global file input
@@ -870,10 +874,13 @@ function chatApp() {
                 var data = JSON.parse(event.data);
                 if (data.type === 'message') {
                     self.isTyping = false;
+                    var agentName = data.agent || self.selectedAgent;
+                    var agentMentionedMe = (data.text || '').toLowerCase().indexOf('@{{ user.username }}') !== -1;
+                    self._notify(self.agentNames[agentName] || agentName, (data.text || '').substring(0, 100), agentMentionedMe);
                     self.messages.push({
                         id: ++self.msgCounter,
                         role: 'agent',
-                        agent: data.agent || self.selectedAgent,
+                        agent: agentName,
                         text: data.text,
                         time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
                     });
@@ -959,6 +966,8 @@ function chatApp() {
                     self.$nextTick(function() { self.scrollToBottom(); });
                 } else if (data.type === 'user_message') {
                     // Message from another user in shared conversation
+                    var mentioned = (data.text || '').toLowerCase().indexOf('@{{ user.username }}') !== -1;
+                    self._notify(data.display_name || data.sender, (data.text || '').substring(0, 100), mentioned);
                     self.messages.push({
                         id: ++self.msgCounter,
                         role: 'other_user',
@@ -998,6 +1007,7 @@ function chatApp() {
                         for (var i = 0; i < self.conversations.length; i++) {
                             if (self.conversations[i].id === data.conversation_id) {
                                 self.conversations[i].unread = true;
+                                self._notify('New message', self.conversations[i].title || 'New message in conversation', true);
                                 break;
                             }
                         }
@@ -1422,6 +1432,13 @@ function chatApp() {
                     ta.focus();
                 }
             });
+        },
+
+        _notify(title, body, force) {
+            if ('Notification' in window && Notification.permission === 'granted' && (document.hidden || force)) {
+                var n = new Notification(title, { body: body, icon: '/static/img/logo.svg', tag: 'webchat-' + Date.now() });
+                n.onclick = function() { window.focus(); n.close(); };
+            }
         },
 
         sendUserTyping() {

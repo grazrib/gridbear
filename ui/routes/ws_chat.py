@@ -399,20 +399,38 @@ async def ws_chat(websocket: WebSocket):
                     f"WebChat: about to broadcast user_message conv={conversation_id}"
                 )
                 if conversation_id:
+                    user_msg_event = {
+                        "type": "user_message",
+                        "sender": uid,
+                        "display_name": user.get("display_name", uid),
+                        "text": text,
+                        "time": __import__("datetime").datetime.now().strftime("%H:%M"),
+                        "attachments": None,
+                    }
                     await broadcast_to_conversation(
                         conversation_id,
-                        {
-                            "type": "user_message",
-                            "sender": uid,
-                            "display_name": user.get("display_name", uid),
-                            "text": text,
-                            "time": __import__("datetime")
-                            .datetime.now()
-                            .strftime("%H:%M"),
-                            "attachments": None,
-                        },
+                        user_msg_event,
                         exclude_uid=uid,
                     )
+                    # Notify participants not currently viewing
+                    try:
+                        from ui.routes.chat_api import list_conversation_participants
+
+                        all_parts = list_conversation_participants(conversation_id)
+                        viewers = _conversation_viewers.get(conversation_id, set())
+                        for p_uid in all_parts:
+                            if p_uid != uid and p_uid not in viewers:
+                                # Send the message itself + unread indicator
+                                await push_to_webchat(p_uid, user_msg_event)
+                                await push_to_webchat(
+                                    p_uid,
+                                    {
+                                        "type": "unread",
+                                        "conversation_id": conversation_id,
+                                    },
+                                )
+                    except Exception:
+                        pass
 
                 # In shared conversations, only invoke the agent if @mentioned
                 agent_mentioned = True
