@@ -5,6 +5,87 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-05
+
+### Added
+
+- **Shared Webchat Conversations**: Multiple users in the same conversation with an agent — invite by username or shareable link, real-time message sync, @mention filtering
+- **Mention Autocomplete**: Type `@` in the textarea to get a dropdown of participants and agents, navigate with Tab/Enter/arrows
+- **@mention Agent Filter**: In shared conversations, agent responds only when tagged with `@agent_name`
+- **Agent @mentions Users**: Agent mentions the user by `@username` when replying in shared conversations
+- **User Typing Indicator**: Real-time "user is typing..." broadcast between conversation participants
+- **Per-Conversation Context Prompt**: Set a working context on each conversation (gear icon) — injected in agent system prompt
+- **Conversation Title Fallback**: Agent sees conversation title as topic when no explicit context set
+- **Off-topic Detection**: Agent asks "right conversation?" if message seems unrelated to context
+- **Channel Metadata**: Messages carry channel/conversation metadata (webchat, Telegram, Discord)
+- **Memory Auto-tagging**: Memories tagged with channel and conversation context for future retrieval
+- **Per-Conversation Runner Sessions**: Each webchat conversation gets its own Claude session (no context bleed)
+- **Background Message Processing**: Agent response saved even if user switches conversation
+- **Unread Indicators**: Blue dot on conversations with new responses, participant-aware delivery
+- **Browser Notifications**: Native Notification API for mentions, agent responses, and unread messages
+- **Google Workspace Drive Comments**: list, add, reply, resolve comment tools
+- **Internal Vault API**: `/api/vault/get` and `/api/vault/list` for MCP subprocess secret access
+- **Email Field**: Added to user create/edit forms
+- **Invite Join Page**: Confirmation page with atomic token redemption (POST, not GET)
+- **Participant Management**: Online/offline status, owner can remove members, auto-revert to private
+
+### Improved
+
+- Agent display name from YAML `name` field instead of file stem
+- Context builder: Google Sheets SA vs user account distinction in prompt
+- Context builder: email `from_alias` support with "prefer own account" instruction
+- Webchat agent list sorted by last conversation activity
+- ADE MCP server auto-reload on config changes (project/env/command save)
+- anyio cancellation throttle increased to 1s for stability
+
+### Fixed
+
+- **CPU leak**: Pure ASGI middleware (CSRFMiddleware + 3 context middlewares), anyio throttle
+- **Prompt leak**: Removed `prompt_preview` from timeout error callback
+- **Runner timeout**: Unified to 900s across CLI, API backend, RLM, and plugin config
+- **Webchat error "undefined"**: Shows actual error details (text/details/error_type)
+- **Gmail**: CC field included in `get_email` response
+- **ADE**: Vault API URL corrected to port 8080, project secrets JS moved to `{% block extra_js %}`
+- **Workflow**: Missing `WorkflowDefinition` import in `_cron_fire`
+- **CI**: CVE-2026-4539 (pygments local-only DoS) ignored in pip-audit
+
+## [0.6.2] - 2026-03-28
+
+### Added
+
+- Agent email settings restored: account, sender_name, from_alias, signature
+- Webchat agent list sorted by last conversation activity
+- CPU profiling endpoint and py-spy/yappi in Dockerfile
+
+### Fixed
+
+- anyio cancellation throttle increased to 1s
+- Version display updated (was stuck at 0.5.0)
+
+## [0.6.1] - 2026-03-24
+
+### Added
+
+- Webchat: textarea with auto-resize and Enter/Ctrl+Enter toggle
+- Webchat: bot image/file delivery via `send_file_to_chat(platform=webchat)`
+- Per-user skills injected into agent system prompt
+- Gmail `reply_email` tool for threaded replies
+
+### Fixed
+
+- CPU leak: BaseHTTPMiddleware → pure ASGI for CSRFMiddleware and context middlewares
+- CPU leak: anyio `_deliver_cancellation` throttled via monkey-patch
+- MCP transport cleanup with `wait_for(timeout=10)` safety net
+- Workflow: use creator identity for user-aware MCP servers
+- Starlette pinned <1.0.0 for TemplateResponse compatibility
+- setuptools bumped >=78.1.1 for CVE PYSEC-2025-49
+- Plugin registry: restore installed state when plugin returns to disk
+- Plugin admin routes registered at module level
+- Memory browse 500 error
+- Telegram: catch NetworkError in message queue handler
+- MCP Gateway: enforce per-user permissions at all levels
+- Attachments: handle subdirectories in cleanup
+
 ## [0.6.0] - 2026-03-19
 
 ### Added
