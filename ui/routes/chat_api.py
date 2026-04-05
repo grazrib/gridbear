@@ -96,6 +96,54 @@ def _ensure_db():
             "ALTER TABLE chat.webchat_conversations "
             "ADD COLUMN IF NOT EXISTS context_prompt TEXT"
         )
+        # Shared conversations schema
+        conn.execute(
+            "ALTER TABLE chat.webchat_conversations "
+            "ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'private'"
+        )
+        conn.execute(
+            "ALTER TABLE chat.webchat_messages ADD COLUMN IF NOT EXISTS sender_id TEXT"
+        )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat.webchat_participants (
+                conversation_id TEXT NOT NULL
+                    REFERENCES chat.webchat_conversations(id) ON DELETE CASCADE,
+                unified_id TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member',
+                joined_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (conversation_id, unified_id)
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_webchat_participants_uid
+            ON chat.webchat_participants(unified_id)
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat.webchat_invites (
+                token TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL
+                    REFERENCES chat.webchat_conversations(id) ON DELETE CASCADE,
+                created_by TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMPTZ NOT NULL,
+                max_uses INTEGER DEFAULT 0,
+                use_count INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_webchat_invites_conv
+            ON chat.webchat_invites(conversation_id)
+        """)
+        # Backfill: create owner participant for existing conversations
+        conn.execute("""
+            INSERT INTO chat.webchat_participants (conversation_id, unified_id, role)
+            SELECT id, unified_id, 'owner'
+            FROM chat.webchat_conversations
+            WHERE id NOT IN (
+                SELECT conversation_id FROM chat.webchat_participants
+            )
+            ON CONFLICT DO NOTHING
+        """)
         conn.commit()
 
     _initialized = True
@@ -114,20 +162,26 @@ def _serialize_row(row: dict) -> dict:
 
 
 def save_message(
-    conversation_id: str, role: str, content: str, metadata: dict | None = None
+    conversation_id: str,
+    role: str,
+    content: str,
+    metadata: dict | None = None,
+    sender_id: str | None = None,
 ):
     """Save a message and update conversation timestamp. Auto-title if empty."""
     _ensure_db()
     encrypted_content = encrypt(content)
     with _db.acquire_sync() as conn:
         conn.execute(
-            """INSERT INTO chat.webchat_messages (conversation_id, role, content, metadata_json)
-               VALUES (%s, %s, %s, %s)""",
+            """INSERT INTO chat.webchat_messages
+               (conversation_id, role, content, metadata_json, sender_id)
+               VALUES (%s, %s, %s, %s, %s)""",
             (
                 conversation_id,
                 role,
                 encrypted_content,
                 json.dumps(metadata) if metadata else None,
+                sender_id,
             ),
         )
         conn.execute(
@@ -163,7 +217,7 @@ def get_conversation_title(conversation_id: str) -> str:
 
 
 def validate_conversation_ownership(conversation_id: str, unified_id: str) -> bool:
-    """Check that a conversation belongs to the given user."""
+    """Check that a conversation belongs to the given user (legacy — private only)."""
     _ensure_db()
     with _db.acquire_sync() as conn:
         row = conn.execute(
@@ -171,6 +225,35 @@ def validate_conversation_ownership(conversation_id: str, unified_id: str) -> bo
             (conversation_id, unified_id),
         ).fetchone()
     return row is not None
+
+
+def validate_conversation_access(conversation_id: str, uid: str) -> str | None:
+    """Check if user is a participant (owner or member). Returns role or None."""
+    _ensure_db()
+    with _db.acquire_sync() as conn:
+        row = conn.execute(
+            "SELECT role FROM chat.webchat_participants "
+            "WHERE conversation_id = %s AND unified_id = %s",
+            (conversation_id, uid),
+        ).fetchone()
+        return row["role"] if row else None
+
+
+def is_conversation_owner(conversation_id: str, uid: str) -> bool:
+    """Check if user is the owner of a conversation."""
+    return validate_conversation_access(conversation_id, uid) == "owner"
+
+
+def list_conversation_participants(conversation_id: str) -> list[str]:
+    """Return list of participant unified_ids for a conversation."""
+    _ensure_db()
+    with _db.acquire_sync() as conn:
+        rows = conn.execute(
+            "SELECT unified_id FROM chat.webchat_participants "
+            "WHERE conversation_id = %s",
+            (conversation_id,),
+        ).fetchall()
+    return [r["unified_id"] for r in rows]
 
 
 # --- REST endpoints ---
@@ -188,18 +271,24 @@ async def list_conversations(request: Request, user: dict = Depends(require_user
     with _db.acquire_sync() as conn:
         if agent:
             cur = conn.execute(
-                """SELECT id, agent_name, title, created_at, updated_at
-                   FROM chat.webchat_conversations
-                   WHERE unified_id = %s AND agent_name = %s
-                   ORDER BY updated_at DESC""",
+                """SELECT c.id, c.agent_name, c.title, c.created_at,
+                          c.updated_at, c.type, c.context_prompt
+                   FROM chat.webchat_conversations c
+                   JOIN chat.webchat_participants p
+                        ON c.id = p.conversation_id
+                   WHERE p.unified_id = %s AND c.agent_name = %s
+                   ORDER BY c.updated_at DESC""",
                 (uid, agent),
             )
         else:
             cur = conn.execute(
-                """SELECT id, agent_name, title, created_at, updated_at
-                   FROM chat.webchat_conversations
-                   WHERE unified_id = %s
-                   ORDER BY updated_at DESC""",
+                """SELECT c.id, c.agent_name, c.title, c.created_at,
+                          c.updated_at, c.type, c.context_prompt
+                   FROM chat.webchat_conversations c
+                   JOIN chat.webchat_participants p
+                        ON c.id = p.conversation_id
+                   WHERE p.unified_id = %s
+                   ORDER BY c.updated_at DESC""",
                 (uid,),
             )
         rows = [_serialize_row(dict(r)) for r in cur.fetchall()]
@@ -240,9 +329,16 @@ async def create_conversation(request: Request, user: dict = Depends(require_use
                VALUES (%s, %s, %s)""",
             (conv_id, uid, agent_name),
         )
+        # Create owner participant
+        conn.execute(
+            """INSERT INTO chat.webchat_participants
+               (conversation_id, unified_id, role)
+               VALUES (%s, %s, 'owner')""",
+            (conv_id, uid),
+        )
         conn.commit()
         row = conn.execute(
-            """SELECT id, agent_name, title, created_at, updated_at
+            """SELECT id, agent_name, title, created_at, updated_at, type
                FROM chat.webchat_conversations WHERE id = %s""",
             (conv_id,),
         ).fetchone()
@@ -420,6 +516,278 @@ async def set_context(
     return api_ok(data={"context_prompt": context_prompt})
 
 
+# --- Participants ---
+
+
+@router.get(
+    "/conversations/{conv_id}/participants",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def list_participants(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    """List participants of a conversation."""
+    _ensure_db()
+    uid = _uid(user)
+    if not validate_conversation_access(conv_id, uid):
+        return api_error(404, "Not found", "not_found")
+    with _db.acquire_sync() as conn:
+        rows = conn.execute(
+            """SELECT p.unified_id, p.role, p.joined_at, u.display_name
+               FROM chat.webchat_participants p
+               LEFT JOIN app.users u ON u.username = p.unified_id
+               WHERE p.conversation_id = %s
+               ORDER BY p.joined_at""",
+            (conv_id,),
+        ).fetchall()
+    from ui.routes.ws_chat import _active_connections
+
+    participants = [
+        {
+            "uid": r["unified_id"],
+            "role": r["role"],
+            "display_name": r["display_name"] or r["unified_id"],
+            "joined_at": r["joined_at"].isoformat() if r["joined_at"] else None,
+            "online": r["unified_id"] in _active_connections,
+        }
+        for r in rows
+    ]
+    return api_ok(data={"participants": participants})
+
+
+@router.post(
+    "/conversations/{conv_id}/invite",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def invite_user(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    """Invite a registered user to a conversation. Owner only."""
+    _ensure_db()
+    uid = _uid(user)
+    if not is_conversation_owner(conv_id, uid):
+        return api_error(403, "Only the owner can invite", "forbidden")
+
+    body = await request.json()
+    target = body.get("username", "").strip().lower()
+    if not target:
+        return api_error(400, "username required", "validation_error")
+    if target == uid:
+        return api_error(400, "Cannot invite yourself", "validation_error")
+
+    # Check target user exists
+    from ui.auth.database import AuthDatabase
+
+    auth_db = AuthDatabase()
+    target_user = auth_db.get_user_by_username(target)
+    if not target_user:
+        return api_error(404, f"User '{target}' not found", "not_found")
+
+    # Check not already participant
+    if validate_conversation_access(conv_id, target):
+        return api_error(400, "User already in conversation", "validation_error")
+
+    with _db.acquire_sync() as conn:
+        # Convert private → shared on first invite
+        conv = conn.execute(
+            "SELECT type FROM chat.webchat_conversations WHERE id = %s",
+            (conv_id,),
+        ).fetchone()
+        if conv and conv["type"] == "private":
+            conn.execute(
+                "UPDATE chat.webchat_conversations SET type = 'shared' WHERE id = %s",
+                (conv_id,),
+            )
+
+        # Add participant
+        conn.execute(
+            """INSERT INTO chat.webchat_participants
+               (conversation_id, unified_id, role)
+               VALUES (%s, %s, 'member')
+               ON CONFLICT DO NOTHING""",
+            (conv_id, target),
+        )
+        conn.commit()
+
+    # Notify via WebSocket
+    from ui.routes.ws_chat import push_to_webchat
+
+    await push_to_webchat(
+        target,
+        {
+            "type": "conversation_invited",
+            "conversation_id": conv_id,
+        },
+    )
+    return api_ok(data={"invited": target})
+
+
+@router.post(
+    "/conversations/{conv_id}/invite-link",
+    response_model=ApiResponse[dict],
+    response_model_exclude_none=True,
+)
+async def create_invite_link(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    """Generate a shareable invite link. Owner only."""
+    import secrets as stdlib_secrets
+
+    _ensure_db()
+    uid = _uid(user)
+    if not is_conversation_owner(conv_id, uid):
+        return api_error(403, "Only the owner can create invite links", "forbidden")
+
+    body = await request.json()
+    expires_hours = body.get("expires_hours", 72)
+    max_uses = body.get("max_uses", 0)
+
+    token = stdlib_secrets.token_urlsafe(32)
+    with _db.acquire_sync() as conn:
+        conn.execute(
+            """INSERT INTO chat.webchat_invites
+               (token, conversation_id, created_by, expires_at, max_uses)
+               VALUES (%s, %s, %s, NOW() + INTERVAL '%s hours', %s)""",
+            (token, conv_id, uid, expires_hours, max_uses),
+        )
+        # Convert to shared if private
+        conn.execute(
+            "UPDATE chat.webchat_conversations "
+            "SET type = 'shared' WHERE id = %s AND type = 'private'",
+            (conv_id,),
+        )
+        conn.commit()
+
+    return api_ok(data={"url": f"/me/chat/join/{token}", "token": token})
+
+
+@router.post(
+    "/conversations/{conv_id}/leave",
+    response_model=ApiResponse,
+    response_model_exclude_none=True,
+)
+async def leave_conversation(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    """Leave a shared conversation. Owner must transfer first."""
+    _ensure_db()
+    uid = _uid(user)
+    role = validate_conversation_access(conv_id, uid)
+    if not role:
+        return api_error(404, "Not found", "not_found")
+    if role == "owner":
+        return api_error(
+            400,
+            "Owner must transfer ownership before leaving",
+            "validation_error",
+        )
+
+    with _db.acquire_sync() as conn:
+        conn.execute(
+            "DELETE FROM chat.webchat_participants "
+            "WHERE conversation_id = %s AND unified_id = %s",
+            (conv_id, uid),
+        )
+        # Revert to private if only owner remains
+        remaining = conn.execute(
+            "SELECT count(*) as cnt FROM chat.webchat_participants "
+            "WHERE conversation_id = %s",
+            (conv_id,),
+        ).fetchone()
+        if remaining and remaining["cnt"] <= 1:
+            conn.execute(
+                "UPDATE chat.webchat_conversations SET type = 'private' WHERE id = %s",
+                (conv_id,),
+            )
+        conn.commit()
+    return api_ok()
+
+
+@router.post(
+    "/conversations/{conv_id}/transfer-ownership",
+    response_model=ApiResponse,
+    response_model_exclude_none=True,
+)
+async def transfer_ownership(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    """Transfer conversation ownership to another participant. Owner only."""
+    _ensure_db()
+    uid = _uid(user)
+    if not is_conversation_owner(conv_id, uid):
+        return api_error(403, "Only the owner can transfer", "forbidden")
+
+    body = await request.json()
+    new_owner = body.get("new_owner", "").strip().lower()
+    if not new_owner or new_owner == uid:
+        return api_error(400, "Invalid new_owner", "validation_error")
+
+    if not validate_conversation_access(conv_id, new_owner):
+        return api_error(400, "Target is not a participant", "validation_error")
+
+    with _db.acquire_sync() as conn:
+        conn.execute(
+            "UPDATE chat.webchat_participants SET role = 'member' "
+            "WHERE conversation_id = %s AND unified_id = %s",
+            (conv_id, uid),
+        )
+        conn.execute(
+            "UPDATE chat.webchat_participants SET role = 'owner' "
+            "WHERE conversation_id = %s AND unified_id = %s",
+            (conv_id, new_owner),
+        )
+        conn.commit()
+    return api_ok()
+
+
+@router.post(
+    "/conversations/{conv_id}/remove-participant",
+    response_model=ApiResponse,
+    response_model_exclude_none=True,
+)
+async def remove_participant(
+    request: Request, conv_id: str, user: dict = Depends(require_user)
+):
+    """Remove a participant from the conversation. Owner only."""
+    _ensure_db()
+    uid = _uid(user)
+    if not is_conversation_owner(conv_id, uid):
+        return api_error(403, "Only the owner can remove participants", "forbidden")
+
+    body = await request.json()
+    target = body.get("username", "").strip().lower()
+    if not target or target == uid:
+        return api_error(400, "Invalid target", "validation_error")
+
+    with _db.acquire_sync() as conn:
+        conn.execute(
+            "DELETE FROM chat.webchat_participants "
+            "WHERE conversation_id = %s AND unified_id = %s",
+            (conv_id, target),
+        )
+        # Revert to private if only owner remains
+        remaining = conn.execute(
+            "SELECT count(*) as cnt FROM chat.webchat_participants "
+            "WHERE conversation_id = %s",
+            (conv_id,),
+        ).fetchone()
+        if remaining and remaining["cnt"] <= 1:
+            conn.execute(
+                "UPDATE chat.webchat_conversations SET type = 'private' WHERE id = %s",
+                (conv_id,),
+            )
+        conn.commit()
+
+    from ui.routes.ws_chat import push_to_webchat
+
+    await push_to_webchat(
+        target, {"type": "participant_removed", "conversation_id": conv_id}
+    )
+    return api_ok()
+
+
 # --- File upload ---
 
 
@@ -477,7 +845,9 @@ _file_tokens: dict[str, dict] = {}
 _FILE_TOKEN_TTL = 3600  # 1 hour
 
 
-def create_file_token(file_path: str, uid: str) -> str:
+def create_file_token(
+    file_path: str, uid: str, conversation_id: str | None = None
+) -> str:
     """Create a short-lived token to serve a file to a specific user."""
     import secrets
 
@@ -485,6 +855,7 @@ def create_file_token(file_path: str, uid: str) -> str:
     _file_tokens[token] = {
         "path": file_path,
         "uid": uid,
+        "conversation_id": conversation_id,
         "expires": time.time() + _FILE_TOKEN_TTL,
     }
     # Prune expired tokens periodically (every 100 creates)
@@ -509,7 +880,10 @@ async def serve_file(token: str, user: dict = Depends(require_user)):
 
     uid = _uid(user)
     if entry["uid"] != uid:
-        return api_error(403, "Access denied", "forbidden")
+        # Allow access if user is a participant of the same conversation
+        conv_id = entry.get("conversation_id")
+        if not conv_id or not validate_conversation_access(conv_id, uid):
+            return api_error(403, "Access denied", "forbidden")
 
     file_path = Path(entry["path"])
     if not file_path.exists():

@@ -7,6 +7,7 @@
 <style>
     #chat-messages { scroll-behavior: smooth; }
     .msg-user { background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(45, 212, 191, 0.05)); }
+    .msg-other-user { background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(251, 191, 36, 0.05)); }
     .msg-agent { background: rgba(100, 116, 139, 0.05); }
     .typing-indicator span {
         animation: blink 1.4s infinite both;
@@ -153,9 +154,11 @@
                         <span x-show="conv.unread"
                               class="w-2 h-2 rounded-full bg-nordic-500 flex-shrink-0"></span>
                         <div class="min-w-0">
-                            <p class="text-sm font-medium truncate"
-                               :class="activeConversationId === conv.id ? 'text-nordic-700 dark:text-nordic-300' : conv.unread ? 'text-nordic-600 dark:text-nordic-400 font-semibold' : 'text-void-700 dark:text-void-300'"
-                               x-text="conv.title || i18n.newConversation"></p>
+                            <p class="text-sm font-medium truncate flex items-center gap-1"
+                               :class="activeConversationId === conv.id ? 'text-nordic-700 dark:text-nordic-300' : conv.unread ? 'text-nordic-600 dark:text-nordic-400 font-semibold' : 'text-void-700 dark:text-void-300'">
+                                <i x-show="conv.type === 'shared'" class="fas fa-users text-[9px] text-void-400"></i>
+                                <span x-text="conv.title || i18n.newConversation" class="truncate"></span>
+                            </p>
                             <p class="text-[10px] text-void-400 mt-0.5" x-text="formatDate(conv.updated_at)"></p>
                         </div>
                     </div>
@@ -166,6 +169,11 @@
                             <i class="fas fa-gear text-xs"></i>
                             <span x-show="conv.id === activeConversationId && conversationContext"
                                   class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-nordic-500"></span>
+                        </button>
+                        <button @click.stop="selectConversation(conv); loadParticipants(); participantsPanelOpen = !participantsPanelOpen"
+                                class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all"
+                                title="{{ _("Participants") }}">
+                            <i class="fas fa-users text-xs"></i>
                         </button>
                         <button @click.stop="renameConversation(conv)"
                                 class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all"
@@ -251,6 +259,51 @@
                         <i class="fas fa-circle-notch fa-spin mr-1"></i> {{ _("Saving...") }}
                     </div>
                 </div>
+                <!-- Participants panel -->
+                <div x-show="participantsPanelOpen" x-transition
+                     class="mb-2 p-3 rounded-xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium text-void-500">{{ _("Participants") }}</span>
+                        <button @click="participantsPanelOpen = false"
+                                class="p-1 rounded-lg hover:bg-void-100 dark:hover:bg-void-800/50 text-void-400 hover:text-void-600 transition-all">
+                            <i class="fas fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-1 mb-3">
+                        <template x-for="p in participants" :key="p.uid">
+                            <div class="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-void-50 dark:hover:bg-void-800/30">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full" :class="isParticipantOnline(p.uid) ? 'bg-green-500' : 'bg-void-300'"></span>
+                                    <span class="text-sm" x-text="p.display_name"></span>
+                                    <span class="text-[10px] text-void-400" x-text="'@' + p.uid"></span>
+                                    <span x-show="p.role === 'owner'" class="text-[9px] px-1.5 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500">owner</span>
+                                </div>
+                                <button x-show="p.role !== 'owner' && isCurrentUserOwner()"
+                                        @click="removeParticipant(p.uid)"
+                                        class="p-1 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-all"
+                                        title="{{ _('Remove') }}">
+                                    <i class="fas fa-user-minus text-xs"></i>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                    <!-- Agent -->
+                    <div class="py-1 px-2 flex items-center gap-2 border-t border-void-100 dark:border-void-800 mt-1 pt-2">
+                        <span class="w-2 h-2 rounded-full bg-nordic-500"></span>
+                        <span class="text-sm font-medium text-nordic-500" x-text="agentNames[selectedAgent] || selectedAgent"></span>
+                        <span class="text-[10px] text-void-400" x-text="'@' + selectedAgent"></span>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500">agent</span>
+                    </div>
+                    <!-- Invite input -->
+                    <div class="flex gap-2">
+                        <input type="text" x-model="inviteUsername" placeholder="{{ _('Username to invite...') }}"
+                               class="flex-1 px-3 py-1.5 rounded-lg bg-white dark:bg-void-800/50 border border-void-200 dark:border-void-700 text-sm focus:ring-2 focus:ring-nordic-500/40 focus:border-nordic-500 outline-none">
+                        <button @click="inviteUser()" :disabled="!inviteUsername.trim()"
+                                class="px-3 py-1.5 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-xs font-medium transition-colors disabled:opacity-50">
+                            <i class="fas fa-user-plus mr-1"></i> {{ _("Invite") }}
+                        </button>
+                    </div>
+                </div>
                 <!-- Messages -->
                 <div id="chat-messages" class="flex-1 overflow-y-auto space-y-3 rounded-2xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30 p-4 relative"
                      @dragover.prevent="dragOver = true"
@@ -272,7 +325,7 @@
                         </div>
                     </template>
                     <template x-for="msg in messages" :key="msg.id">
-                        <div :class="msg.role === 'user' ? 'msg-user ml-2 sm:ml-8' : msg.role === 'system' ? 'mx-2 sm:mx-8 text-center' : 'msg-agent mr-2 sm:mr-8'" class="rounded-xl p-4">
+                        <div :class="msg.role === 'user' ? 'msg-user ml-2 sm:ml-8' : msg.role === 'other_user' ? 'msg-other-user mr-2 sm:mr-8' : msg.role === 'system' ? 'mx-2 sm:mx-8 text-center' : 'msg-agent mr-2 sm:mr-8'" class="rounded-xl p-4">
                             <template x-if="msg.role === 'system'">
                                 <div class="text-[11px] text-void-400 italic" x-text="msg.text"></div>
                             </template>
@@ -280,8 +333,8 @@
                                 <div>
                                     <div class="flex items-center gap-2 mb-1">
                                         <span class="text-[10px] font-semibold uppercase tracking-wide"
-                                              :class="msg.role === 'user' ? 'text-frost-500' : 'text-nordic-500'"
-                                              x-text="msg.role === 'user' ? '{{ user.display_name or user.username }}' : msg.agent || selectedAgent"></span>
+                                              :class="msg.role === 'user' ? 'text-frost-500' : msg.role === 'other_user' ? 'text-amber-500' : 'text-nordic-500'"
+                                              x-text="msg.role === 'user' ? '{{ user.display_name or user.username }}' : msg.role === 'other_user' ? msg.display_name : msg.agent || selectedAgent"></span>
                                         <span class="text-[10px] text-void-400" x-text="msg.time"></span>
                                     </div>
                                     <!-- Attachment thumbnails in message -->
@@ -306,12 +359,19 @@
                         </div>
                     </template>
 
-                    <!-- Typing indicator -->
-                    <div x-show="isTyping" class="msg-agent mr-2 sm:mr-8 rounded-xl p-4">
-                        <div class="typing-indicator text-void-400">
-                            <span></span><span></span><span></span>
+                    <!-- Typing indicators -->
+                    <template x-if="otherUserTyping">
+                        <div class="msg-other-user mr-2 sm:mr-8 rounded-xl px-4 py-2">
+                            <span class="text-[10px] text-amber-500 italic" x-text="otherUserTyping + ' {{ _("is typing...") }}'"></span>
                         </div>
-                    </div>
+                    </template>
+                    <template x-if="isTyping">
+                        <div class="msg-agent mr-2 sm:mr-8 rounded-xl p-4">
+                            <div class="typing-indicator text-void-400">
+                                <span></span><span></span><span></span>
+                            </div>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- Attachment preview strip -->
@@ -347,7 +407,7 @@
                         <i class="fas fa-microphone text-red-400 mr-1"></i>
                         <span x-text="voiceInterim"></span>
                     </div>
-                    <div class="flex gap-2 items-end">
+                    <div class="flex gap-2 items-end relative">
                         <!-- Attach button -->
                         <button @click="$refs.fileInput ? $refs.fileInput.click() : document.getElementById('file-input').click()"
                                 :disabled="!wsConnected"
@@ -355,10 +415,22 @@
                                 title="{{ _("Attach file") }}">
                             <i class="fas fa-paperclip"></i>
                         </button>
+                        <!-- Mention autocomplete dropdown -->
+                        <div x-show="mentionOpen" class="absolute bottom-full left-0 mb-1 w-64 bg-white dark:bg-void-900 border border-void-200 dark:border-void-700 rounded-xl shadow-lg overflow-hidden z-50">
+                            <template x-for="(item, idx) in mentionSuggestions()" :key="item.uid">
+                                <button @mousedown.prevent="selectMention(item)"
+                                        class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                                        :class="idx === mentionIndex ? 'bg-nordic-500/10 text-nordic-600 dark:text-nordic-400' : 'hover:bg-void-50 dark:hover:bg-void-800/50'">
+                                    <span x-text="item.display_name" class="font-medium"></span>
+                                    <span class="text-[10px] text-void-400" x-text="'@' + item.uid"></span>
+                                    <span x-show="item.type === 'agent'" class="text-[9px] px-1 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500 ml-auto">agent</span>
+                                </button>
+                            </template>
+                        </div>
                         <textarea x-model="inputText"
-                               @keydown="if ($event.key === 'Enter') handleEnter($event)"
+                               @keydown="handleKeydown($event)"
                                @paste="handlePaste($event)"
-                               @input="autoResize($event)"
+                               @input="autoResize($event); sendUserTyping(); checkMentionTrigger($event)"
                                placeholder="{{ _("Type a message or paste an image...") }}"
                                :disabled="!wsConnected"
                                rows="1"
@@ -421,6 +493,7 @@ window.i18n = {
 function chatApp() {
     return {
         selectedAgent: '{{ agents[0].name if agents else '' }}',
+        agentNames: { {% for agent in agents %}'{{ agent.name }}': '{{ agent.display_name or agent.name }}'{% if not loop.last %}, {% endif %}{% endfor %} },
         messages: [],
         inputText: '',
         isTyping: false,
@@ -442,6 +515,20 @@ function chatApp() {
         lastSavedContext: '',
         contextPanelOpen: false,
         contextSaving: false,
+
+        // Participants
+        participantsPanelOpen: false,
+        participants: [],
+        inviteUsername: '',
+        _lastTypingSent: 0,
+        otherUserTyping: null,
+        _typingTimeout: null,
+
+        // Mention autocomplete
+        mentionOpen: false,
+        mentionFilter: '',
+        mentionIndex: 0,
+        _mentionStart: -1,
 
         // Attachments
         pendingFiles: [],  // [{file, previewUrl, uploading, uploadedPath, filename}]
@@ -470,6 +557,10 @@ function chatApp() {
             var self = this;
             if (typeof marked !== 'undefined') {
                 marked.setOptions({ breaks: true, gfm: true });
+            }
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
             }
             this.loadConversations();
 
@@ -516,6 +607,8 @@ function chatApp() {
 
         renderMarkdown(text) {
             if (!text) return '';
+            // Highlight @mentions
+            text = text.replace(/@(\w+)/g, '<span class="text-nordic-500 font-semibold">@$1</span>');
             if (typeof marked !== 'undefined') {
                 return marked.parse(text);
             }
@@ -668,7 +761,12 @@ function chatApp() {
             self.conversationContext = '';
             self.lastSavedContext = '';
             self.contextPanelOpen = false;
+            self.participantsPanelOpen = false;
+            self.participants = [];
             conv.unread = false;
+
+            // Load participants (for mention autocomplete)
+            self.loadParticipants();
 
             // Load conversation context
             fetch('/me/chat/api/conversations/' + conv.id + '/context')
@@ -776,10 +874,13 @@ function chatApp() {
                 var data = JSON.parse(event.data);
                 if (data.type === 'message') {
                     self.isTyping = false;
+                    var agentName = data.agent || self.selectedAgent;
+                    var agentMentionedMe = (data.text || '').toLowerCase().indexOf('@{{ user.username }}') !== -1;
+                    self._notify(self.agentNames[agentName] || agentName, (data.text || '').substring(0, 100), agentMentionedMe);
                     self.messages.push({
                         id: ++self.msgCounter,
                         role: 'agent',
-                        agent: data.agent || self.selectedAgent,
+                        agent: agentName,
                         text: data.text,
                         time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
                     });
@@ -826,6 +927,13 @@ function chatApp() {
                     self.$nextTick(function() { self.scrollToBottom(); });
                 } else if (data.type === 'typing') {
                     self.isTyping = true;
+                    self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'user_typing') {
+                    self.otherUserTyping = data.display_name || data.sender || 'Someone';
+                    clearTimeout(self._typingTimeout);
+                    self._typingTimeout = setTimeout(function() {
+                        self.otherUserTyping = null;
+                    }, 4000);
                 } else if (data.type === 'error') {
                     self.isTyping = false;
                     var errMsg = data.text || data.details || data.error_type || 'unknown error';
@@ -856,12 +964,50 @@ function chatApp() {
                     });
                     self.isTyping = false;
                     self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'user_message') {
+                    // Message from another user in shared conversation
+                    var mentioned = (data.text || '').toLowerCase().indexOf('@{{ user.username }}') !== -1;
+                    self._notify(data.display_name || data.sender, (data.text || '').substring(0, 100), mentioned);
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'other_user',
+                        sender: data.sender,
+                        display_name: data.display_name || data.sender,
+                        text: data.text,
+                        time: data.time || new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                    self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'participant_joined') {
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'system',
+                        text: (data.display_name || data.uid) + ' joined the conversation',
+                        time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                } else if (data.type === 'participant_removed' || data.type === 'participant_left') {
+                    self.messages.push({
+                        id: ++self.msgCounter,
+                        role: 'system',
+                        text: (data.display_name || data.uid || 'A participant') + ' left the conversation',
+                        time: new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                    });
+                } else if (data.type === 'conversation_invited') {
+                    // Reload conversations to show the new one
+                    self.loadConversations();
+                } else if (data.type === 'conversation_deleted') {
+                    // Remove from sidebar and deselect if active
+                    self.conversations = self.conversations.filter(function(c) { return c.id !== data.conversation_id; });
+                    if (self.activeConversationId === data.conversation_id) {
+                        self.activeConversationId = null;
+                        self.messages = [];
+                    }
                 } else if (data.type === 'unread') {
                     // Mark conversation as having unread messages
                     if (data.conversation_id !== self.activeConversationId) {
                         for (var i = 0; i < self.conversations.length; i++) {
                             if (self.conversations[i].id === data.conversation_id) {
                                 self.conversations[i].unread = true;
+                                self._notify('New message', self.conversations[i].title || 'New message in conversation', true);
                                 break;
                             }
                         }
@@ -923,7 +1069,6 @@ function chatApp() {
             this.inputText = '';
             this._voiceCommitted = '';
             this.pendingFiles = [];
-            this.isTyping = true;
 
             // Reset textarea height after send
             this.$nextTick(function() {
@@ -1121,6 +1266,35 @@ function chatApp() {
 
         // --- Enter behavior ---
 
+        handleKeydown(event) {
+            // Mention autocomplete takes priority
+            if (this.mentionOpen) {
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    var s = this.mentionSuggestions();
+                    this.mentionIndex = (this.mentionIndex + 1) % s.length;
+                    return;
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    var s = this.mentionSuggestions();
+                    this.mentionIndex = (this.mentionIndex - 1 + s.length) % s.length;
+                    return;
+                } else if (event.key === 'Tab' || event.key === 'Enter') {
+                    event.preventDefault();
+                    var s = this.mentionSuggestions();
+                    if (s[this.mentionIndex]) this.selectMention(s[this.mentionIndex]);
+                    return;
+                } else if (event.key === 'Escape') {
+                    this.mentionOpen = false;
+                    return;
+                }
+            }
+            // Normal Enter handling
+            if (event.key === 'Enter') {
+                this.handleEnter(event);
+            }
+        },
+
         handleEnter(event) {
             if (this.enterToSend) {
                 // Enter = send, Shift+Enter or Ctrl+Enter = newline
@@ -1160,6 +1334,140 @@ function chatApp() {
                 if (data.ok) self.lastSavedContext = self.conversationContext;
             })
             .catch(function() { self.contextSaving = false; });
+        },
+
+        // --- Participants ---
+
+        loadParticipants() {
+            var self = this;
+            if (!self.activeConversationId) return;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/participants')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    self.participants = (data.data && data.data.participants) || [];
+                })
+                .catch(function() { self.participants = []; });
+        },
+
+        inviteUser() {
+            var self = this;
+            var target = self.inviteUsername.trim().toLowerCase();
+            if (!target || !self.activeConversationId) return;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/invite', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]') ? document.querySelector('[name=csrf_token]').value : ''},
+                body: JSON.stringify({ username: target }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    self.inviteUsername = '';
+                    self.loadParticipants();
+                } else {
+                    alert(data.detail || data.error || 'Error');
+                }
+            });
+        },
+
+        isParticipantOnline(uid) {
+            var p = this.participants.find(function(x) { return x.uid === uid; });
+            return p ? p.online : false;
+        },
+
+        mentionSuggestions() {
+            var filter = this.mentionFilter.toLowerCase();
+            var items = [];
+            // Add participants
+            for (var i = 0; i < this.participants.length; i++) {
+                var p = this.participants[i];
+                items.push({ uid: p.uid, display_name: p.display_name, type: 'user' });
+            }
+            // Add agent
+            items.push({
+                uid: this.selectedAgent,
+                display_name: this.agentNames[this.selectedAgent] || this.selectedAgent,
+                type: 'agent',
+            });
+            if (!filter) return items;
+            return items.filter(function(item) {
+                return item.uid.toLowerCase().indexOf(filter) !== -1
+                    || item.display_name.toLowerCase().indexOf(filter) !== -1;
+            });
+        },
+
+        checkMentionTrigger(event) {
+            var ta = event.target || document.querySelector('textarea[x-model="inputText"]');
+            if (!ta) { this.mentionOpen = false; return; }
+            var val = ta.value;
+            var pos = ta.selectionStart;
+            // Find @ before cursor
+            var before = val.substring(0, pos);
+            var atIdx = before.lastIndexOf('@');
+            if (atIdx >= 0 && (atIdx === 0 || before[atIdx - 1] === ' ' || before[atIdx - 1] === '\n')) {
+                var partial = before.substring(atIdx + 1);
+                if (partial.indexOf(' ') === -1 && partial.length < 30) {
+                    this.mentionFilter = partial;
+                    this._mentionStart = atIdx;
+                    this.mentionIndex = 0;
+                    this.mentionOpen = this.mentionSuggestions().length > 0;
+                    return;
+                }
+            }
+            this.mentionOpen = false;
+        },
+
+
+        selectMention(item) {
+            var ta = document.querySelector('textarea[x-model="inputText"]');
+            var cursorPos = ta ? ta.selectionStart : this.inputText.length;
+            var before = this.inputText.substring(0, this._mentionStart);
+            var after = this.inputText.substring(cursorPos);
+            this.inputText = before + '@' + item.uid + ' ' + after;
+            this.mentionOpen = false;
+            this.$nextTick(function() {
+                if (ta) {
+                    var pos = before.length + item.uid.length + 2;
+                    ta.selectionStart = pos;
+                    ta.selectionEnd = pos;
+                    ta.focus();
+                }
+            });
+        },
+
+        _notify(title, body, force) {
+            if ('Notification' in window && Notification.permission === 'granted' && (document.hidden || force)) {
+                var n = new Notification(title, { body: body, icon: '/static/img/logo.svg', tag: 'webchat-' + Date.now() });
+                n.onclick = function() { window.focus(); n.close(); };
+            }
+        },
+
+        sendUserTyping() {
+            var now = Date.now();
+            if (now - this._lastTypingSent < 3000) return;
+            this._lastTypingSent = now;
+            if (this.ws && this.ws.readyState === 1) {
+                this.ws.send(JSON.stringify({ type: 'user_typing' }));
+            }
+        },
+
+        isCurrentUserOwner() {
+            var self = this;
+            var me = self.participants.find(function(p) { return p.uid === '{{ user.username }}'; });
+            return me && me.role === 'owner';
+        },
+
+        removeParticipant(uid) {
+            var self = this;
+            if (!confirm('Remove ' + uid + ' from this conversation?')) return;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/remove-participant', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]') ? document.querySelector('[name=csrf_token]').value : ''},
+                body: JSON.stringify({ username: uid }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) self.loadParticipants();
+            });
         },
 
         autoResize(event) {

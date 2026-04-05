@@ -23,8 +23,69 @@ GRIDBEAR_SECRET = os.getenv("INTERNAL_API_SECRET", "")
 # Active WebSocket connections: {uid: websocket}
 _active_connections: dict[str, WebSocket] = {}
 
+# Per-user: which conversation they're currently viewing
+_active_conversations: dict[str, str] = {}
+
+# Per-conversation: set of uids currently viewing
+_conversation_viewers: dict[str, set[str]] = {}
+
+# Per-conversation: asyncio lock for serializing agent calls
+_conversation_locks: dict[str, asyncio.Lock] = {}
+
 # Background tasks — prevent garbage collection
 _background_tasks: set[asyncio.Task] = set()
+
+
+def _get_conversation_lock(conversation_id: str) -> asyncio.Lock:
+    if conversation_id not in _conversation_locks:
+        _conversation_locks[conversation_id] = asyncio.Lock()
+    return _conversation_locks[conversation_id]
+
+
+def _register_viewer(uid: str, conversation_id: str) -> None:
+    """Register a user as viewing a conversation."""
+    # Deregister from previous conversation
+    old_conv = _active_conversations.get(uid)
+    if old_conv and old_conv != conversation_id:
+        viewers = _conversation_viewers.get(old_conv, set())
+        viewers.discard(uid)
+        if not viewers:
+            _conversation_viewers.pop(old_conv, None)
+            _conversation_locks.pop(old_conv, None)
+
+    _active_conversations[uid] = conversation_id
+    _conversation_viewers.setdefault(conversation_id, set()).add(uid)
+
+
+def _deregister_viewer(uid: str) -> None:
+    """Remove a user from the viewer registry."""
+    conv_id = _active_conversations.pop(uid, None)
+    if conv_id:
+        viewers = _conversation_viewers.get(conv_id, set())
+        viewers.discard(uid)
+        if not viewers:
+            _conversation_viewers.pop(conv_id, None)
+            _conversation_locks.pop(conv_id, None)
+
+
+async def broadcast_to_conversation(
+    conversation_id: str, event: dict, exclude_uid: str | None = None
+) -> None:
+    """Send an event to all users currently viewing a conversation."""
+    viewers = _conversation_viewers.get(conversation_id, set())
+    logger.info(
+        f"broadcast conv={conversation_id[:8]}... viewers={viewers} "
+        f"exclude={exclude_uid} event_type={event.get('type')}"
+    )
+    for uid in list(viewers):
+        if uid == exclude_uid:
+            continue
+        ws = _active_connections.get(uid)
+        if ws:
+            try:
+                await ws.send_json(event)
+            except Exception:
+                pass
 
 
 async def push_to_webchat(uid: str, event: dict) -> bool:
@@ -136,14 +197,16 @@ async def _stream_from_gridbear(
     ws_alive = True
 
     async def _try_send(event):
-        """Best-effort WebSocket send — silently stops if disconnected."""
+        """Best-effort send to all viewers of the conversation."""
         nonlocal ws_alive
-        if not ws_alive or not websocket:
-            return
-        try:
-            await websocket.send_json(event)
-        except Exception:
-            ws_alive = False
+        if conversation_id:
+            # Broadcast to all viewers
+            await broadcast_to_conversation(conversation_id, event)
+        elif ws_alive and websocket:
+            try:
+                await websocket.send_json(event)
+            except Exception:
+                ws_alive = False
 
     async with aiohttp.ClientSession() as session:
         try:
@@ -211,14 +274,19 @@ async def _stream_from_gridbear(
             return ""
 
 
-def _save_message(conversation_id: str | None, role: str, content: str):
+def _save_message(
+    conversation_id: str | None,
+    role: str,
+    content: str,
+    sender_id: str | None = None,
+):
     """Persist a message if conversation tracking is active."""
     if not conversation_id or not content:
         return
     try:
         from ui.routes.chat_api import save_message
 
-        save_message(conversation_id, role, content)
+        save_message(conversation_id, role, content, sender_id=sender_id)
     except Exception as e:
         logger.warning(f"WebChat: failed to save message: {e}")
 
@@ -251,23 +319,42 @@ async def ws_chat(websocket: WebSocket):
                 await websocket.close(code=4003, reason="Forbidden")
                 return
 
-    # Validate conversation ownership if provided
+    # Validate conversation access (owner or member)
     if conversation_id:
-        from ui.routes.chat_api import validate_conversation_ownership
+        from ui.routes.chat_api import validate_conversation_access
 
-        if not validate_conversation_ownership(conversation_id, uid):
+        if not validate_conversation_access(conversation_id, uid):
             await websocket.send_json(
                 {"type": "error", "text": "Conversazione non valida"}
             )
             await websocket.close(code=4003, reason="Forbidden")
             return
 
+    # Check if shared conversation
+    is_shared = False
+    if conversation_id:
+        try:
+            from ui.routes.chat_api import _db, _ensure_db
+
+            _ensure_db()
+            with _db.acquire_sync() as conn:
+                row = conn.execute(
+                    "SELECT type FROM chat.webchat_conversations WHERE id = %s",
+                    (conversation_id,),
+                ).fetchone()
+                is_shared = row and row["type"] == "shared"
+        except Exception:
+            pass
+
     logger.info(
         f"WebChat: user {uid} connected to agent {agent_name or 'default'}"
         + (f" conv={conversation_id[:8]}..." if conversation_id else "")
+        + (" (shared)" if is_shared else "")
     )
 
     _active_connections[uid] = websocket
+    if conversation_id:
+        _register_viewer(uid, conversation_id)
 
     try:
         while True:
@@ -280,6 +367,20 @@ async def ws_chat(websocket: WebSocket):
 
             msg_type = data.get("type", "")
 
+            if msg_type == "user_typing":
+                # Broadcast typing indicator to other viewers
+                if conversation_id:
+                    await broadcast_to_conversation(
+                        conversation_id,
+                        {
+                            "type": "user_typing",
+                            "sender": uid,
+                            "display_name": user.get("display_name", uid),
+                        },
+                        exclude_uid=uid,
+                    )
+                continue
+
             if msg_type == "message":
                 text = data.get("text", "").strip()
                 attachments = data.get("attachments") or []
@@ -287,66 +388,133 @@ async def ws_chat(websocket: WebSocket):
                 if not text and not attachments:
                     continue
 
-                # Persist user message (include attachment info in text if no text)
+                # Persist user message
                 save_text = text
                 if attachments and not text:
                     save_text = "[allegato]"
-                _save_message(conversation_id, "user", save_text)
+                _save_message(conversation_id, "user", save_text, sender_id=uid)
 
-                # Send typing indicator immediately
-                try:
-                    await websocket.send_json({"type": "typing"})
-                except Exception:
-                    pass
+                # Broadcast user_message to other viewers
+                logger.info(
+                    f"WebChat: about to broadcast user_message conv={conversation_id}"
+                )
+                if conversation_id:
+                    user_msg_event = {
+                        "type": "user_message",
+                        "sender": uid,
+                        "display_name": user.get("display_name", uid),
+                        "text": text,
+                        "time": __import__("datetime").datetime.now().strftime("%H:%M"),
+                        "attachments": None,
+                    }
+                    await broadcast_to_conversation(
+                        conversation_id,
+                        user_msg_event,
+                        exclude_uid=uid,
+                    )
+                    # Notify participants not currently viewing
+                    try:
+                        from ui.routes.chat_api import list_conversation_participants
 
-                # Run in background so the response is saved even if
-                # the user switches conversation (WebSocket disconnects).
+                        all_parts = list_conversation_participants(conversation_id)
+                        viewers = _conversation_viewers.get(conversation_id, set())
+                        for p_uid in all_parts:
+                            if p_uid != uid and p_uid not in viewers:
+                                # Send the message itself + unread indicator
+                                await push_to_webchat(p_uid, user_msg_event)
+                                await push_to_webchat(
+                                    p_uid,
+                                    {
+                                        "type": "unread",
+                                        "conversation_id": conversation_id,
+                                    },
+                                )
+                    except Exception:
+                        pass
+
+                # In shared conversations, only invoke the agent if @mentioned
+                agent_mentioned = True
+                if is_shared and text:
+                    mention = f"@{agent_name}" if agent_name else None
+                    agent_mentioned = bool(mention and mention.lower() in text.lower())
+                    logger.info(
+                        f"WebChat: shared mention check: "
+                        f"is_shared={is_shared} mention={mention} "
+                        f"agent_mentioned={agent_mentioned} text={text[:50]}"
+                    )
+
+                if not agent_mentioned:
+                    # User-only message, no agent response needed
+                    continue
+
+                # Send typing indicator to all viewers
+                if conversation_id:
+                    await broadcast_to_conversation(conversation_id, {"type": "typing"})
+                else:
+                    try:
+                        await websocket.send_json({"type": "typing"})
+                    except Exception:
+                        pass
+
+                # Run in background
                 async def _process_message(
                     _text, _user, _agent, _ws, _conv_id, _att, _ctx
                 ):
                     try:
-                        result = await _stream_from_gridbear(
-                            _text,
-                            _user,
-                            _agent,
-                            _ws,
-                            _conv_id,
-                            attachments=_att,
-                            context_prompt=_ctx,
-                        )
+                        # Acquire conversation lock for shared conversations
+                        lock = _get_conversation_lock(_conv_id) if _conv_id else None
+                        if lock:
+                            await lock.acquire()
+                        try:
+                            result = await _stream_from_gridbear(
+                                _text,
+                                _user,
+                                _agent,
+                                _ws,
+                                _conv_id,
+                                attachments=_att,
+                                context_prompt=_ctx,
+                            )
+                        finally:
+                            if lock and lock.locked():
+                                lock.release()
+
                         if result:
                             _save_message(_conv_id, "assistant", result)
-                            # Notify user of new message (for unread indicator)
-                            logger.info(
-                                f"WebChat: sending unread for conv={_conv_id[:8]}..."
-                            )
-                            delivered = await push_to_webchat(
-                                _user["username"],
-                                {
-                                    "type": "unread",
-                                    "conversation_id": _conv_id,
-                                },
-                            )
-                            logger.info(
-                                f"WebChat: unread delivered={delivered} "
-                                f"conv={_conv_id[:8]}..."
-                            )
+                            # Send unread to all participants not viewing
+                            if _conv_id:
+                                try:
+                                    from ui.routes.chat_api import (
+                                        list_conversation_participants,
+                                    )
+
+                                    parts = list_conversation_participants(_conv_id)
+                                    viewers = _conversation_viewers.get(_conv_id, set())
+                                    for p_uid in parts:
+                                        if p_uid not in viewers:
+                                            await push_to_webchat(
+                                                p_uid,
+                                                {
+                                                    "type": "unread",
+                                                    "conversation_id": _conv_id,
+                                                },
+                                            )
+                                except Exception:
+                                    pass
 
                         if _conv_id:
                             from ui.routes.chat_api import get_conversation_title
 
                             title = get_conversation_title(_conv_id)
                             if title:
-                                try:
-                                    await _ws.send_json(
-                                        {
-                                            "type": "conversation_update",
-                                            "conversation_id": _conv_id,
-                                            "title": title,
-                                        }
-                                    )
-                                except Exception:
-                                    pass
+                                await broadcast_to_conversation(
+                                    _conv_id,
+                                    {
+                                        "type": "conversation_update",
+                                        "conversation_id": _conv_id,
+                                        "title": title,
+                                    },
+                                )
                     except Exception:
                         logger.exception("WebChat: background processing error")
 
@@ -370,4 +538,5 @@ async def ws_chat(websocket: WebSocket):
         logger.error(f"WebChat: connection error: {e}")
     finally:
         _active_connections.pop(uid, None)
+        _deregister_viewer(uid)
         logger.info(f"WebChat: user {uid} disconnected")

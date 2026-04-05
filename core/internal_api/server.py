@@ -90,6 +90,34 @@ async def chat(
 
     processor = AgentAwareMessageProcessor(plugin_manager, agent_context)
 
+    # Fetch participant list for shared conversations
+    ch_meta = dict(request.channel_metadata) if request.channel_metadata else {}
+    conv_id = ch_meta.get("conversation_id")
+    if conv_id:
+        try:
+            from core.registry import get_database
+
+            db = get_database()
+            if db:
+                with db.acquire_sync() as conn:
+                    rows = conn.execute(
+                        "SELECT p.unified_id, u.display_name "
+                        "FROM chat.webchat_participants p "
+                        "LEFT JOIN app.users u ON u.username = p.unified_id "
+                        "WHERE p.conversation_id = %s",
+                        (conv_id,),
+                    ).fetchall()
+                    if len(rows) > 1:
+                        ch_meta["participants"] = [
+                            {
+                                "uid": r["unified_id"],
+                                "name": r["display_name"] or r["unified_id"],
+                            }
+                            for r in rows
+                        ]
+        except Exception:
+            pass
+
     message = Message(
         user_id=0,
         username=request.username,
@@ -97,7 +125,7 @@ async def chat(
         attachments=request.attachments,
         platform=request.platform,
         context_prompt=request.context_prompt,
-        channel_metadata=request.channel_metadata,
+        channel_metadata=ch_meta,
     )
 
     user_info = UserInfo(
