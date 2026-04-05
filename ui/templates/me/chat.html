@@ -175,6 +175,14 @@
                                 title="{{ _("Participants") }}">
                             <i class="fas fa-users text-xs"></i>
                         </button>
+                        <button @click.stop="selectConversation(conv); loadDocuments(); docsPanelOpen = !docsPanelOpen"
+                                class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all relative"
+                                title="{{ _("Documents") }}">
+                            <i class="fas fa-file-lines text-xs"></i>
+                            <span x-show="conv.id === activeConversationId && conversationDocs.length > 0"
+                                  class="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-nordic-500 text-white text-[8px] flex items-center justify-center"
+                                  x-text="conversationDocs.length"></span>
+                        </button>
                         <button @click.stop="renameConversation(conv)"
                                 class="p-1 rounded-lg hover:bg-nordic-500/10 text-void-400 hover:text-nordic-500 transition-all"
                                 title="{{ _("Rename") }}">
@@ -302,6 +310,54 @@
                                 class="px-3 py-1.5 rounded-lg bg-nordic-500 hover:bg-nordic-600 text-white text-xs font-medium transition-colors disabled:opacity-50">
                             <i class="fas fa-user-plus mr-1"></i> {{ _("Invite") }}
                         </button>
+                    </div>
+                </div>
+                <!-- Documents panel -->
+                <div x-show="docsPanelOpen" x-transition
+                     class="mb-2 p-3 rounded-xl border border-void-200 dark:border-void-800 bg-white/50 dark:bg-void-900/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium text-void-500">{{ _("Documents") }}</span>
+                        <div class="flex items-center gap-2">
+                            <label class="p-1 rounded-lg hover:bg-void-100 dark:hover:bg-void-800/50 text-void-400 hover:text-nordic-500 transition-all cursor-pointer"
+                                   title="{{ _('Upload document') }}">
+                                <i class="fas fa-plus text-xs"></i>
+                                <input type="file" class="hidden" @change="uploadDocument($event)"
+                                       accept=".pdf,.txt,.csv,.json,.xml,.md,.doc,.docx,.xls,.xlsx">
+                            </label>
+                            <button @click="docsPanelOpen = false"
+                                    class="p-1 rounded-lg hover:bg-void-100 dark:hover:bg-void-800/50 text-void-400 hover:text-void-600 transition-all">
+                                <i class="fas fa-xmark text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="space-y-1 max-h-48 overflow-y-auto">
+                        <template x-if="conversationDocs.length === 0 && !docsUploading">
+                            <div class="text-xs text-void-400 text-center py-3">
+                                <i class="fas fa-file-circle-plus text-lg mb-1 block"></i>
+                                {{ _("No documents yet") }}
+                            </div>
+                        </template>
+                        <template x-for="doc in conversationDocs" :key="doc.id">
+                            <div class="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-void-50 dark:hover:bg-void-800/30 group">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <i class="fas fa-file text-void-400 text-xs flex-shrink-0"></i>
+                                    <div class="min-w-0">
+                                        <div class="text-xs truncate" x-text="doc.original_filename"></div>
+                                        <div class="text-[10px] text-void-400" x-text="formatFileSize(doc.file_size)"></div>
+                                    </div>
+                                </div>
+                                <button @click="deleteDocument(doc.id)"
+                                        class="p-1 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                                        title="{{ _('Remove') }}">
+                                    <i class="fas fa-trash-can text-[10px]"></i>
+                                </button>
+                            </div>
+                        </template>
+                        <template x-if="docsUploading">
+                            <div class="text-xs text-void-400 text-center py-2">
+                                <i class="fas fa-circle-notch fa-spin mr-1"></i> {{ _("Uploading...") }}
+                            </div>
+                        </template>
                     </div>
                 </div>
                 <!-- Messages -->
@@ -515,6 +571,11 @@ function chatApp() {
         lastSavedContext: '',
         contextPanelOpen: false,
         contextSaving: false,
+
+        // Documents panel
+        docsPanelOpen: false,
+        conversationDocs: [],
+        docsUploading: false,
 
         // Participants
         participantsPanelOpen: false,
@@ -762,11 +823,16 @@ function chatApp() {
             self.lastSavedContext = '';
             self.contextPanelOpen = false;
             self.participantsPanelOpen = false;
+            self.docsPanelOpen = false;
             self.participants = [];
+            self.conversationDocs = [];
             conv.unread = false;
 
             // Load participants (for mention autocomplete)
             self.loadParticipants();
+
+            // Load documents
+            self.loadDocuments();
 
             // Load conversation context
             fetch('/me/chat/api/conversations/' + conv.id + '/context')
@@ -1468,6 +1534,67 @@ function chatApp() {
             .then(function(data) {
                 if (data.ok) self.loadParticipants();
             });
+        },
+
+        // --- Documents ---
+
+        loadDocuments() {
+            var self = this;
+            if (!self.activeConversationId) return;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/documents')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.ok) self.conversationDocs = data.data || [];
+                })
+                .catch(function(e) { console.error('loadDocuments error', e); });
+        },
+
+        uploadDocument(event) {
+            var self = this;
+            var file = event.target.files[0];
+            if (!file || !self.activeConversationId) return;
+            event.target.value = '';
+
+            self.docsUploading = true;
+            var fd = new FormData();
+            fd.append('file', file);
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/documents', {
+                method: 'POST', body: fd, headers: { 'X-CSRF-Token': self._csrfToken() }
+            })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.ok) {
+                        self.loadDocuments();
+                    } else {
+                        alert((data.error && data.error.message) || 'Upload failed');
+                    }
+                })
+                .catch(function(e) {
+                    console.error('uploadDocument error', e);
+                    alert('Upload failed');
+                })
+                .finally(function() { self.docsUploading = false; });
+        },
+
+        deleteDocument(docId) {
+            var self = this;
+            if (!self.activeConversationId) return;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/documents/' + docId, {
+                method: 'DELETE', headers: { 'X-CSRF-Token': self._csrfToken() }
+            })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.ok) {
+                        self.conversationDocs = self.conversationDocs.filter(function(d) { return d.id !== docId; });
+                    }
+                })
+                .catch(function(e) { console.error('deleteDocument error', e); });
+        },
+
+        formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         },
 
         autoResize(event) {

@@ -191,6 +191,9 @@ class MessageProcessor:
             builder.set_conversation_context(message.context_prompt)
         if message.channel_metadata:
             builder.set_channel_metadata(message.channel_metadata)
+            conv_docs = message.channel_metadata.get("conversation_documents")
+            if conv_docs:
+                builder.set_conversation_documents(conv_docs)
 
         if hook_data.attachments:
             for attachment in hook_data.attachments:
@@ -563,6 +566,9 @@ class AgentAwareMessageProcessor(MessageProcessor):
             builder.set_conversation_context(message.context_prompt)
         if message.channel_metadata:
             builder.set_channel_metadata(message.channel_metadata)
+            conv_docs = message.channel_metadata.get("conversation_documents")
+            if conv_docs:
+                builder.set_conversation_documents(conv_docs)
 
         # Inject inter-agent context if multi-agent
         if not ctx_opts.get("skip_inter_agent"):

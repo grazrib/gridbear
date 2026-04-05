@@ -141,6 +141,7 @@ class ContextBuilder:
         self._tool_loading: str = "full"
         self._conversation_context: str | None = None
         self._channel_metadata: dict | None = None
+        self._conversation_documents: list[dict] | None = None
 
     def set_channel_metadata(self, metadata: dict | None) -> "ContextBuilder":
         """Set channel/conversation metadata for message source tracking."""
@@ -150,6 +151,11 @@ class ContextBuilder:
     def set_conversation_context(self, context: str | None) -> "ContextBuilder":
         """Set per-conversation working context."""
         self._conversation_context = context if context else None
+        return self
+
+    def set_conversation_documents(self, docs: list[dict] | None) -> "ContextBuilder":
+        """Set per-conversation documents for RAG injection."""
+        self._conversation_documents = docs if docs else None
         return self
 
     def add_user_info(self, user_info: UserInfo) -> "ContextBuilder":
@@ -734,6 +740,42 @@ When sending emails as {self._agent_display_name or "yourself"}, ALWAYS append t
                 f"User messages likely relate to this topic. "
                 f"If a message seems unrelated, ask the user "
                 f"if they are in the right conversation."
+            )
+
+        # Include conversation documents (per-conversation knowledge base)
+        if self._conversation_documents:
+            doc_parts = []
+            total_chars = 0
+            max_chars = 100_000  # 100KB total cap for all documents
+            for doc in self._conversation_documents:
+                text = doc.get("content_text", "")
+                fname = doc.get("original_filename", "document")
+                if not text:
+                    doc_parts.append(
+                        f"--- document: {fname} ---\n"
+                        f"(no text content extracted)\n"
+                        f"--- end document ---"
+                    )
+                    continue
+                remaining = max_chars - total_chars
+                if remaining <= 0:
+                    doc_parts.append(
+                        f"--- document: {fname} ---\n"
+                        f"(skipped — context size limit reached)\n"
+                        f"--- end document ---"
+                    )
+                    continue
+                if len(text) > remaining:
+                    text = text[:remaining] + "\n... (truncated)"
+                total_chars += len(text)
+                doc_parts.append(
+                    f"--- document: {fname} ---\n{text}\n--- end document ---"
+                )
+            parts.append(
+                "[Conversation Documents]\n"
+                "The user has uploaded the following documents to this "
+                "conversation. Reference them when answering questions.\n\n"
+                + "\n\n".join(doc_parts)
             )
 
         # Include recent chat history for conversational context
