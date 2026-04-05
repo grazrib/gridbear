@@ -73,7 +73,11 @@ async def broadcast_to_conversation(
 ) -> None:
     """Send an event to all users currently viewing a conversation."""
     viewers = _conversation_viewers.get(conversation_id, set())
-    for uid in viewers:
+    logger.info(
+        f"broadcast conv={conversation_id[:8]}... viewers={viewers} "
+        f"exclude={exclude_uid} event_type={event.get('type')}"
+    )
+    for uid in list(viewers):
         if uid == exclude_uid:
             continue
         ws = _active_connections.get(uid)
@@ -270,14 +274,19 @@ async def _stream_from_gridbear(
             return ""
 
 
-def _save_message(conversation_id: str | None, role: str, content: str):
+def _save_message(
+    conversation_id: str | None,
+    role: str,
+    content: str,
+    sender_id: str | None = None,
+):
     """Persist a message if conversation tracking is active."""
     if not conversation_id or not content:
         return
     try:
         from ui.routes.chat_api import save_message
 
-        save_message(conversation_id, role, content)
+        save_message(conversation_id, role, content, sender_id=sender_id)
     except Exception as e:
         logger.warning(f"WebChat: failed to save message: {e}")
 
@@ -321,9 +330,26 @@ async def ws_chat(websocket: WebSocket):
             await websocket.close(code=4003, reason="Forbidden")
             return
 
+    # Check if shared conversation
+    is_shared = False
+    if conversation_id:
+        try:
+            from ui.routes.chat_api import _db, _ensure_db
+
+            _ensure_db()
+            with _db.acquire_sync() as conn:
+                row = conn.execute(
+                    "SELECT type FROM chat.webchat_conversations WHERE id = %s",
+                    (conversation_id,),
+                ).fetchone()
+                is_shared = row and row["type"] == "shared"
+        except Exception:
+            pass
+
     logger.info(
         f"WebChat: user {uid} connected to agent {agent_name or 'default'}"
         + (f" conv={conversation_id[:8]}..." if conversation_id else "")
+        + (" (shared)" if is_shared else "")
     )
 
     _active_connections[uid] = websocket
@@ -341,6 +367,20 @@ async def ws_chat(websocket: WebSocket):
 
             msg_type = data.get("type", "")
 
+            if msg_type == "user_typing":
+                # Broadcast typing indicator to other viewers
+                if conversation_id:
+                    await broadcast_to_conversation(
+                        conversation_id,
+                        {
+                            "type": "user_typing",
+                            "sender": uid,
+                            "display_name": user.get("display_name", uid),
+                        },
+                        exclude_uid=uid,
+                    )
+                continue
+
             if msg_type == "message":
                 text = data.get("text", "").strip()
                 attachments = data.get("attachments") or []
@@ -355,6 +395,9 @@ async def ws_chat(websocket: WebSocket):
                 _save_message(conversation_id, "user", save_text, sender_id=uid)
 
                 # Broadcast user_message to other viewers
+                logger.info(
+                    f"WebChat: about to broadcast user_message conv={conversation_id}"
+                )
                 if conversation_id:
                     await broadcast_to_conversation(
                         conversation_id,
@@ -371,11 +414,29 @@ async def ws_chat(websocket: WebSocket):
                         exclude_uid=uid,
                     )
 
-                # Send typing indicator
-                try:
-                    await websocket.send_json({"type": "typing"})
-                except Exception:
-                    pass
+                # In shared conversations, only invoke the agent if @mentioned
+                agent_mentioned = True
+                if is_shared and text:
+                    mention = f"@{agent_name}" if agent_name else None
+                    agent_mentioned = bool(mention and mention.lower() in text.lower())
+                    logger.info(
+                        f"WebChat: shared mention check: "
+                        f"is_shared={is_shared} mention={mention} "
+                        f"agent_mentioned={agent_mentioned} text={text[:50]}"
+                    )
+
+                if not agent_mentioned:
+                    # User-only message, no agent response needed
+                    continue
+
+                # Send typing indicator to all viewers
+                if conversation_id:
+                    await broadcast_to_conversation(conversation_id, {"type": "typing"})
+                else:
+                    try:
+                        await websocket.send_json({"type": "typing"})
+                    except Exception:
+                        pass
 
                 # Run in background
                 async def _process_message(

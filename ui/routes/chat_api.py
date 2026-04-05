@@ -690,6 +690,17 @@ async def leave_conversation(
             "WHERE conversation_id = %s AND unified_id = %s",
             (conv_id, uid),
         )
+        # Revert to private if only owner remains
+        remaining = conn.execute(
+            "SELECT count(*) as cnt FROM chat.webchat_participants "
+            "WHERE conversation_id = %s",
+            (conv_id,),
+        ).fetchone()
+        if remaining and remaining["cnt"] <= 1:
+            conn.execute(
+                "UPDATE chat.webchat_conversations SET type = 'private' WHERE id = %s",
+                (conv_id,),
+            )
         conn.commit()
     return api_ok()
 
@@ -756,6 +767,17 @@ async def remove_participant(
             "WHERE conversation_id = %s AND unified_id = %s",
             (conv_id, target),
         )
+        # Revert to private if only owner remains
+        remaining = conn.execute(
+            "SELECT count(*) as cnt FROM chat.webchat_participants "
+            "WHERE conversation_id = %s",
+            (conv_id,),
+        ).fetchone()
+        if remaining and remaining["cnt"] <= 1:
+            conn.execute(
+                "UPDATE chat.webchat_conversations SET type = 'private' WHERE id = %s",
+                (conv_id,),
+            )
         conn.commit()
 
     from ui.routes.ws_chat import push_to_webchat

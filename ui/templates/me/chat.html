@@ -275,10 +275,24 @@
                                 <div class="flex items-center gap-2">
                                     <span class="w-2 h-2 rounded-full" :class="isParticipantOnline(p.uid) ? 'bg-green-500' : 'bg-void-300'"></span>
                                     <span class="text-sm" x-text="p.display_name"></span>
+                                    <span class="text-[10px] text-void-400" x-text="'@' + p.uid"></span>
                                     <span x-show="p.role === 'owner'" class="text-[9px] px-1.5 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500">owner</span>
                                 </div>
+                                <button x-show="p.role !== 'owner' && isCurrentUserOwner()"
+                                        @click="removeParticipant(p.uid)"
+                                        class="p-1 rounded-lg hover:bg-red-500/10 text-void-400 hover:text-red-500 transition-all"
+                                        title="{{ _('Remove') }}">
+                                    <i class="fas fa-user-minus text-xs"></i>
+                                </button>
                             </div>
                         </template>
+                    </div>
+                    <!-- Agent -->
+                    <div class="py-1 px-2 flex items-center gap-2 border-t border-void-100 dark:border-void-800 mt-1 pt-2">
+                        <span class="w-2 h-2 rounded-full bg-nordic-500"></span>
+                        <span class="text-sm font-medium text-nordic-500" x-text="agentNames[selectedAgent] || selectedAgent"></span>
+                        <span class="text-[10px] text-void-400" x-text="'@' + selectedAgent"></span>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500">agent</span>
                     </div>
                     <!-- Invite input -->
                     <div class="flex gap-2">
@@ -345,12 +359,19 @@
                         </div>
                     </template>
 
-                    <!-- Typing indicator -->
-                    <div x-show="isTyping" class="msg-agent mr-2 sm:mr-8 rounded-xl p-4">
-                        <div class="typing-indicator text-void-400">
-                            <span></span><span></span><span></span>
+                    <!-- Typing indicators -->
+                    <template x-if="otherUserTyping">
+                        <div class="msg-other-user mr-2 sm:mr-8 rounded-xl px-4 py-2">
+                            <span class="text-[10px] text-amber-500 italic" x-text="otherUserTyping + ' {{ _("is typing...") }}'"></span>
                         </div>
-                    </div>
+                    </template>
+                    <template x-if="isTyping">
+                        <div class="msg-agent mr-2 sm:mr-8 rounded-xl p-4">
+                            <div class="typing-indicator text-void-400">
+                                <span></span><span></span><span></span>
+                            </div>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- Attachment preview strip -->
@@ -386,7 +407,7 @@
                         <i class="fas fa-microphone text-red-400 mr-1"></i>
                         <span x-text="voiceInterim"></span>
                     </div>
-                    <div class="flex gap-2 items-end">
+                    <div class="flex gap-2 items-end relative">
                         <!-- Attach button -->
                         <button @click="$refs.fileInput ? $refs.fileInput.click() : document.getElementById('file-input').click()"
                                 :disabled="!wsConnected"
@@ -394,10 +415,22 @@
                                 title="{{ _("Attach file") }}">
                             <i class="fas fa-paperclip"></i>
                         </button>
+                        <!-- Mention autocomplete dropdown -->
+                        <div x-show="mentionOpen" class="absolute bottom-full left-0 mb-1 w-64 bg-white dark:bg-void-900 border border-void-200 dark:border-void-700 rounded-xl shadow-lg overflow-hidden z-50">
+                            <template x-for="(item, idx) in mentionSuggestions()" :key="item.uid">
+                                <button @mousedown.prevent="selectMention(item)"
+                                        class="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                                        :class="idx === mentionIndex ? 'bg-nordic-500/10 text-nordic-600 dark:text-nordic-400' : 'hover:bg-void-50 dark:hover:bg-void-800/50'">
+                                    <span x-text="item.display_name" class="font-medium"></span>
+                                    <span class="text-[10px] text-void-400" x-text="'@' + item.uid"></span>
+                                    <span x-show="item.type === 'agent'" class="text-[9px] px-1 py-0.5 rounded-full bg-nordic-500/10 text-nordic-500 ml-auto">agent</span>
+                                </button>
+                            </template>
+                        </div>
                         <textarea x-model="inputText"
-                               @keydown="if ($event.key === 'Enter') handleEnter($event)"
+                               @keydown="handleKeydown($event)"
                                @paste="handlePaste($event)"
-                               @input="autoResize($event)"
+                               @input="autoResize($event); sendUserTyping(); checkMentionTrigger($event)"
                                placeholder="{{ _("Type a message or paste an image...") }}"
                                :disabled="!wsConnected"
                                rows="1"
@@ -460,6 +493,7 @@ window.i18n = {
 function chatApp() {
     return {
         selectedAgent: '{{ agents[0].name if agents else '' }}',
+        agentNames: { {% for agent in agents %}'{{ agent.name }}': '{{ agent.display_name or agent.name }}'{% if not loop.last %}, {% endif %}{% endfor %} },
         messages: [],
         inputText: '',
         isTyping: false,
@@ -486,6 +520,15 @@ function chatApp() {
         participantsPanelOpen: false,
         participants: [],
         inviteUsername: '',
+        _lastTypingSent: 0,
+        otherUserTyping: null,
+        _typingTimeout: null,
+
+        // Mention autocomplete
+        mentionOpen: false,
+        mentionFilter: '',
+        mentionIndex: 0,
+        _mentionStart: -1,
 
         // Attachments
         pendingFiles: [],  // [{file, previewUrl, uploading, uploadedPath, filename}]
@@ -560,6 +603,8 @@ function chatApp() {
 
         renderMarkdown(text) {
             if (!text) return '';
+            // Highlight @mentions
+            text = text.replace(/@(\w+)/g, '<span class="text-nordic-500 font-semibold">@$1</span>');
             if (typeof marked !== 'undefined') {
                 return marked.parse(text);
             }
@@ -712,7 +757,12 @@ function chatApp() {
             self.conversationContext = '';
             self.lastSavedContext = '';
             self.contextPanelOpen = false;
+            self.participantsPanelOpen = false;
+            self.participants = [];
             conv.unread = false;
+
+            // Load participants (for mention autocomplete)
+            self.loadParticipants();
 
             // Load conversation context
             fetch('/me/chat/api/conversations/' + conv.id + '/context')
@@ -870,6 +920,13 @@ function chatApp() {
                     self.$nextTick(function() { self.scrollToBottom(); });
                 } else if (data.type === 'typing') {
                     self.isTyping = true;
+                    self.$nextTick(function() { self.scrollToBottom(); });
+                } else if (data.type === 'user_typing') {
+                    self.otherUserTyping = data.display_name || data.sender || 'Someone';
+                    clearTimeout(self._typingTimeout);
+                    self._typingTimeout = setTimeout(function() {
+                        self.otherUserTyping = null;
+                    }, 4000);
                 } else if (data.type === 'error') {
                     self.isTyping = false;
                     var errMsg = data.text || data.details || data.error_type || 'unknown error';
@@ -1002,7 +1059,6 @@ function chatApp() {
             this.inputText = '';
             this._voiceCommitted = '';
             this.pendingFiles = [];
-            this.isTyping = true;
 
             // Reset textarea height after send
             this.$nextTick(function() {
@@ -1200,6 +1256,35 @@ function chatApp() {
 
         // --- Enter behavior ---
 
+        handleKeydown(event) {
+            // Mention autocomplete takes priority
+            if (this.mentionOpen) {
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    var s = this.mentionSuggestions();
+                    this.mentionIndex = (this.mentionIndex + 1) % s.length;
+                    return;
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    var s = this.mentionSuggestions();
+                    this.mentionIndex = (this.mentionIndex - 1 + s.length) % s.length;
+                    return;
+                } else if (event.key === 'Tab' || event.key === 'Enter') {
+                    event.preventDefault();
+                    var s = this.mentionSuggestions();
+                    if (s[this.mentionIndex]) this.selectMention(s[this.mentionIndex]);
+                    return;
+                } else if (event.key === 'Escape') {
+                    this.mentionOpen = false;
+                    return;
+                }
+            }
+            // Normal Enter handling
+            if (event.key === 'Enter') {
+                this.handleEnter(event);
+            }
+        },
+
         handleEnter(event) {
             if (this.enterToSend) {
                 // Enter = send, Shift+Enter or Ctrl+Enter = newline
@@ -1277,6 +1362,95 @@ function chatApp() {
         isParticipantOnline(uid) {
             var p = this.participants.find(function(x) { return x.uid === uid; });
             return p ? p.online : false;
+        },
+
+        mentionSuggestions() {
+            var filter = this.mentionFilter.toLowerCase();
+            var items = [];
+            // Add participants
+            for (var i = 0; i < this.participants.length; i++) {
+                var p = this.participants[i];
+                items.push({ uid: p.uid, display_name: p.display_name, type: 'user' });
+            }
+            // Add agent
+            items.push({
+                uid: this.selectedAgent,
+                display_name: this.agentNames[this.selectedAgent] || this.selectedAgent,
+                type: 'agent',
+            });
+            if (!filter) return items;
+            return items.filter(function(item) {
+                return item.uid.toLowerCase().indexOf(filter) !== -1
+                    || item.display_name.toLowerCase().indexOf(filter) !== -1;
+            });
+        },
+
+        checkMentionTrigger(event) {
+            var ta = event.target || document.querySelector('textarea[x-model="inputText"]');
+            if (!ta) { this.mentionOpen = false; return; }
+            var val = ta.value;
+            var pos = ta.selectionStart;
+            // Find @ before cursor
+            var before = val.substring(0, pos);
+            var atIdx = before.lastIndexOf('@');
+            if (atIdx >= 0 && (atIdx === 0 || before[atIdx - 1] === ' ' || before[atIdx - 1] === '\n')) {
+                var partial = before.substring(atIdx + 1);
+                if (partial.indexOf(' ') === -1 && partial.length < 30) {
+                    this.mentionFilter = partial;
+                    this._mentionStart = atIdx;
+                    this.mentionIndex = 0;
+                    this.mentionOpen = this.mentionSuggestions().length > 0;
+                    return;
+                }
+            }
+            this.mentionOpen = false;
+        },
+
+
+        selectMention(item) {
+            var ta = document.querySelector('textarea[x-model="inputText"]');
+            var cursorPos = ta ? ta.selectionStart : this.inputText.length;
+            var before = this.inputText.substring(0, this._mentionStart);
+            var after = this.inputText.substring(cursorPos);
+            this.inputText = before + '@' + item.uid + ' ' + after;
+            this.mentionOpen = false;
+            this.$nextTick(function() {
+                if (ta) {
+                    var pos = before.length + item.uid.length + 2;
+                    ta.selectionStart = pos;
+                    ta.selectionEnd = pos;
+                    ta.focus();
+                }
+            });
+        },
+
+        sendUserTyping() {
+            var now = Date.now();
+            if (now - this._lastTypingSent < 3000) return;
+            this._lastTypingSent = now;
+            if (this.ws && this.ws.readyState === 1) {
+                this.ws.send(JSON.stringify({ type: 'user_typing' }));
+            }
+        },
+
+        isCurrentUserOwner() {
+            var self = this;
+            var me = self.participants.find(function(p) { return p.uid === '{{ user.username }}'; });
+            return me && me.role === 'owner';
+        },
+
+        removeParticipant(uid) {
+            var self = this;
+            if (!confirm('Remove ' + uid + ' from this conversation?')) return;
+            fetch('/me/chat/api/conversations/' + self.activeConversationId + '/remove-participant', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]') ? document.querySelector('[name=csrf_token]').value : ''},
+                body: JSON.stringify({ username: uid }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) self.loadParticipants();
+            });
         },
 
         autoResize(event) {

@@ -76,7 +76,9 @@ def _get_user_agents(user: dict) -> list[dict]:
             agents.append(
                 {
                     "name": agent_file.stem,
-                    "display_name": agent_config.get("display_name", agent_file.stem),
+                    "display_name": agent_config.get(
+                        "name", agent_config.get("display_name", agent_file.stem)
+                    ),
                     "description": agent_config.get("description", ""),
                     "avatar": agent_config.get("avatar", ""),
                 }
