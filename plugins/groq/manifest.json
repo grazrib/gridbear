@@ -1,0 +1,71 @@
+{
+  "name": "groq",
+  "version": "0.1.0",
+  "type": "runner",
+  "description": "Groq Cloud LLM runner — ultra-fast inference via LPU hardware (free tier available)",
+  "entry_point": "runner.py",
+  "class_name": "GroqRunner",
+  "config_schema": {
+    "groq_api_key": {
+      "type": "secret",
+      "env": "GROQ_API_KEY",
+      "description": "Groq API Key (from console.groq.com — free tier available)",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "default": "llama-3.3-70b-versatile",
+      "description": "Default model to use",
+      "enum": [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "gemma2-9b-it",
+        "mixtral-8x7b-32768",
+        "qwen-qwq-32b",
+        "mistral-saba-24b",
+        "compound-beta",
+        "compound-beta-mini"
+      ]
+    },
+    "timeout": {
+      "type": "integer",
+      "default": 120,
+      "description": "Request timeout in seconds"
+    },
+    "temperature": {
+      "type": "number",
+      "default": 0.7,
+      "description": "Sampling temperature (0.0 - 2.0)"
+    },
+    "max_output_tokens": {
+      "type": "integer",
+      "default": 8192,
+      "description": "Maximum output tokens per response"
+    },
+    "max_tool_iterations": {
+      "type": "integer",
+      "default": 20,
+      "description": "Maximum tool-use loop iterations"
+    },
+    "max_tools": {
+      "type": "integer",
+      "default": 0,
+      "description": "Maximum number of MCP tools (0 = unlimited)"
+    },
+    "notify_tool_use": {
+      "type": "boolean",
+      "default": true,
+      "description": "Send tool-use notifications to chat"
+    }
+  },
+  "dependencies": [],
+  "models_refreshable": true,
+  "ui": {
+    "display_name": "Groq",
+    "icon": "fas fa-bolt",
+    "section": "runners",
+    "priority": 5
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "name": "huggingface",
+  "version": "0.1.0",
+  "type": "runner",
+  "description": "Hugging Face Inference API runner — access thousands of open-source models (free tier available)",
+  "entry_point": "runner.py",
+  "class_name": "HuggingFaceRunner",
+  "config_schema": {
+    "hf_token": {
+      "type": "secret",
+      "env": "HF_TOKEN",
+      "description": "Hugging Face API Token (from huggingface.co/settings/tokens — free tier available)",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "default": "meta-llama/Llama-3.3-70B-Instruct",
+      "description": "HuggingFace model ID (must support text-generation or chat-completion endpoint)",
+      "enum": [
+        "meta-llama/Llama-3.3-70B-Instruct",
+        "meta-llama/Llama-3.2-3B-Instruct",
+        "Qwen/Qwen2.5-72B-Instruct",
+        "Qwen/Qwen2.5-Coder-32B-Instruct",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "google/gemma-2-27b-it",
+        "microsoft/phi-4",
+        "deepseek-ai/DeepSeek-V3-0324",
+        "NovaSky-AI/Sky-T1-32B-Preview"
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "default": "auto",
+      "description": "Inference provider: 'auto' (fastest available), 'hf-inference' (HF native), 'together', 'sambanova', 'fireworks', 'nebius'",
+      "enum": ["auto", "hf-inference", "together", "sambanova", "fireworks", "nebius", "serverless"]
+    },
+    "timeout": {
+      "type": "integer",
+      "default": 120,
+      "description": "Request timeout in seconds"
+    },
+    "temperature": {
+      "type": "number",
+      "default": 0.7,
+      "description": "Sampling temperature"
+    },
+    "max_output_tokens": {
+      "type": "integer",
+      "default": 4096,
+      "description": "Maximum new tokens to generate"
+    },
+    "max_tool_iterations": {
+      "type": "integer",
+      "default": 10,
+      "description": "Maximum tool-use loop iterations"
+    },
+    "max_tools": {
+      "type": "integer",
+      "default": 0,
+      "description": "Maximum number of MCP tools (0 = unlimited)"
+    },
+    "notify_tool_use": {
+      "type": "boolean",
+      "default": true,
+      "description": "Send tool-use notifications to chat"
+    }
+  },
+  "dependencies": [],
+  "models_refreshable": false,
+  "ui": {
+    "display_name": "Hugging Face",
+    "icon": "fas fa-face-smile",
+    "section": "runners",
+    "priority": 8
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "name": "odoo",
+  "version": "0.0.1",
+  "type": "mcp",
+  "description": "Odoo MCP server provider (multi-instance, no Odoo modules required)",
+  "entry_point": "provider.py",
+  "class_name": "OdooProvider",
+  "mcp_category": "erp",
+  "mcp_naming": "per_account",
+  "mcp_name_template": "odoo-{instance}",
+  "config_schema": {
+    "timeout_seconds": {
+      "type": "integer",
+      "default": 30,
+      "description": "HTTP timeout for Odoo JSON-RPC calls"
+    },
+    "allowed_models": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated allowlist of Odoo models (empty = all)"
+    },
+    "allow_unsafe_execute_kw": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable generic odoo_execute_kw tool (use with care)"
+    },
+    "allowed_methods": {
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated allowlist of methods for odoo_execute_kw (empty = all when enabled)"
+    },
+    "max_smart_fields": {
+      "type": "integer",
+      "default": 20,
+      "description": "Max fields returned when fields are omitted (smart selection)"
+    },
+    "validate_fields": {
+      "type": "boolean",
+      "default": true,
+      "description": "Validate fields on create/update using fields_get"
+    }
+  },
+  "dependencies": [],
+  "private_only": true,
+  "ui": {
+    "display_name": "Odoo",
+    "icon": "fas fa-layer-group",
+    "section": "integrations",
+    "priority": 11
+  }
+}

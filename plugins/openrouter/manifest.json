@@ -1,0 +1,84 @@
+{
+  "name": "openrouter",
+  "version": "0.1.0",
+  "type": "runner",
+  "description": "OpenRouter — unified API gateway to 200+ LLM models (many free) including Llama, DeepSeek, Qwen, Mistral, Gemma",
+  "entry_point": "runner.py",
+  "class_name": "OpenRouterRunner",
+  "config_schema": {
+    "openrouter_api_key": {
+      "type": "secret",
+      "env": "OPENROUTER_API_KEY",
+      "description": "OpenRouter API Key (from openrouter.ai — free tier models available)",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "default": "meta-llama/llama-3.3-70b-instruct:free",
+      "description": "Model in 'provider/model' format. Append ':free' for free-tier models.",
+      "enum": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "meta-llama/llama-3.2-3b-instruct:free",
+        "mistralai/mistral-7b-instruct:free",
+        "google/gemma-3-27b-it:free",
+        "deepseek/deepseek-chat:free",
+        "deepseek/deepseek-r1:free",
+        "qwen/qwq-32b:free",
+        "qwen/qwen3-235b-a22b:free",
+        "nousresearch/hermes-3-llama-3.1-405b:free",
+        "openai/gpt-4o-mini",
+        "anthropic/claude-3-haiku",
+        "meta-llama/llama-3.3-70b-instruct",
+        "x-ai/grok-3-mini-beta"
+      ]
+    },
+    "site_url": {
+      "type": "string",
+      "default": "",
+      "description": "Optional: your site URL for OpenRouter analytics (HTTP-Referer header)"
+    },
+    "site_name": {
+      "type": "string",
+      "default": "GridBear",
+      "description": "Optional: your app name for OpenRouter analytics (X-Title header)"
+    },
+    "timeout": {
+      "type": "integer",
+      "default": 120,
+      "description": "Request timeout in seconds"
+    },
+    "temperature": {
+      "type": "number",
+      "default": 0.7,
+      "description": "Sampling temperature (0.0 - 2.0)"
+    },
+    "max_output_tokens": {
+      "type": "integer",
+      "default": 8192,
+      "description": "Maximum output tokens per response"
+    },
+    "max_tool_iterations": {
+      "type": "integer",
+      "default": 20,
+      "description": "Maximum tool-use loop iterations"
+    },
+    "max_tools": {
+      "type": "integer",
+      "default": 0,
+      "description": "Maximum number of MCP tools (0 = unlimited)"
+    },
+    "notify_tool_use": {
+      "type": "boolean",
+      "default": true,
+      "description": "Send tool-use notifications to chat"
+    }
+  },
+  "dependencies": [],
+  "models_refreshable": false,
+  "ui": {
+    "display_name": "OpenRouter",
+    "icon": "fas fa-route",
+    "section": "runners",
+    "priority": 6
+  }
+}

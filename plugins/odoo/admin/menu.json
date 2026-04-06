@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "label": "Odoo",
+      "url": "/plugins/odoo",
+      "icon": "fas fa-layer-group",
+      "section": "integrations",
+      "priority": 11
+    }
+  ]
+}

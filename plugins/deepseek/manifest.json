@@ -1,0 +1,63 @@
+{
+  "name": "deepseek",
+  "version": "0.1.0",
+  "type": "runner",
+  "description": "DeepSeek AI runner — high-capability models at ultra-low cost ($0.14/M input tokens for Chat)",
+  "entry_point": "runner.py",
+  "class_name": "DeepSeekRunner",
+  "config_schema": {
+    "deepseek_api_key": {
+      "type": "secret",
+      "env": "DEEPSEEK_API_KEY",
+      "description": "DeepSeek API Key (from platform.deepseek.com — new accounts get $5 credit)",
+      "required": true
+    },
+    "model": {
+      "type": "string",
+      "default": "deepseek-chat",
+      "description": "DeepSeek model to use",
+      "enum": [
+        "deepseek-chat",
+        "deepseek-reasoner"
+      ]
+    },
+    "timeout": {
+      "type": "integer",
+      "default": 180,
+      "description": "Request timeout in seconds (higher for reasoner)"
+    },
+    "temperature": {
+      "type": "number",
+      "default": 0.7,
+      "description": "Sampling temperature (0.0 - 2.0). Not applicable to deepseek-reasoner."
+    },
+    "max_output_tokens": {
+      "type": "integer",
+      "default": 8192,
+      "description": "Maximum output tokens per response"
+    },
+    "max_tool_iterations": {
+      "type": "integer",
+      "default": 20,
+      "description": "Maximum tool-use loop iterations"
+    },
+    "max_tools": {
+      "type": "integer",
+      "default": 0,
+      "description": "Maximum number of MCP tools (0 = unlimited)"
+    },
+    "notify_tool_use": {
+      "type": "boolean",
+      "default": true,
+      "description": "Send tool-use notifications to chat"
+    }
+  },
+  "dependencies": [],
+  "models_refreshable": false,
+  "ui": {
+    "display_name": "DeepSeek",
+    "icon": "fas fa-brain",
+    "section": "runners",
+    "priority": 7
+  }
+}

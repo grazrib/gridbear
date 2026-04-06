@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Odoo - GridBear Admin{% endblock %}
+{% block page_title %}Odoo{% endblock %}
+
+{% block content_alerts %}
+{% if request.query_params.get('added') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Istanza aggiunta.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('removed') %}
+<div class="mb-6 p-4 rounded-xl bg-ember-500/10 border border-ember-500/20 flex items-center gap-3 text-ember-600 dark:text-ember-400">
+    <i class="fas fa-trash"></i>
+    <span>Istanza rimossa.</span>
+</div>
+{% endif %}
+{% if request.query_params.get('saved') %}
+<div class="mb-6 p-4 rounded-xl bg-nordic-500/10 border border-nordic-500/20 flex items-center gap-3 text-nordic-600 dark:text-nordic-400">
+    <i class="fas fa-check-circle"></i>
+    <span>Impostazioni salvate.</span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 space-y-6">
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-layer-group text-frost-500"></i>
+                    Istanze collegate
+                </h3>
+                <p class="text-sm text-void-500 dark:text-void-400 mt-1">Aggiungi/rimuovi istanze Odoo al volo dal pannello</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-xs font-medium text-void-500 dark:text-void-400 uppercase tracking-wider border-b border-void-100 dark:border-void-800">
+                            <th class="px-5 py-3">Nome</th>
+                            <th class="px-5 py-3">DB</th>
+                            <th class="px-5 py-3">Utente</th>
+                            <th class="px-5 py-3">Stato</th>
+                            <th class="px-5 py-3 text-right">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-void-100 dark:divide-void-800">
+                        {% for inst in instances %}
+                        <tr class="hover:bg-void-50 dark:hover:bg-void-800/50 transition-colors">
+                            <td class="px-5 py-4">
+                                <div class="font-medium text-void-900 dark:text-white">{{ inst.name }}</div>
+                                <div class="text-xs text-void-500 dark:text-void-400">{{ inst.url }}</div>
+                                <div class="text-xs text-void-400 dark:text-void-500 font-mono">{{ inst.server_name }}</div>
+                            </td>
+                            <td class="px-5 py-4 text-void-600 dark:text-void-300">{{ inst.db }}</td>
+                            <td class="px-5 py-4 text-void-600 dark:text-void-300">{{ inst.username }}</td>
+                            <td class="px-5 py-4">
+                                {% if inst.has_secret %}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-nordic-500/10 text-nordic-600 dark:text-nordic-400 text-xs font-medium">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-nordic-500"></span>
+                                    Pronta
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-ember-500/10 text-ember-600 dark:text-ember-400 text-xs font-medium">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-ember-500"></span>
+                                    Manca API Key
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="px-5 py-4">
+                                <div class="flex items-center justify-end gap-2">
+                                    <form method="POST" action="/plugins/odoo/remove/{{ inst.id }}" class="inline">
+                                        {% include "partials/csrf_field.html" %}
+                                        <button type="submit"
+                                                class="px-3 py-1.5 rounded-lg hover:bg-red-500/10 text-void-500 hover:text-red-500 text-sm font-medium transition-colors">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not instances %}
+                        <tr>
+                            <td colspan="5" class="px-5 py-12 text-center">
+                                <i class="fas fa-plug text-4xl text-void-300 dark:text-void-600 mb-3"></i>
+                                <p class="text-void-500 dark:text-void-400">Nessuna istanza Odoo collegata</p>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-6">
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-frost-500/5 to-transparent">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-plus text-frost-500"></i>
+                    Aggiungi istanza
+                </h3>
+                <p class="text-sm text-void-500 dark:text-void-400 mt-1">Usa una API Key utente Odoo</p>
+            </div>
+            <div class="p-5">
+                <form method="POST" action="/plugins/odoo/add" class="space-y-4">
+                    {% include "partials/csrf_field.html" %}
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Nome</label>
+                        <input type="text" name="name" required
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">URL</label>
+                        <input type="text" name="url" required placeholder="https://odoo.tuodominio.it"
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Database</label>
+                        <input type="text" name="db" required
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Username</label>
+                        <input type="text" name="username" required
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">API Key</label>
+                        <input type="password" name="api_key" required
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-frost-500/50 transition-all">
+                    </div>
+                    <button type="submit"
+                            class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-frost-500 hover:bg-frost-600 text-white font-medium transition-colors">
+                        <i class="fas fa-save"></i>
+                        Salva
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="rounded-2xl bg-white dark:bg-void-900/50 border border-void-200 dark:border-void-800 overflow-hidden">
+            <div class="p-5 border-b border-void-200 dark:border-void-800 bg-gradient-to-r from-nordic-500/5 to-transparent">
+                <h3 class="font-semibold text-void-900 dark:text-white flex items-center gap-2">
+                    <i class="fas fa-sliders text-nordic-500"></i>
+                    Impostazioni
+                </h3>
+            </div>
+            <div class="p-5">
+                <form method="POST" action="/plugins/odoo/settings" class="space-y-4">
+                    {% include "partials/csrf_field.html" %}
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Timeout (secondi)</label>
+                        <input type="number" name="timeout_seconds" value="{{ timeout_seconds }}" min="1" max="300"
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Modelli consentiti (allowlist)</label>
+                        <textarea name="allowed_models" rows="3" placeholder="res.partner, sale.order, account.move"
+                                  class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">{{ allowed_models }}</textarea>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Max smart fields</label>
+                        <input type="number" name="max_smart_fields" value="{{ max_smart_fields }}" min="1" max="200"
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" name="validate_fields" {% if validate_fields %}checked{% endif %}
+                               class="mt-1 h-4 w-4 rounded border-void-300 dark:border-void-600 bg-void-50 dark:bg-void-800/50 text-nordic-500 focus:ring-nordic-500/40">
+                        <div>
+                            <div class="text-sm font-medium text-void-700 dark:text-void-200">Valida campi create/update</div>
+                            <div class="text-xs text-void-500 dark:text-void-400">Usa fields_get per bloccare campi inesistenti o readonly</div>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" name="allow_unsafe_execute_kw" {% if allow_unsafe_execute_kw %}checked{% endif %}
+                               class="mt-1 h-4 w-4 rounded border-void-300 dark:border-void-600 bg-void-50 dark:bg-void-800/50 text-ember-500 focus:ring-ember-500/40">
+                        <div>
+                            <div class="text-sm font-medium text-void-700 dark:text-void-200">Abilita odoo_execute_kw (unsafe)</div>
+                            <div class="text-xs text-void-500 dark:text-void-400">Espone chiamate generiche a metodi Odoo</div>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-void-700 dark:text-void-200">Metodi consentiti per odoo_execute_kw</label>
+                        <input type="text" name="allowed_methods" value="{{ allowed_methods }}" placeholder="search_read, read, create, write, unlink"
+                               class="w-full bg-void-50 dark:bg-void-800/50 border border-void-200 dark:border-void-700 rounded-xl py-2.5 px-4 text-void-900 dark:text-white focus:outline-none focus:border-nordic-500/50 transition-all">
+                    </div>
+                    <button type="submit"
+                            class="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-nordic-500 hover:bg-nordic-600 text-white font-medium transition-colors">
+                        <i class="fas fa-save"></i>
+                        Salva
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
